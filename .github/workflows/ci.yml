@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-test:
+    name: Windows MinGW Build & Unit Tests
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup MSYS2 MinGW-w64 Environment
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-glew
+          mingw-w64-x86_64-glfw
+          mingw-w64-x86_64-glm
+          mingw-w64-x86_64-openal
+
+    - name: Configure CMake
+      shell: msys2 {0}
+      run: cmake -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build Solar Odyssey & Test Targets
+      shell: msys2 {0}
+      run: cmake --build build-cmake --config Release
+
+    - name: Run Catch2 Unit Tests (CTest)
+      shell: msys2 {0}
+      run: ctest --test-dir build-cmake --output-on-failure
