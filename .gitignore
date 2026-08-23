@@ -1,0 +1,37 @@
+# Build output
+build/
+build_cmake/
+build-cmake/
+build-*/
+out/
+bin/
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+*.lib
+*.pdb
+*.ninja_log
+*.ninja_deps
+.ninja_log
+CMakeCache.txt
+CMakeFiles/
+
+# Temporary / Trash / Logs
+Trash/
+*.log
+*.tmp
+*.ini
+imgui.ini
+
+# IDE & Editor
+.vs/
+.vscode/ipch/
+*.user
+*.suo
+*.sln.docstates
+
+# OS junk
+Thumbs.db
+.DS_Store

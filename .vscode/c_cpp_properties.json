@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "name": "Win32-MSYS2-Mingw64",
+      "compilerPath": "C:/msys64/mingw64/bin/g++.exe",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "windows-gcc-x64",
+      "includePath": [
+        "${workspaceFolder}",
+        "C:/msys64/mingw64/include",
+        "C:/msys64/mingw64/include/GL",
+        "C:/msys64/mingw64/include/AL",
+        "C:/msys64/mingw64/include/glm",
+        "${workspaceFolder}/imgui",
+        "${workspaceFolder}/imgui/backends"
+      ],
+      "defines": [
+        "IMGUI_IMPL_OPENGL_LOADER_GLEW"
+      ]
+    }
+  ],
+  "version": 4
+}
