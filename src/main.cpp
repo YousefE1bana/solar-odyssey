@@ -59,6 +59,16 @@
 #include "immediate_batch.h"
 #include "orbital_physics.h"
 
+// -----------------------------------------------------------------------------
+// Dedicated High-Performance GPU Selection Hints
+// Exported symbols instructing NVIDIA Optimus and AMD PowerXpress switchable
+// graphics drivers to automatically select the discrete high-performance GPU.
+// -----------------------------------------------------------------------------
+extern "C" {
+    __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
 using namespace std;
 using namespace glm;
 
@@ -66,14 +76,9 @@ using namespace glm;
 static const char* kSettingsPath = "solar_odyssey_settings.ini";
 AppSettings gAppSettings;
 
-// Window dimensions & Fullscreen preservation
+// Window dimensions
 int windowWidth = 1920;
 int windowHeight = 1080;
-int savedWindowX = 100;
-int savedWindowY = 100;
-int savedWindowWidth = 1920;
-int savedWindowHeight = 1080;
-bool isFullscreen = false;
 
 // Subsystem singletons
 CelestialDatabase celestialDb;
@@ -104,7 +109,6 @@ static void applyLoadedSettings() {
     postPipeline.bloomEnabled   = gAppSettings.bloomEnabled;
     solarUI.timeMultiplier      = gAppSettings.timeScale;
     cameraCtrl.fieldOfView      = gAppSettings.fieldOfView;
-    solarUI.isFullscreen        = gAppSettings.fullscreen;
 }
 
 // Capture live state back into the settings struct
@@ -127,7 +131,6 @@ static void captureCurrentSettings() {
     gAppSettings.bloomEnabled        = postPipeline.bloomEnabled;
     gAppSettings.timeScale           = solarUI.timeMultiplier;
     gAppSettings.fieldOfView         = cameraCtrl.fieldOfView;
-    gAppSettings.fullscreen          = isFullscreen;
 }
 
 // Planet runtime structure
@@ -338,40 +341,6 @@ void updateCursorCapture(GLFWwindow* window) {
             isFirstMouseMove = true;
         }
     }
-}
-
-void framebufferSizeCallback(GLFWwindow* window, int width, int height);
-
-void toggleFullscreen(GLFWwindow* window) {
-    if (!window) return;
-    isFullscreen = !isFullscreen;
-    gAppSettings.fullscreen = isFullscreen;
-    solarUI.isFullscreen = isFullscreen;
-
-    if (isFullscreen) {
-        // Save current windowed position and dimensions
-        glfwGetWindowPos(window, &savedWindowX, &savedWindowY);
-        glfwGetWindowSize(window, &savedWindowWidth, &savedWindowHeight);
-
-        GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-        if (primaryMonitor) {
-            const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
-            if (mode) {
-                glfwSetWindowMonitor(window, primaryMonitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-            }
-        }
-    } else {
-        // Restore windowed position and dimensions
-        glfwSetWindowMonitor(window, nullptr, savedWindowX, savedWindowY, savedWindowWidth, savedWindowHeight, 0);
-    }
-
-    // Refresh framebuffer size, viewport, projection, post pipeline, and cursor
-    int fbWidth = 0, fbHeight = 0;
-    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
-    if (fbWidth > 0 && fbHeight > 0) {
-        framebufferSizeCallback(window, fbWidth, fbHeight);
-    }
-    updateCursorCapture(window);
 }
 
 // Forward Declarations
@@ -1320,9 +1289,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         } else if (key == GLFW_KEY_N) {
             missionSystem.selectNextMission();
             return;
-        } else if (key == GLFW_KEY_F11) {
-            toggleFullscreen(window);
-            return;
         }
 
         // Mode-dependent key dispatch
@@ -1755,6 +1721,10 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    std::cout << "[GPU Detection] Vendor:   " << (const char*)glGetString(GL_VENDOR) << "\n";
+    std::cout << "[GPU Detection] Renderer: " << (const char*)glGetString(GL_RENDERER) << "\n";
+    std::cout << "[GPU Detection] Version:  " << (const char*)glGetString(GL_VERSION) << "\n";
+
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
@@ -1765,9 +1735,6 @@ int main(int argc, char** argv) {
     ImGui_ImplOpenGL3_Init("#version 450");
     solarUI.applySpaceTheme();
     applyLoadedSettings();
-    if (gAppSettings.fullscreen) {
-        toggleFullscreen(window);
-    }
 
     // Initialize Audio
     initializeSounds();
@@ -2245,11 +2212,6 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
-        if (solarUI.pendingFullscreenToggle) {
-            solarUI.pendingFullscreenToggle = false;
-            toggleFullscreen(window);
-        }
 
         // Prepare Pickable Bodies list for floating labels & picking (reused across frames)
         static std::vector<PickableBody> pickableList;
