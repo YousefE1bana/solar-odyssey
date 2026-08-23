@@ -22,7 +22,6 @@
 #include <imgui_impl_opengl3.h>
 
 #include <vector>
-#include <memory>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -58,6 +57,7 @@
 #include "solar_ui.h"
 #include "settings_persistence.h"
 #include "immediate_batch.h"
+#include "orbital_physics.h"
 
 using namespace std;
 using namespace glm;
@@ -70,14 +70,14 @@ AppSettings gAppSettings;
 int windowWidth = 1920;
 int windowHeight = 1080;
 
-// Subsystem singletons & RAII owners
+// Subsystem singletons
 CelestialDatabase celestialDb;
 CameraController cameraCtrl;
 SolarOdysseyUI solarUI;
 PostProcessingPipeline postPipeline;
-std::unique_ptr<AtmosphereEffects> atmosphereEffects;
-std::unique_ptr<AsteroidBelt> asteroidBelt;
-std::unique_ptr<PlanetPOV> planetPov;
+AtmosphereEffects* atmosphereEffects = nullptr;
+AsteroidBelt* asteroidBelt = nullptr;
+PlanetPOV* planetPov = nullptr;
 
 // Push persisted settings into the live UI/subsystem state
 static void applyLoadedSettings() {
@@ -1045,8 +1045,8 @@ void renderPlanets(float time) {
         float effectiveSpinSpeed = planet.spinSpeed * solarUI.spinSpeedScale;
         float effectiveSize = planet.size * solarUI.planetScale;
 
+        planet.currentPosition = OrbitalPhysics::computePlanetPosition(time, planet.orbitSpeed, solarUI.orbitSpeedScale, planet.orbitRadius);
         float radAngle = glm::radians(time * effectiveOrbitSpeed * 0.02f);
-        planet.currentPosition = glm::vec3(cos(radAngle) * planet.orbitRadius, 0.0f, -sin(radAngle) * planet.orbitRadius);
 
         glm::mat4 orbitMat = glm::rotate(glm::mat4(1.0f), radAngle, glm::vec3(0.0f, 1.0f, 0.0f));
         orbitMat = glm::translate(orbitMat, glm::vec3(planet.orbitRadius, 0.0f, 0.0f));
@@ -1156,11 +1156,7 @@ void renderPlanets(float time) {
                 moonModel = glm::scale(moonModel, glm::vec3(effectiveMoonSize));
                 glm::mat4 moonMV = curView * moonModel;
 
-                moon.currentPosition = planet.currentPosition + glm::vec3(
-                    cos(moonRadAngle) * moon.orbitRadius,
-                    0.0f,
-                    -sin(moonRadAngle) * moon.orbitRadius
-                );
+                moon.currentPosition = OrbitalPhysics::computeMoonPosition(planet.currentPosition, time, moon.orbitSpeed, solarUI.orbitSpeedScale, moon.orbitRadius);
 
                 if (shadersReady && planetProgram) {
                     glUseProgram(planetProgram);
@@ -1722,9 +1718,9 @@ int main(int argc, char** argv) {
     setupSpecialPlanetTextures();
 
     // Initialize Systems
-    asteroidBelt = std::make_unique<AsteroidBelt>(800, 13.5f, 15.8f, "Textures/moon.jpg");
-    planetPov = std::make_unique<PlanetPOV>();
-    atmosphereEffects = std::make_unique<AtmosphereEffects>();
+    asteroidBelt = new AsteroidBelt(800, 13.5f, 15.8f, "Textures/moon.jpg");
+    planetPov = new PlanetPOV();
+    atmosphereEffects = new AtmosphereEffects();
     postPipeline.init(windowWidth, windowHeight);
 
     // Compile Planet Shader
@@ -1839,7 +1835,7 @@ int main(int argc, char** argv) {
     }
 
     // Set initial quality preset
-    solarUI.applyQualityPreset(QUALITY_HIGH, postPipeline, asteroidBelt.get());
+    solarUI.applyQualityPreset(QUALITY_HIGH, postPipeline, asteroidBelt);
 
     // Main Game Loop
     while (!glfwWindowShouldClose(window)) {
@@ -2200,7 +2196,7 @@ int main(int argc, char** argv) {
                                     [](const string& name) { explorePlanetPOVByName(name); });
 
         // Settings Panel
-        solarUI.renderSettingsPanel(postPipeline, asteroidBelt.get(), atmosphereEffects.get(), cameraCtrl);
+        solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
 
         // Diagnostics
         solarUI.renderDiagnostics((float)windowWidth);
@@ -2232,10 +2228,10 @@ int main(int argc, char** argv) {
         glfwPollEvents();
     }
 
-    // Cleanup & RAII Release
-    asteroidBelt.reset();
-    planetPov.reset();
-    atmosphereEffects.reset();
+    // Cleanup
+    if (asteroidBelt) { delete asteroidBelt; asteroidBelt = nullptr; }
+    if (planetPov) { delete planetPov; planetPov = nullptr; }
+    if (atmosphereEffects) { delete atmosphereEffects; atmosphereEffects = nullptr; }
     postPipeline.cleanup();
 
     auto safeDeleteTex = [](GLuint &tex) {
@@ -2257,11 +2253,10 @@ int main(int argc, char** argv) {
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
 
-    if (starfieldProgram) { glDeleteProgram(starfieldProgram); starfieldProgram = 0; }
-    if (planetProgram) { glDeleteProgram(planetProgram); planetProgram = 0; }
-    if (sunProgram) { glDeleteProgram(sunProgram); sunProgram = 0; }
-    if (blackHoleProgram) { glDeleteProgram(blackHoleProgram); blackHoleProgram = 0; }
-    if (wormholeProgram) { glDeleteProgram(wormholeProgram); wormholeProgram = 0; }
+    if (planetProgram) glDeleteProgram(planetProgram);
+    if (sunProgram) glDeleteProgram(sunProgram);
+    if (blackHoleProgram) glDeleteProgram(blackHoleProgram);
+    if (wormholeProgram) glDeleteProgram(wormholeProgram);
 
     cleanupAudio();
 

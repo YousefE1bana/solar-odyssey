@@ -36,6 +36,9 @@ public:
 
     void setQualityCount(int count);
     int getAsteroidCount() const;
+    const std::vector<Asteroid>& getAsteroids() const { return allAsteroids; }
+    float getInnerRadius() const { return innerRadius; }
+    float getOuterRadius() const { return outerRadius; }
     void update(float deltaTime, float planetSpeed, const glm::vec3& blackHolePos = glm::vec3(0.0f), float blackHoleStrength = 0.0f);
     void render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunEyePos);
 };

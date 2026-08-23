@@ -125,6 +125,14 @@ add_executable(SolarOdysseyTests
   src/camera_controller.cpp
   src/mission_system.cpp
   src/settings_persistence.cpp
+  src/spaceship.cpp
+  src/warp_system.cpp
+  src/asteroid_belt.cpp
+  src/gl_primitives.cpp
+  src/modern_mesh.cpp
+  src/immediate_batch.cpp
+  src/shader_utils.cpp
+  src/stb_image_impl.cpp
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
   imgui/imgui_tables.cpp

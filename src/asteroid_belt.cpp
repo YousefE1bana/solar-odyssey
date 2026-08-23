@@ -8,9 +8,10 @@
 
 AsteroidBelt::AsteroidBelt(int count, float inR, float outR, const char* texturePath)
     : activeCount(count), innerRadius(inR), outerRadius(outR) {
-    glprims::sharedModernSphere().ensure();
     generateAsteroids(1500);
-    if (texturePath) loadTexture(texturePath);
+    if (texturePath && texturePath[0] != '\0') {
+        loadTexture(texturePath);
+    }
 }
 
 AsteroidBelt::~AsteroidBelt() {

@@ -1,65 +1,67 @@
 #include "catch.hpp"
-#include <glm/glm.hpp>
-#include <cmath>
+#include "spaceship.h"
+#include <vector>
 
-namespace {
-    struct ShipState {
-        glm::vec3 pos = glm::vec3(0.0f);
-        glm::vec3 vel = glm::vec3(0.0f);
-        float throttle = 0.0f;
-        float maxSpeed = 15.0f;
-        float linearDamping = 0.90f;
-        float boostEnergy = 100.0f;
-        float maxBoostEnergy = 100.0f;
+TEST_CASE("Spaceship Kinematics, Flight Controls and Camera Cycling", "[spaceship]") {
+    Spaceship ship;
 
-        void update(float dt, bool boosting) {
-            float speedMult = boosting && (boostEnergy > 0.0f) ? 2.5f : 1.0f;
-            if (boosting && boostEnergy > 0.0f) {
-                boostEnergy = std::max(0.0f, boostEnergy - 35.0f * dt);
-            } else if (!boosting && boostEnergy < maxBoostEnergy) {
-                boostEnergy = std::min(maxBoostEnergy, boostEnergy + 20.0f * dt);
-            }
-
-            vel *= std::pow(linearDamping, dt * 60.0f);
-            pos += vel * dt * speedMult;
-        }
-
-        float getSpeedKmh() const {
-            return glm::length(vel) * 1250.0f;
-        }
-    };
-}
-
-TEST_CASE("Spaceship Kinematics, Damping and Energy Systems", "[spaceship]") {
-    SECTION("Linear damping reduces velocity in vacuum when thrust is idle") {
-        ShipState ship;
-        ship.vel = glm::vec3(0.0f, 0.0f, -10.0f);
-
-        float initialSpeed = glm::length(ship.vel);
-        ship.update(1.0f, false);
-        float dampedSpeed = glm::length(ship.vel);
-
-        REQUIRE(dampedSpeed < initialSpeed);
-        REQUIRE(dampedSpeed > 0.0f);
+    SECTION("Spaceship initialization spawns with valid physical orientation") {
+        REQUIRE(ship.position == glm::vec3(12.0f, 2.5f, 14.0f));
+        REQUIRE(ship.boostEnergy == Approx(100.0f));
+        REQUIRE(ship.flightMode == FLIGHT_MANUAL);
+        REQUIRE(ship.cameraView == SHIP_CAM_CHASE);
+        REQUIRE(glm::length(ship.forward) == Approx(1.0f));
     }
 
-    SECTION("Boost drains energy and increases displacement") {
-        ShipState normalShip;
-        normalShip.vel = glm::vec3(0.0f, 0.0f, 10.0f);
+    SECTION("Forward throttle acceleration increases velocity and speed telemetry") {
+        ship.active = true;
+        std::vector<std::pair<std::string, std::pair<glm::vec3, float>>> bodies;
+        bodies.push_back({"Earth", {glm::vec3(0.0f), 1.0f}});
 
-        ShipState boostingShip;
-        boostingShip.vel = glm::vec3(0.0f, 0.0f, 10.0f);
+        // Process forward input
+        ship.processInput(true, false, false, false, false, false, false, false, false, 0.1f);
+        REQUIRE(ship.throttle > 0.0f);
 
-        normalShip.update(0.5f, false);
-        boostingShip.update(0.5f, true);
-
-        REQUIRE(boostingShip.boostEnergy < normalShip.boostEnergy);
-        REQUIRE(boostingShip.pos.z > normalShip.pos.z);
+        ship.update(0.1f, bodies);
+        REQUIRE(glm::length(ship.velocity) > 0.0f);
+        REQUIRE(ship.getSpeedKmh() > 0.0f);
     }
 
-    SECTION("Speed conversion matches expected simulated scale") {
-        ShipState ship;
-        ship.vel = glm::vec3(2.0f, 0.0f, 0.0f);
-        REQUIRE(ship.getSpeedKmh() == Approx(2500.0f));
+    SECTION("Boost thrust consumes boost energy and yields higher velocity") {
+        std::vector<std::pair<std::string, std::pair<glm::vec3, float>>> bodies;
+
+        Spaceship normalShip;
+        normalShip.active = true;
+        normalShip.processInput(true, false, false, false, false, false, false, false, false, 0.1f);
+        normalShip.update(0.1f, bodies);
+
+        Spaceship boostShip;
+        boostShip.active = true;
+        boostShip.processInput(true, false, false, false, false, false, false, false, true, 0.1f);
+        boostShip.update(0.1f, bodies);
+
+        REQUIRE(boostShip.boostEnergy < normalShip.boostEnergy);
+        REQUIRE(glm::length(boostShip.velocity) > glm::length(normalShip.velocity));
+    }
+
+    SECTION("Camera mode cycling sequences through all 3 views") {
+        REQUIRE(ship.cameraView == SHIP_CAM_CHASE);
+        ship.cycleCameraMode();
+        REQUIRE(ship.cameraView == SHIP_CAM_CLOSE);
+        ship.cycleCameraMode();
+        REQUIRE(ship.cameraView == SHIP_CAM_COCKPIT);
+        ship.cycleCameraMode();
+        REQUIRE(ship.cameraView == SHIP_CAM_CHASE);
+    }
+
+    SECTION("Target planet designation and Orbit Assist toggling") {
+        ship.setTargetPlanet("Mars", glm::vec3(30.0f, 0.0f, 0.0f), 0.7f);
+        REQUIRE(ship.targetPlanetName == "Mars");
+        REQUIRE(ship.targetPlanetPos == glm::vec3(30.0f, 0.0f, 0.0f));
+
+        ship.toggleOrbitAssist();
+        REQUIRE(ship.flightMode == FLIGHT_ORBIT_ASSIST);
+        ship.toggleOrbitAssist();
+        REQUIRE(ship.flightMode == FLIGHT_MANUAL);
     }
 }
