@@ -60,6 +60,7 @@
 #include "orbital_physics.h"
 #include "nbody_simulation.h"
 #include "audio_loader.h"
+#include "lod_manager.h"
 
 using namespace std;
 using namespace glm;
@@ -978,28 +979,35 @@ void drawSaturnRings(float innerRadius, float outerRadius, const glm::mat4& ring
 }
 
 void drawTexturedSphere(float radius, int slices = 40, int stacks = 40) {
+    (void)radius;
     (void)slices;
     (void)stacks;
-    glprims::sharedModernSphere().drawUnit();
+    lod::LODManager::instance().drawSphere(lod::SPHERE_LOD_ULTRA);
 }
 
 void renderSun(float time) {
+    float sunDist = glm::distance(cameraCtrl.currentEye, glm::vec3(0.0f));
+    float sunRadius = 2.0f * solarUI.planetScale;
+    lod::SphereTier tier = lod::LODManager::instance().computeSphereTier(sunDist, sunRadius, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
+
     if (shadersReady && sunProgram) {
         glUseProgram(sunProgram);
         glUniform1f(uSunTimeLoc, time);
         glUniform1f(uSunBrightnessLoc, solarUI.sunIntensity * 1.5f);
 
         glm::mat4 sunMV = cameraCtrl.getViewMatrix() * glm::rotate(glm::mat4(1.0f), glm::radians(time * 5.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        sunMV = glm::scale(sunMV, glm::vec3(2.0f * solarUI.planetScale));
+        sunMV = glm::scale(sunMV, glm::vec3(sunRadius));
         uploadCoreMatricesDirect(uSunModelViewLoc, uSunProjectionLoc, uSunNormalMatrixLoc, sunMV, currentProjMatrix);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, sunTexture);
 
-        glprims::sharedModernSphere().drawUnit();
+        lod::LODManager::instance().drawSphere(tier);
+        lod::LODManager::instance().recordBodyRender("Sun", sunDist, sunRadius, tier);
         glUseProgram(0);
     } else {
-        glprims::sharedModernSphere().drawUnit();
+        lod::LODManager::instance().drawSphere(tier);
+        lod::LODManager::instance().recordBodyRender("Sun", sunDist, sunRadius, tier);
     }
 }
 
@@ -1014,6 +1022,8 @@ void renderPlanets(float time) {
 
         float effectiveSpinSpeed = planet.spinSpeed * solarUI.spinSpeedScale;
         float effectiveSize = planet.size * solarUI.planetScale;
+        float distToPlanet = glm::distance(cameraCtrl.currentEye, planet.currentPosition);
+        lod::SphereTier planetTier = lod::LODManager::instance().computeSphereTier(distToPlanet, effectiveSize, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
 
         glm::mat4 orbitMat = glm::translate(glm::mat4(1.0f), planet.currentPosition);
         glm::mat4 atmoMV = curView * orbitMat;
@@ -1087,12 +1097,14 @@ void renderPlanets(float time) {
             glUniform1f(uTimeLoc, time);
             uploadCoreMatricesDirect(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, planetMV, currentProjMatrix);
 
-            glprims::sharedModernSphere().drawUnit();
+            lod::LODManager::instance().drawSphere(planetTier);
+            lod::LODManager::instance().recordBodyRender(planet.name, distToPlanet, effectiveSize, planetTier);
 
             glUseProgram(0);
             glActiveTexture(GL_TEXTURE0);
         } else {
-            glprims::sharedModernSphere().drawUnit();
+            lod::LODManager::instance().drawSphere(planetTier);
+            lod::LODManager::instance().recordBodyRender(planet.name, distToPlanet, effectiveSize, planetTier);
         }
 
         // Saturn Rings
@@ -1110,6 +1122,8 @@ void renderPlanets(float time) {
         for (const auto &planet : planets) {
             if (planet.name == moon.parentPlanet) {
                 float effectiveMoonSize = moon.size * solarUI.planetScale;
+                float distToMoon = glm::distance(cameraCtrl.currentEye, moon.currentPosition);
+                lod::SphereTier moonTier = lod::LODManager::instance().computeSphereTier(distToMoon, effectiveMoonSize, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
 
                 glm::mat4 moonModel = glm::translate(glm::mat4(1.0f), moon.currentPosition);
                 moonModel = glm::scale(moonModel, glm::vec3(effectiveMoonSize));
@@ -1127,10 +1141,12 @@ void renderPlanets(float time) {
                     glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
                     glUniform1f(uSunIntensityLoc, 1.25f);
                     uploadCoreMatricesDirect(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, moonMV, currentProjMatrix);
-                    glprims::sharedModernSphere().drawUnit();
+                    lod::LODManager::instance().drawSphere(moonTier);
+                    lod::LODManager::instance().recordBodyRender(moon.name, distToMoon, effectiveMoonSize, moonTier);
                     glUseProgram(0);
                 } else {
-                    glprims::sharedModernSphere().drawUnit();
+                    lod::LODManager::instance().drawSphere(moonTier);
+                    lod::LODManager::instance().recordBodyRender(moon.name, distToMoon, effectiveMoonSize, moonTier);
                 }
                 break;
             }
@@ -1653,8 +1669,18 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
                   << ", musicRate=" << gMusic.sampleRate
                   << ", pcmSizeKB=" << gMusic.data.size() / 1024
                   << " -> " << (musicLoaded && soundBuffersReady ? "PASS" : "FAIL") << std::endl;
-    } else if (qaFrameCount >= 522) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, and Native Audio tests completed successfully!" << std::endl;
+    } else if (qaFrameCount == 518) {
+        // TEST 17: Level-of-Detail (LOD) multi-tier dynamic mesh resolution
+        lod::LODManager& lodMgr = lod::LODManager::instance();
+        int renderedTris = lodMgr.getRenderedTrianglesThisFrame();
+        int savedTris = lodMgr.getSavedTrianglesThisFrame();
+        bool lodFunctioning = (renderedTris > 0) && (savedTris > 0);
+        std::cout << "[QA TEST 17] Level-of-Detail (LOD) Mesh Resolution -> renderedTris=" << renderedTris
+                  << ", savedTris=" << savedTris
+                  << ", bodyCount=" << lodMgr.getBodyTelemetry().size()
+                  << " -> " << (lodFunctioning ? "PASS" : "FAIL") << std::endl;
+    } else if (qaFrameCount >= 525) {
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, and LOD tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
@@ -1781,6 +1807,7 @@ int main(int argc, char** argv) {
     planetPov = new PlanetPOV();
     atmosphereEffects = new AtmosphereEffects();
     postPipeline.init(windowWidth, windowHeight);
+    lod::LODManager::instance().init();
 
     // Compile Planet Shader
     {
@@ -2226,6 +2253,9 @@ int main(int argc, char** argv) {
         currentViewMatrix = viewMat;
         currentProjMatrix = projMat;
 
+        // Reset LOD telemetry counters for current frame
+        lod::LODManager::instance().beginFrame();
+
         // Draw Starfield Background
         drawStarfield();
 
@@ -2269,7 +2299,7 @@ int main(int argc, char** argv) {
                 focusFade = 0.20f;
             }
             glm::vec3 sunEyePos = glm::vec3(viewMat * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-            asteroidBelt->render(focusFade, planetProgram, viewMat, projMat, sunEyePos);
+            asteroidBelt->render(focusFade, planetProgram, viewMat, projMat, sunEyePos, cameraCtrl.currentEye, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
         }
 
         // 2. END POST-PROCESSING & COMPOSITE TO SCREEN

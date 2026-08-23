@@ -29,6 +29,7 @@ add_executable(SolarOdyssey
   src/solar_ui.cpp
   src/nbody_simulation.cpp
   src/audio_loader.cpp
+  src/lod_manager.cpp
   app_icon.rc
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
@@ -128,6 +129,7 @@ add_executable(SolarOdysseyTests
   tests/test_asteroid_belt.cpp
   tests/test_nbody_simulation.cpp
   tests/test_audio_loader.cpp
+  tests/test_lod_manager.cpp
   src/planet_data.cpp
   src/picking.cpp
   src/camera_controller.cpp
@@ -138,6 +140,7 @@ add_executable(SolarOdysseyTests
   src/asteroid_belt.cpp
   src/nbody_simulation.cpp
   src/audio_loader.cpp
+  src/lod_manager.cpp
   src/gl_primitives.cpp
   src/modern_mesh.cpp
   src/immediate_batch.cpp

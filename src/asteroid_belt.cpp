@@ -128,7 +128,11 @@ void AsteroidBelt::update(float deltaTime, float planetSpeed, const glm::vec3& b
     }
 }
 
-void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunEyePos) {
+#include "lod_manager.h"
+
+void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat,
+                          const glm::vec3& sunEyePos, const glm::vec3& camEye,
+                          bool enableLOD, int lodOverride) {
     if (!program || allAsteroids.empty()) return;
 
     GLenum errPre = glGetError();
@@ -180,11 +184,13 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
     float countMult = 0.20f + 0.80f * std::max(0.0f, std::min(1.0f, focusFade));
     int countToRender = (int)(std::min(activeCount, (int)allAsteroids.size()) * countMult);
 
-    glprims::sharedModernSphere().ensure();
-    glBindVertexArray(glprims::sharedModernSphere().vao);
+    lod::LODManager& lodMgr = lod::LODManager::instance();
+    lodMgr.init();
 
     for (int i = 0; i < countToRender; ++i) {
         const Asteroid& ast = allAsteroids[i];
+        float distToCam = glm::distance(ast.position, camEye);
+        lod::AsteroidTier tier = lodMgr.computeAsteroidTier(distToCam, enableLOD, lodOverride);
 
         glm::mat4 model = glm::translate(glm::mat4(1.0f), ast.position);
         model = glm::rotate(model, glm::radians(ast.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -198,7 +204,8 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
         if (modelViewLoc != -1) glUniformMatrix4fv(modelViewLoc, 1, GL_FALSE, glm::value_ptr(mv));
         if (normalLoc != -1) glUniformMatrix3fv(normalLoc, 1, GL_FALSE, glm::value_ptr(normalMat));
 
-        glDrawElements(GL_TRIANGLES, glprims::sharedModernSphere().indexCount, GL_UNSIGNED_SHORT, nullptr);
+        lodMgr.drawAsteroid(tier);
+        lodMgr.recordAsteroidRender(tier);
     }
 
     glBindVertexArray(0);

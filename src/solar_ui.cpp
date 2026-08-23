@@ -1,4 +1,5 @@
 #include "solar_ui.h"
+#include "lod_manager.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <imgui.h>
 #include <cmath>
@@ -689,6 +690,27 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
                         ImGui::Checkbox("Vignette", &postProc.vignetteEnabled);
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Subtle optical lens darkening towards screen borders.");
                     }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Level-of-Detail (LOD) System");
+                    ImGui::Checkbox("Enable Dynamic Mesh LOD", &enableMeshLOD);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Dynamically adjusts polygon resolution of planets, moons, and asteroids based on camera distance.");
+
+                    if (enableMeshLOD) {
+                        const char* lodModes[] = {
+                            "Auto (Distance-based)",
+                            "Force LOD 0 (Ultra 64x64 / 8,192 tris)",
+                            "Force LOD 1 (High 36x36 / 2,592 tris)",
+                            "Force LOD 2 (Medium 20x20 / 800 tris)",
+                            "Force LOD 3 (Low 12x12 / 288 tris)"
+                        };
+                        ImGui::Combo("LOD Override", &lodOverrideMode, lodModes, 5);
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Manually locks the active geometric detail tier across all bodies for visual comparison.");
+
+                        ImGui::Checkbox("Show LOD Inspector in Diagnostics", &showLODDebugTelemetry);
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Displays real-time distance and polygon counts per celestial body in the Diagnostics panel.");
+                    }
                     ImGui::EndTabItem();
                 }
 
@@ -855,14 +877,50 @@ void SolarOdysseyUI::renderDiagnostics(float screenWidth) {
             ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Hardware & Driver:");
             ImGui::Text("GPU: %s", (const char*)glGetString(GL_RENDERER));
             ImGui::Text("API: %s", (const char*)glGetString(GL_VERSION));
-            ImGui::Separator();
-
             ImGui::TextDisabled("Display & Quality:");
             ImGui::Text("Screen: %s (F11)", isFullscreen ? "Fullscreen" : "Windowed");
             ImGui::Text("Preset: %s", qualityPreset == QUALITY_LOW ? "Low" :
                                       qualityPreset == QUALITY_MEDIUM ? "Medium" :
                                       qualityPreset == QUALITY_HIGH ? "High" : "Ultra");
             ImGui::Text("Simulation: %.2fx (Day %.0f)", timeMultiplier, elapsedSimDays);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            lod::LODManager& lodMgr = lod::LODManager::instance();
+            ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Level-of-Detail (LOD):");
+            ImGui::Text("Mode: %s", !enableMeshLOD ? "Disabled (LOD 0)" :
+                                   lodOverrideMode == 0 ? "Auto (Dynamic Distance)" :
+                                   lodOverrideMode == 1 ? "Forced Ultra (LOD 0)" :
+                                   lodOverrideMode == 2 ? "Forced High (LOD 1)" :
+                                   lodOverrideMode == 3 ? "Forced Med (LOD 2)" : "Forced Low (LOD 3)");
+            ImGui::Text("Drawn: %d tris", lodMgr.getRenderedTrianglesThisFrame());
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.35f, 0.95f, 0.55f, 1.0f), "(Saved %d tris)", lodMgr.getSavedTrianglesThisFrame());
+
+            const int* astCounts = lodMgr.getAsteroidTierCounts();
+            ImGui::Text("Belt: %d H | %d M | %d L", astCounts[0], astCounts[1], astCounts[2]);
+
+            if (showLODDebugTelemetry && !lodMgr.getBodyTelemetry().empty()) {
+                ImGui::Spacing();
+                if (ImGui::BeginTable("LODTelemetryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Body", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                    ImGui::TableSetupColumn("Tier", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& telem : lodMgr.getBodyTelemetry()) {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%s", telem.name.c_str());
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::Text("%.1f", telem.distance);
+                        ImGui::TableSetColumnIndex(2);
+                        glm::vec3 col = lod::LODManager::getTierDebugColor(telem.activeTier);
+                        ImGui::TextColored(ImVec4(col.r, col.g, col.b, 1.0f), "%s", lod::LODManager::getSphereTierName(telem.activeTier));
+                    }
+                    ImGui::EndTable();
+                }
+            }
         }
         ImGui::End();
     }

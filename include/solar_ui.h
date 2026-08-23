@@ -54,6 +54,11 @@ public:
     float ringOpacity = 0.90f;
     bool  showDwarfPlanets = true;
 
+    // Level-of-Detail (LOD) System
+    bool enableMeshLOD = true;
+    int  lodOverrideMode = 0; // 0 = Auto (Distance), 1 = Force Ultra (LOD0), 2 = Force High (LOD1), 3 = Force Med (LOD2), 4 = Force Low (LOD3)
+    bool showLODDebugTelemetry = false;
+
     // Graphics Preset
     GraphicsQuality qualityPreset = QUALITY_HIGH;
 
