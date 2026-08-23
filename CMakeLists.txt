@@ -27,6 +27,7 @@ add_executable(SolarOdyssey
   src/spaceship.cpp
   src/mission_system.cpp
   src/solar_ui.cpp
+  src/nbody_simulation.cpp
   app_icon.rc
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
@@ -124,6 +125,7 @@ add_executable(SolarOdysseyTests
   tests/test_spaceship_physics.cpp
   tests/test_warp_system.cpp
   tests/test_asteroid_belt.cpp
+  tests/test_nbody_simulation.cpp
   src/planet_data.cpp
   src/picking.cpp
   src/camera_controller.cpp
@@ -132,6 +134,7 @@ add_executable(SolarOdysseyTests
   src/spaceship.cpp
   src/warp_system.cpp
   src/asteroid_belt.cpp
+  src/nbody_simulation.cpp
   src/gl_primitives.cpp
   src/modern_mesh.cpp
   src/immediate_batch.cpp
