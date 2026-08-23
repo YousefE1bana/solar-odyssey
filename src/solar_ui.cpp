@@ -608,9 +608,18 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
                     ImGui::EndTabItem();
                 }
 
-                // Tab 3: Visual Layers & Overlays
-                if (ImGui::BeginTabItem("Display Layers")) {
+                // Tab 3: Visual Layers & Display Settings
+                if (ImGui::BeginTabItem("Display & Graphics")) {
                     ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Screen Mode");
+                    if (ImGui::Checkbox("Fullscreen Mode (F11)", &isFullscreen)) {
+                        pendingFullscreenToggle = true;
+                    }
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle between Fullscreen and Windowed mode.");
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Visual Layers & Overlays");
                     ImGui::Checkbox("Orbit Paths (O)", &showOrbits);
                     ImGui::Checkbox("Planet Labels (L)", &showLabels);
                     ImGui::Checkbox("Atmospheric Scattering", &showAtmospheres);

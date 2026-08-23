@@ -14,6 +14,7 @@ TEST_CASE("Settings Persistence INI Round-Trip", "[settings]") {
     original.bloomEnabled = false;
     original.sunIntensity = 1.45f;
     original.ringOpacity  = 0.72f;
+    original.fullscreen   = true;
 
     saveSettings(testPath, original);
 
@@ -28,6 +29,7 @@ TEST_CASE("Settings Persistence INI Round-Trip", "[settings]") {
     REQUIRE(loaded.bloomEnabled == false);
     REQUIRE(loaded.sunIntensity == Approx(1.45f));
     REQUIRE(loaded.ringOpacity  == Approx(0.72f));
+    REQUIRE(loaded.fullscreen   == true);
 
     std::remove(testPath);
 }

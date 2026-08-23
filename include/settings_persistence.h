@@ -27,9 +27,10 @@ struct AppSettings {
     float atmosphereGlowScale = 1.0f;
     float ringOpacity     = 0.90f;
 
-    // Camera
+    // Camera & Screen
     float fieldOfView = 60.0f;
     bool  vsyncEnabled = true;
+    bool  fullscreen   = false;
 
     std::string serialize() const;
     void apply(const std::unordered_map<std::string, std::string>& kv);

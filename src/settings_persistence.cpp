@@ -25,6 +25,7 @@ std::string AppSettings::serialize() const {
     ss << "ringOpacity=" << ringOpacity << "\n";
     ss << "fieldOfView=" << fieldOfView << "\n";
     ss << "vsyncEnabled=" << (vsyncEnabled ? 1 : 0) << "\n";
+    ss << "fullscreen=" << (fullscreen ? 1 : 0) << "\n";
     return ss.str();
 }
 
@@ -57,6 +58,7 @@ void AppSettings::apply(const std::unordered_map<std::string, std::string>& kv) 
     getF("ringOpacity", ringOpacity);
     getF("fieldOfView", fieldOfView);
     getB("vsyncEnabled", vsyncEnabled);
+    getB("fullscreen", fullscreen);
 
     masterVolume = std::clamp(masterVolume, 0.0f, 1.0f);
     musicVolume  = std::clamp(musicVolume, 0.0f, 1.0f);

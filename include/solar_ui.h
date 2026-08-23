@@ -34,6 +34,8 @@ public:
     bool showSettingsModal = false;
     bool showPlanetCard = false;
     bool showMissionModal = false;
+    bool isFullscreen = false;
+    bool pendingFullscreenToggle = false;
 
     // Simulation control references
     bool isPaused = false;
