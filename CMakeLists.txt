@@ -104,6 +104,7 @@ add_custom_command(TARGET SolarOdyssey POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Sound $<TARGET_FILE_DIR:SolarOdyssey>/Sound
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:SolarOdyssey>/shaders
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.jpg $<TARGET_FILE_DIR:SolarOdyssey>/icon.jpg
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.png $<TARGET_FILE_DIR:SolarOdyssey>/icon.png
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.ico $<TARGET_FILE_DIR:SolarOdyssey>/icon.ico
 )
 

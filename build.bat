@@ -91,6 +91,7 @@ xcopy /E /I /Y /Q Sound build\Sound\ >nul
 
 REM Copy icon files to build directory
 if exist "icon.jpg" copy /Y "icon.jpg" build\ >nul
+if exist "icon.png" copy /Y "icon.png" build\ >nul
 if exist "icon.ico" copy /Y "icon.ico" build\ >nul
 
 echo.

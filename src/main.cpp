@@ -1697,10 +1697,23 @@ int main(int argc, char** argv) {
 
     // Set Window and Taskbar Icon
     int iconWidth = 0, iconHeight = 0, iconChannels = 0;
-    unsigned char* iconPixels = stbi_load("icon.jpg", &iconWidth, &iconHeight, &iconChannels, 4);
-    if (!iconPixels) {
-        iconPixels = stbi_load("../icon.jpg", &iconWidth, &iconHeight, &iconChannels, 4);
+    unsigned char* iconPixels = nullptr;
+    const char* iconCandidates[] = {
+        "icon.jpg", "icon.png",
+        "Textures/icon.jpg", "Textures/icon.png",
+        "../icon.jpg", "../icon.png",
+        "build/icon.jpg", "build/icon.png",
+        "build-cmake/icon.jpg", "build-cmake/icon.png"
+    };
+    const char* loadedPath = nullptr;
+    for (const char* path : iconCandidates) {
+        iconPixels = stbi_load(path, &iconWidth, &iconHeight, &iconChannels, 4);
+        if (iconPixels) {
+            loadedPath = path;
+            break;
+        }
     }
+
     if (iconPixels) {
         // Ensure 100% full opacity (alpha = 255) for all pixels
         for (int i = 0; i < iconWidth * iconHeight; ++i) {
@@ -1711,7 +1724,11 @@ int main(int argc, char** argv) {
         iconImage.height = iconHeight;
         iconImage.pixels = iconPixels;
         glfwSetWindowIcon(window, 1, &iconImage);
+        std::cout << "[Icon] Window and taskbar icon loaded successfully (" << iconWidth << "x" << iconHeight
+                  << " from " << loadedPath << ")" << std::endl;
         stbi_image_free(iconPixels);
+    } else {
+        std::cerr << "[Icon] Warning: Failed to load window icon (icon.jpg / icon.png not found in search paths)" << std::endl;
     }
 
     glfwMakeContextCurrent(window);
