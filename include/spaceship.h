@@ -125,7 +125,6 @@ public:
     glm::vec3 getCameraTarget() const;
     float getSpeedKmh() const;
 
-    void setMat(const GLfloat amb[4], const GLfloat diff[4], const GLfloat spec[4], float shininess, const GLfloat emis[4] = nullptr);
     void render(const glm::mat4& projection, const glm::mat4& view);
     void renderCockpitInterior(const glm::mat4& projection, const glm::mat4& view);
 };
