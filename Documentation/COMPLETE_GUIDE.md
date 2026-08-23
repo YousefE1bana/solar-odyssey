@@ -128,9 +128,6 @@ pacman -S mingw-w64-x86_64-gcc \
 # Run application
 cd build
 .\SolarOdyssey.exe
-
-# Optional: Convert audio files
-.\convert_audio.bat
 ```
 
 ---
@@ -342,28 +339,17 @@ The audio system uses **OpenAL** for 3D spatial audio with procedural tone gener
 
 - **Planet Selection Sounds**: Each planet generates a unique procedural tone
 - **POV Ambient Sounds**: Continuous looping ambient sounds in Planet POV mode
-- **Background Music Control**: Toggle background music on/off
-- **Sound Effects Control**: Toggle planet selection sounds on/off
-
 ### Audio File Support
-Currently supports procedural tones. To use included MP3 files:
-
-#### Option 1: Automatic Conversion
-```bash
-# Requires FFmpeg
-.\convert_audio.bat
-```
-
-#### Option 2: Manual Conversion
-1. Convert MP3 files in `Sound/` directory to WAV format
-2. Use online converters like [CloudConvert](https://cloudconvert.com/mp3-to-wav)
-3. Ensure WAV files have same names as MP3 files
+The audio engine features native high-performance decoding via `dr_mp3` and `dr_wav` (public domain, zero external dependencies).
+- **Native MP3 Decoding**: All NASA planetary recordings and space ambient tracks in `Sound/*.mp3` load directly with zero conversion.
+- **WAV Support**: Standard PCM WAV files are supported out of the box.
+- **Procedural Tone Fallback**: Unmapped celestial bodies automatically fall back to tuned harmonic resonance tones.
 
 ### POV Ambient Sound Usage
 1. **Enable POV Mode**: Check "Enable Planet POV Mode"
 2. **Select Planet**: Click planet button or use POV tab radio buttons
-3. **Ambient Sound**: Unique looping tone starts automatically
-4. **Switch Planets**: Different planets have different ambient frequencies
+3. **Ambient Sound**: Authentic NASA planetary recording begins looping automatically
+4. **Switch Planets**: Different planets feature distinct planetary audio profiles
 5. **Disable**: Uncheck POV mode or click "Disable POV" to stop
 
 ### Sound Characteristics

@@ -31,10 +31,7 @@ cd build
 .\SolarOdyssey.exe
 ```
 
-## Optional: Convert Audio Files
-```bash
-# If you have FFmpeg installed
-.\convert_audio.bat
-```
+## Audio Playback
+All MP3 and WAV planetary and ambient sound tracks are decoded natively via `dr_mp3` and `dr_wav` with zero external dependencies (no FFmpeg conversion required).
 
 That's it! 🚀

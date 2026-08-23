@@ -51,7 +51,7 @@
 - **saturn.mp3** - Saturn ambient sound (gaseous)
 - **uranus.mp3** - Uranus ambient sound (icy)
 - **neptune.mp3** - Neptune ambient sound (stormy)
-- ***.wav** - Converted WAV versions (created by convert_audio.bat)
+- *Native MP3/WAV playback via `dr_mp3` and `dr_wav`*
 
 ### imgui/ (Dear ImGui UI Library)
 - **imgui.cpp, imgui.h** - Core ImGui library files

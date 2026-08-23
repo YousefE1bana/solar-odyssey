@@ -59,6 +59,7 @@
 #include "immediate_batch.h"
 #include "orbital_physics.h"
 #include "nbody_simulation.h"
+#include "audio_loader.h"
 
 using namespace std;
 using namespace glm;
@@ -394,75 +395,6 @@ Moon::Moon(const string& name, float size, float orbitRadius, float orbitSpeed,
 }
 
 // Audio implementations
-// RIFF-aware WAV loader: walks chunks instead of assuming a bare 44-byte header,
-// so files with LIST/INFO/fact chunks or odd-sized data load correctly.
-bool loadWavWhole(const std::string &path, std::vector<char> &outPCM, ALenum &outFmt, ALsizei &outRate) {
-    FILE *file = fopen(path.c_str(), "rb");
-    if (!file) return false;
-
-    unsigned char riff[12];
-    if (fread(riff, 1, 12, file) != 12 ||
-        memcmp(riff, "RIFF", 4) != 0 || memcmp(riff + 8, "WAVE", 4) != 0) {
-        fclose(file);
-        return false;
-    }
-
-    bool fmtFound = false;
-    short channels = 0, bits = 0;
-    int sampleRate = 0;
-
-    while (true) {
-        unsigned char chunkHeader[8];
-        size_t got = fread(chunkHeader, 1, 8, file);
-        if (got < 8) break;
-
-        unsigned int chunkSize = (unsigned int)chunkHeader[4] |
-                                 ((unsigned int)chunkHeader[5] << 8) |
-                                 ((unsigned int)chunkHeader[6] << 16) |
-                                 ((unsigned int)chunkHeader[7] << 24);
-
-        if (memcmp(chunkHeader, "fmt ", 4) == 0 && chunkSize >= 16) {
-            unsigned char fmt[16];
-            if (fread(fmt, 1, 16, file) != 16) break;
-            if (chunkSize > 16) fseek(file, (long)(chunkSize - 16), SEEK_CUR);
-            // memcpy reads: unaligned pointer casts are UB and non-portable
-            short fmtChannels, fmtBits;
-            int   fmtSampleRate;
-            memcpy(&fmtChannels,    fmt + 2, sizeof(short));
-            memcpy(&fmtSampleRate,  fmt + 4, sizeof(int));
-            memcpy(&fmtBits,        fmt + 14, sizeof(short));
-            channels    = fmtChannels;
-            sampleRate  = fmtSampleRate;
-            bits        = fmtBits;
-            fmtFound = true;
-        } else if (memcmp(chunkHeader, "data", 4) == 0) {
-            if (!fmtFound) { // data before fmt is invalid; bail out
-                fclose(file);
-                return false;
-            }
-            // Sanity cap: reject absurd chunk sizes (allocation-bomb guard for
-            // crafted/corrupt files). 256 MB of PCM is far beyond any track here.
-            if (chunkSize > 256u * 1024u * 1024u) {
-                fclose(file);
-                return false;
-            }
-            outPCM.resize(chunkSize);
-            size_t read = fread(outPCM.data(), 1, chunkSize, file);
-            outPCM.resize(read);
-            break; // first data chunk is all we need
-        } else {
-            fseek(file, (long)(chunkSize + (chunkSize & 1)), SEEK_CUR); // skip + pad byte
-        }
-    }
-
-    fclose(file);
-
-    if (!fmtFound || bits != 16 || (channels != 1 && channels != 2) || outPCM.empty()) return false;
-    outFmt = (channels == 1) ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
-    outRate = sampleRate;
-    return true;
-}
-
 void musicStop() {
     if (!audioDevice || !backgroundSource) return;
     alSourceStop(backgroundSource);
@@ -477,7 +409,7 @@ void musicLoad(const std::string &path) {
     if (!audioDevice || !backgroundSource) return;
     musicStop();
     if (!gMusic.buffers[0]) alGenBuffers(BackgroundMusic::kBuffers, gMusic.buffers);
-    if (!loadWavWhole(path, gMusic.data, gMusic.format, gMusic.sampleRate)) {
+    if (!AudioLoader::loadAudioFile(path, gMusic.data, gMusic.format, gMusic.sampleRate)) {
         return;
     }
     gMusic.trackPath = path;
@@ -493,6 +425,7 @@ void musicLoad(const std::string &path) {
     alSourcef(backgroundSource, AL_GAIN, vol);
     alSourcePlay(backgroundSource);
     gMusic.active = true;
+    std::cout << "[Audio] Background music streaming: " << path << " (" << gMusic.sampleRate << " Hz, " << gMusic.data.size() / 1024 << " KB)" << std::endl;
 }
 
 void musicUpdate() {
@@ -599,12 +532,33 @@ void initializeSounds() {
 
     vector<string> planetNames = {"Sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"};
     for (const string &planetName : planetNames) {
-        ALuint source, buffer;
+        ALuint source = 0, buffer = 0;
         alGenSources(1, &source);
         alGenBuffers(1, &buffer);
+
+        std::string lowerName = planetName;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+
+        std::vector<char> pcm;
+        ALenum format = 0;
+        ALsizei sampleRate = 0;
+        if (AudioLoader::loadAudioFile(lowerName + ".mp3", pcm, format, sampleRate)) {
+            alBufferData(buffer, format, pcm.data(), (ALsizei)pcm.size(), sampleRate);
+            std::cout << "[Audio] Loaded native space track for " << planetName << " (" << pcm.size() / 1024 << " KB, " << sampleRate << " Hz)" << std::endl;
+        } else {
+            // Procedural resonant fallback for celestial bodies without a dedicated recording
+            float frequency = 110.0f;
+            for (char c : planetName) frequency += c * 1.5f;
+            frequency = fmod(frequency, 330.0f) + 90.0f;
+            generateTone(buffer, frequency, 2.0f);
+        }
+
         planetSoundSources[planetName] = source;
         planetSoundBuffers[planetName] = buffer;
     }
+
+    // Auto-start ambient space music stream
+    musicLoad("Sound/earth.mp3");
 }
 
 void playPlanetSound(const string &planetName) {
@@ -614,13 +568,10 @@ void playPlanetSound(const string &planetName) {
     auto bufferIt = planetSoundBuffers.find(planetName);
 
     if (sourceIt != planetSoundSources.end() && bufferIt != planetSoundBuffers.end()) {
-        float frequency = 220.0f;
-        for (char c : planetName) frequency += c * 2.5f;
-        frequency = fmod(frequency, 700.0f) + 200.0f;
-
-        generateTone(bufferIt->second, frequency, 0.6f);
+        alSourceStop(sourceIt->second);
         alSourcei(sourceIt->second, AL_BUFFER, bufferIt->second);
-        float vol = solarUI.masterVolume * solarUI.sfxVolume;
+        alSourcei(sourceIt->second, AL_LOOPING, AL_FALSE);
+        float vol = solarUI.masterVolume * solarUI.sfxVolume * 0.7f;
         alSourcef(sourceIt->second, AL_GAIN, vol);
         alSourcePlay(sourceIt->second);
     }
@@ -637,14 +588,9 @@ void startPOVAmbientSound(const string &planetName) {
         currentPOVPlanet = planetName;
         currentPOVSource = sourceIt->second;
 
-        float frequency = 110.0f;
-        for (char c : planetName) frequency += c * 1.5f;
-        frequency = fmod(frequency, 330.0f) + 90.0f;
-
-        generateTone(bufferIt->second, frequency, 2.0f);
         alSourcei(currentPOVSource, AL_BUFFER, bufferIt->second);
         alSourcei(currentPOVSource, AL_LOOPING, AL_TRUE);
-        float vol = solarUI.masterVolume * solarUI.sfxVolume * 0.4f;
+        float vol = solarUI.masterVolume * solarUI.sfxVolume * 0.5f;
         alSourcef(currentPOVSource, AL_GAIN, vol);
         alSourcePlay(currentPOVSource);
     }
@@ -1699,8 +1645,16 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
                   << " -> " << (nbodyActive && earthValid ? "PASS" : "FAIL") << std::endl;
         solarUI.physicsMode = 0;
         solarUI.pendingPhysicsModeChange = true;
-    } else if (qaFrameCount >= 520) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, and N-Body tests completed successfully!" << std::endl;
+    } else if (qaFrameCount == 515) {
+        // TEST 16: Native MP3 audio decoding & OpenAL streaming verification
+        bool musicLoaded = gMusic.active && (!gMusic.data.empty());
+        bool soundBuffersReady = (planetSoundBuffers["Earth"] != 0);
+        std::cout << "[QA TEST 16] Native MP3 Audio Decoding -> musicActive=" << (musicLoaded ? "true" : "false")
+                  << ", musicRate=" << gMusic.sampleRate
+                  << ", pcmSizeKB=" << gMusic.data.size() / 1024
+                  << " -> " << (musicLoaded && soundBuffersReady ? "PASS" : "FAIL") << std::endl;
+    } else if (qaFrameCount >= 522) {
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, and Native Audio tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }

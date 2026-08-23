@@ -238,7 +238,7 @@ pacman -S mingw-w64-x86_64-glfw mingw-w64-x86_64-glm
 #### 4. "Audio not working"
 **Solution**: 
 - Ensure OpenAL is installed: `pacman -S mingw-w64-x86_64-openal`
-- Convert MP3 files to WAV: `.\convert_audio.bat`
+- MP3/WAV files are decoded natively via `dr_mp3`/`dr_wav` (no conversion necessary)
 - Check audio drivers are up to date
 
 #### 5. "Missing DLL errors"
