@@ -47,6 +47,7 @@ public:
     glm::vec3 position = glm::vec3(0.0f, 6.0f, 22.0f);
     glm::vec3 prevFramePosition = position;
     glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 externalGravityAccel = glm::vec3(0.0f);
     glm::vec3 forward = glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 right = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -119,6 +120,7 @@ public:
                       bool pitchUp, bool pitchDown, bool boost, float dt);
 
     void update(float dt, const std::vector<std::pair<std::string, std::pair<glm::vec3, float>>>& planetaryBodies);
+    void applyGravityAcceleration(const glm::vec3& accel) { externalGravityAccel = accel; }
 
     glm::mat4 getViewMatrix() const;
     glm::vec3 getCameraEye() const;

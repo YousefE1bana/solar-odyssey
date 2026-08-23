@@ -43,6 +43,8 @@ public:
     float elapsedSimDays = 0.0f;
 
     // Planetary Simulation Parameters
+    int   physicsMode = 0; // 0 = PHYSICS_KEPLERIAN, 1 = PHYSICS_NBODY
+    bool  pendingPhysicsModeChange = false;
     float planetScale = 1.0f;
     float orbitSpeedScale = 1.0f;
     float spinSpeedScale = 1.0f;

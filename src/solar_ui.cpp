@@ -384,6 +384,14 @@ void SolarOdysseyUI::renderBottomControlBar(float screenWidth, float screenHeigh
             ImGui::SameLine(0, 12);
             // Elapsed time indicator
             ImGui::TextColored(ImVec4(0.70f, 0.80f, 0.90f, 1.0f), "Day %.0f", elapsedSimDays);
+
+            if (physicsMode == 1) {
+                ImGui::SameLine(0, 8);
+                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.20f, 1.0f), "[N-BODY GRAVITY]");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Live N-Body universal gravitation is actively simulating all orbital perturbations.");
+                }
+            }
         }
         ImGui::End();
     }
@@ -535,6 +543,28 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
                     ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Celestial Bodies & Orbit Physics");
                     ImGui::Separator();
                     ImGui::Spacing();
+
+                    const char* physicsModes[] = {
+                        "Keplerian Orbits (Stable Standard)",
+                        "N-Body Gravitation (Real Physics Simulation)"
+                    };
+                    int currentPhysics = physicsMode;
+                    if (ImGui::Combo("Physics Mode", &currentPhysics, physicsModes, IM_ARRAYSIZE(physicsModes))) {
+                        if (currentPhysics != physicsMode) {
+                            physicsMode = currentPhysics;
+                            pendingPhysicsModeChange = true;
+                        }
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(
+                            "Keplerian: Textbook geometric orbits (predictable and stable indefinitely).\n"
+                            "N-Body: Real pairwise Newton universal gravitation (F = G*m1*m2/r^2).\n"
+                            "Planets experience live gravitational pull, precession, and orbital resonances."
+                        );
+                    }
+                    if (physicsMode == 1) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.20f, 1.0f), "  [!] Real N-Body Gravity Active - Orbits computed via Velocity Verlet integrator.");
+                    }
 
                     ImGui::SliderFloat("Visual Planet Scale", &planetScale, 0.25f, 3.50f, "%.2fx");
                     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies the render size of all planets and moons.");

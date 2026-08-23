@@ -248,6 +248,7 @@ void Spaceship::update(float dt, const std::vector<std::pair<std::string, std::p
             // Manual flight propulsion
             glm::vec3 desiredThrust = forward * (targetLinearSpeed * acceleration * dt);
             velocity += desiredThrust;
+            velocity += externalGravityAccel * dt; // Apply real N-Body gravity assist
             velocity *= pow(linearDrag, dt * 60.0f);
 
             // Clamp max speed
