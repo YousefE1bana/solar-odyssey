@@ -62,6 +62,7 @@
 #include "audio_loader.h"
 #include "lod_manager.h"
 #include "save_state.h"
+#include "shadow_math.h"
 
 using namespace std;
 using namespace glm;
@@ -192,6 +193,17 @@ GLint uAtmosphereGlowLoc = -1;
 GLint uSpecularStrengthLoc = -1;
 GLint uTimeLoc = -1;
 GLint uSunEyePosLoc = -1;
+
+// Analytical Ring & Eclipse Shadow Uniforms
+GLint uSunLocalPosLoc = -1;
+GLint uHasRingsLoc = -1;
+GLint uRingInnerRadiusLoc = -1;
+GLint uRingOuterRadiusLoc = -1;
+GLint uIsRingLoc = -1;
+GLint uPlanetRadiusLoc = -1;
+GLint uHasEclipseLoc = -1;
+GLint uEclipseLocalPosLoc = -1;
+GLint uEclipseRadiusLoc = -1;
 
 GLuint sunProgram = 0;
 GLint uSunTexLoc = -1;
@@ -906,7 +918,7 @@ void drawOrbit(float radius, bool isSelected) {
     glDisable(GL_BLEND);
 }
 
-void drawSaturnRings(float innerRadius, float outerRadius, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos) {
+void drawSaturnRings(float innerRadius, float outerRadius, float planetRadius, const glm::mat4& ringModel, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos) {
     if (!planetProgram) return;
 
     glEnable(GL_BLEND);
@@ -967,6 +979,14 @@ void drawSaturnRings(float innerRadius, float outerRadius, const glm::mat4& ring
     glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
     glUniform1f(uSunIntensityLoc, 1.35f);
     glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
+
+    // Analytical Shadows for Ring Geometry
+    glUniform1i(uIsRingLoc, 1);
+    glUniform1f(uPlanetRadiusLoc, planetRadius);
+    glUniform1i(uHasRingsLoc, 0);
+    glUniform1i(uHasEclipseLoc, 0);
+    glm::vec3 sunLocalPos = glm::vec3(glm::inverse(ringModel) * glm::vec4(sunWorldPosition, 1.0f));
+    glUniform3f(uSunLocalPosLoc, sunLocalPos.x, sunLocalPos.y, sunLocalPos.z);
 
     uploadCoreMatricesDirect(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, ringMV, projMat);
 
@@ -1096,6 +1116,37 @@ void renderPlanets(float time) {
             glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
             glUniform1f(uSunIntensityLoc, (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f);
             glUniform1f(uTimeLoc, time);
+
+            // Analytical Ring and Eclipse Shadow Uniforms
+            glUniform1i(uIsRingLoc, 0);
+            glm::vec3 planetSunLocalPos = glm::vec3(glm::inverse(planetModel) * glm::vec4(sunWorldPosition, 1.0f));
+            glUniform3f(uSunLocalPosLoc, planetSunLocalPos.x, planetSunLocalPos.y, planetSunLocalPos.z);
+
+            if (planet.hasRings) {
+                glUniform1i(uHasRingsLoc, 1);
+                glUniform1f(uRingInnerRadiusLoc, planet.ringInnerRadius / planet.size);
+                glUniform1f(uRingOuterRadiusLoc, planet.ringOuterRadius / planet.size);
+            } else {
+                glUniform1i(uHasRingsLoc, 0);
+            }
+
+            // Eclipse shadow check (e.g. Moon on Earth)
+            bool eclipseFound = false;
+            for (const auto& m : moons) {
+                if (m.parentPlanet == planet.name) {
+                    glm::vec3 moonLocalPos = glm::vec3(glm::inverse(planetModel) * glm::vec4(m.currentPosition, 1.0f));
+                    float moonLocalRadius = (m.size * solarUI.planetScale) / effectiveSize;
+                    glUniform1i(uHasEclipseLoc, 1);
+                    glUniform3f(uEclipseLocalPosLoc, moonLocalPos.x, moonLocalPos.y, moonLocalPos.z);
+                    glUniform1f(uEclipseRadiusLoc, moonLocalRadius);
+                    eclipseFound = true;
+                    break;
+                }
+            }
+            if (!eclipseFound) {
+                glUniform1i(uHasEclipseLoc, 0);
+            }
+
             uploadCoreMatricesDirect(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, planetMV, currentProjMatrix);
 
             lod::LODManager::instance().drawSphere(planetTier);
@@ -1114,7 +1165,7 @@ void renderPlanets(float time) {
             ringModel = glm::rotate(ringModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
             ringModel = glm::rotate(ringModel, glm::radians(26.7f), glm::vec3(1.0f, 0.0f, 0.2f));
             glm::mat4 ringMV = curView * ringModel;
-            drawSaturnRings(planet.ringInnerRadius * solarUI.planetScale, planet.ringOuterRadius * solarUI.planetScale, ringMV, currentProjMatrix, sunEyePos);
+            drawSaturnRings(planet.ringInnerRadius * solarUI.planetScale, planet.ringOuterRadius * solarUI.planetScale, effectiveSize, ringModel, ringMV, currentProjMatrix, sunEyePos);
         }
     }
 
@@ -1141,6 +1192,13 @@ void renderPlanets(float time) {
                     glUniform1f(uAtmosphereGlowLoc, 0.0f);
                     glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
                     glUniform1f(uSunIntensityLoc, 1.25f);
+
+                    glUniform1i(uIsRingLoc, 0);
+                    glUniform1i(uHasRingsLoc, 0);
+                    glUniform1i(uHasEclipseLoc, 0);
+                    glm::vec3 moonSunLocalPos = glm::vec3(glm::inverse(moonModel) * glm::vec4(sunWorldPosition, 1.0f));
+                    glUniform3f(uSunLocalPosLoc, moonSunLocalPos.x, moonSunLocalPos.y, moonSunLocalPos.z);
+
                     uploadCoreMatricesDirect(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, moonMV, currentProjMatrix);
                     lod::LODManager::instance().drawSphere(moonTier);
                     lod::LODManager::instance().recordBodyRender(moon.name, distToMoon, effectiveMoonSize, moonTier);
@@ -1712,8 +1770,25 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
                       << ", workgroups=" << telem.dispatchedWorkgroups
                       << " -> " << (computeOk ? "PASS" : "FAIL") << std::endl;
         }
-    } else if (qaFrameCount >= 535) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, Save State, and Compute Shader tests completed successfully!" << std::endl;
+    } else if (qaFrameCount == 530) {
+        // TEST 20: Analytical Ring & Eclipse Shadow calculations
+        glm::vec3 sunDir = glm::normalize(glm::vec3(0.0f, 0.5f, 1.0f));
+        glm::vec3 ringHitSurface(0.0f, -0.8f, 0.0f);
+        float ringShadow = ShadowMath::calculateRingShadowOnPlanet(ringHitSurface, sunDir, 1.25f, 2.45f, true);
+
+        glm::vec3 shadowRing(0.0f, 0.0f, 2.0f);
+        float planetShadow = ShadowMath::calculatePlanetShadowOnRing(shadowRing, glm::vec3(0.0f, 0.0f, -1.0f), 1.0f, true);
+
+        glm::vec3 eclipseCenter(0.0f, 0.0f, -1.0f);
+        float eclipseShadow = ShadowMath::calculateEclipseShadow(eclipseCenter, glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 0.0f, -2.0f), 0.25f, true);
+
+        bool shadowOk = (ringShadow < 0.5f) && (planetShadow < 0.05f) && (eclipseShadow < 0.20f);
+        std::cout << "[QA TEST 20] Analytical Ring & Eclipse Shadows -> ringShadow=" << ringShadow
+                  << ", planetOnRing=" << planetShadow
+                  << ", moonEclipse=" << eclipseShadow
+                  << " -> " << (shadowOk ? "PASS" : "FAIL") << std::endl;
+    } else if (qaFrameCount >= 540) {
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, Save State, Compute Shader, and Analytical Shadow tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
@@ -1867,6 +1942,18 @@ int main(int argc, char** argv) {
                 uModelViewLoc = glGetUniformLocation(planetProgram, "uModelView");
                 uProjectionLoc = glGetUniformLocation(planetProgram, "uProjection");
                 uNormalMatrixLoc = glGetUniformLocation(planetProgram, "uNormalMatrix");
+
+                // Analytical Ring & Eclipse Shadow Uniforms
+                uSunLocalPosLoc = glGetUniformLocation(planetProgram, "uSunLocalPos");
+                uHasRingsLoc = glGetUniformLocation(planetProgram, "uHasRings");
+                uRingInnerRadiusLoc = glGetUniformLocation(planetProgram, "uRingInnerRadius");
+                uRingOuterRadiusLoc = glGetUniformLocation(planetProgram, "uRingOuterRadius");
+                uIsRingLoc = glGetUniformLocation(planetProgram, "uIsRing");
+                uPlanetRadiusLoc = glGetUniformLocation(planetProgram, "uPlanetRadius");
+                uHasEclipseLoc = glGetUniformLocation(planetProgram, "uHasEclipse");
+                uEclipseLocalPosLoc = glGetUniformLocation(planetProgram, "uEclipseLocalPos");
+                uEclipseRadiusLoc = glGetUniformLocation(planetProgram, "uEclipseRadius");
+
                 shadersReady = true;
             }
         }

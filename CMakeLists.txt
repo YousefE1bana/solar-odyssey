@@ -132,6 +132,7 @@ add_executable(SolarOdysseyTests
   tests/test_audio_loader.cpp
   tests/test_lod_manager.cpp
   tests/test_save_state.cpp
+  tests/test_shadow_math.cpp
   src/planet_data.cpp
   src/picking.cpp
   src/camera_controller.cpp
