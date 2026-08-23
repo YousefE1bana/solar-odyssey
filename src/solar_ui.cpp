@@ -621,25 +621,43 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
                     ImGui::Separator();
                     ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Visual Layers & Overlays");
                     ImGui::Checkbox("Orbit Paths (O)", &showOrbits);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Renders physical Keplerian orbital trajectories for all bodies.");
+
                     ImGui::Checkbox("Planet Labels (L)", &showLabels);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("3D projected billboard markers with distance attenuation.");
+
                     ImGui::Checkbox("Atmospheric Scattering", &showAtmospheres);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multi-spectral Rayleigh and Mie atmospheric limb scattering.");
+
                     ImGui::Checkbox("Asteroid Belt", &showAsteroids);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("GPU instanced main belt simulation with Kirkwood resonance gaps.");
+
                     ImGui::Checkbox("Solar Particles & Comets", &showParticles);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Ejected solar flare particles and hyperbolic comet with dual tails.");
+
                     ImGui::Checkbox("Performance Diagnostics", &showDiagnostics);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Real-time GPU renderer, driver version, FPS, and frametime telemetry.");
 
                     ImGui::Spacing();
                     ImGui::Separator();
-                    ImGui::Text("Cinematic Post-Processing:");
+                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Cinematic Post-Processing");
                     ImGui::Checkbox("Enable Post-Processing Pipeline", &postProc.enabled);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Master toggle for HDR framebuffer pipeline.");
+
                     if (postProc.enabled) {
                         ImGui::Checkbox("Bloom Lighting & Corona", &postProc.bloomEnabled);
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multi-pass Gaussian bloom for solar corona & accretion disks.");
+
                         if (postProc.bloomEnabled) {
-                            ImGui::SliderFloat("Bloom Intensity", &postProc.bloomIntensity, 0.1f, 1.2f);
-                            ImGui::SliderFloat("Bloom Threshold", &postProc.bloomThreshold, 0.5f, 1.2f);
+                            ImGui::SliderFloat("Bloom Intensity", &postProc.bloomIntensity, 0.1f, 1.2f, "%.2f");
+                            ImGui::SliderFloat("Bloom Threshold", &postProc.bloomThreshold, 0.5f, 1.2f, "%.2f");
                         }
                         ImGui::Checkbox("ACES Filmic Tone Mapping", &postProc.toneMappingEnabled);
-                        ImGui::SliderFloat("Exposure", &postProc.exposure, 0.5f, 2.5f);
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Academy Color Encoding System curve for cinematic dynamic range.");
+
+                        ImGui::SliderFloat("Exposure", &postProc.exposure, 0.5f, 2.5f, "%.2f");
                         ImGui::Checkbox("Vignette", &postProc.vignetteEnabled);
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Subtle optical lens darkening towards screen borders.");
                     }
                     ImGui::EndTabItem();
                 }
@@ -792,17 +810,29 @@ void SolarOdysseyUI::renderDiagnostics(float screenWidth) {
         if (!showDiagnostics) return;
 
         ImGui::SetNextWindowPos(ImVec2(16, 85), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(340, 215), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("Diagnostics", &showDiagnostics)) {
-            ImGui::Text("FPS: %.1f (%.2f ms)", ImGui::GetIO().Framerate, 1000.0f / ImGui::GetIO().Framerate);
+        if (ImGui::Begin("Diagnostics & Telemetry", &showDiagnostics)) {
+            float fps = ImGui::GetIO().Framerate;
+            float frameMs = 1000.0f / (fps > 0.001f ? fps : 1.0f);
+            ImVec4 fpsColor = (fps >= 55.0f) ? ImVec4(0.35f, 0.95f, 0.55f, 1.0f) :
+                              (fps >= 30.0f) ? ImVec4(1.0f, 0.85f, 0.35f, 1.0f) :
+                                               ImVec4(1.0f, 0.40f, 0.35f, 1.0f);
+
+            ImGui::TextColored(fpsColor, "Performance: %.1f FPS (%.2f ms)", fps, frameMs);
             ImGui::Separator();
-            ImGui::Text("OpenGL: %s", (const char*)glGetString(GL_VERSION));
+
+            ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Hardware & Driver:");
             ImGui::Text("GPU: %s", (const char*)glGetString(GL_RENDERER));
+            ImGui::Text("API: %s", (const char*)glGetString(GL_VERSION));
             ImGui::Separator();
-            ImGui::Text("Quality: %s", qualityPreset == QUALITY_LOW ? "Low" :
+
+            ImGui::TextDisabled("Display & Quality:");
+            ImGui::Text("Screen: %s (F11)", isFullscreen ? "Fullscreen" : "Windowed");
+            ImGui::Text("Preset: %s", qualityPreset == QUALITY_LOW ? "Low" :
                                       qualityPreset == QUALITY_MEDIUM ? "Medium" :
                                       qualityPreset == QUALITY_HIGH ? "High" : "Ultra");
+            ImGui::Text("Simulation: %.2fx (Day %.0f)", timeMultiplier, elapsedSimDays);
         }
         ImGui::End();
     }
@@ -965,12 +995,12 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
         if (ImGui::Begin("SpaceshipHelp", nullptr, flags)) {
             ImGui::TextColored(ImVec4(0.65f, 0.80f, 0.95f, 1.0f), " FLIGHT CONTROLS");
             ImGui::Separator();
-            ImGui::Text("W/S: Thrust / Brake    | Shift: Boost");
-            ImGui::Text("A/D: Yaw    Q/E: Roll  | R/F: Pitch");
-            ImGui::Text("J: Warp to Target      | H: Orbit Assist");
+            ImGui::Text("W/S: Thrust / Brake  |  Shift: Boost");
+            ImGui::Text("A/D: Yaw  |  Q/E: Roll  |  R/F: Pitch");
+            ImGui::Text("J: Warp / Autopilot  |  H: Orbit Assist");
             const char* camName = (ship.cameraView == SHIP_CAM_CHASE) ? "CHASE" :
                                   (ship.cameraView == SHIP_CAM_CLOSE) ? "CLOSE" : "COCKPIT";
-            ImGui::Text("C: Cam [%s]  | X: Exit Flight", camName);
+            ImGui::Text("C: View [%s]  |  X / Esc: Exit", camName);
             ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.45f, 0.95f), "Hold [Alt] to release cursor for UI");
         }
         ImGui::End();

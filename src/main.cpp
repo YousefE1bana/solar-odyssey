@@ -1502,21 +1502,34 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
     } else if (qaFrameCount == 15) {
         postPipeline.captureScreenshot("Screenshots/Polish/overview.bmp");
         postPipeline.captureScreenshot("Screenshots/Regression/explorer_normal.bmp");
+        solarUI.selectedPlanetName = "Earth";
+        solarUI.showPlanetCard = true;
+    } else if (qaFrameCount == 22) {
+        postPipeline.captureScreenshot("Screenshots/Polish/planet_dossier.bmp");
+        solarUI.showPlanetCard = false;
+        solarUI.showDiagnostics = true;
+    } else if (qaFrameCount == 28) {
+        postPipeline.captureScreenshot("Screenshots/Polish/diagnostics.bmp");
+        solarUI.showDiagnostics = false;
+        solarUI.showSettingsModal = true;
+    } else if (qaFrameCount == 35) {
+        postPipeline.captureScreenshot("Screenshots/Polish/settings_modal.bmp");
+        solarUI.showSettingsModal = false;
         focusPlanetByName("Sun");
-    } else if (qaFrameCount == 45) {
+    } else if (qaFrameCount == 55) {
         postPipeline.captureScreenshot("Screenshots/Polish/sun.bmp");
         focusPlanetByName("Earth");
-    } else if (qaFrameCount == 80) {
+    } else if (qaFrameCount == 90) {
         postPipeline.captureScreenshot("Screenshots/Polish/earth.bmp");
         focusPlanetByName("Jupiter");
-    } else if (qaFrameCount == 115) {
+    } else if (qaFrameCount == 125) {
         postPipeline.captureScreenshot("Screenshots/Polish/jupiter.bmp");
         focusPlanetByName("Saturn");
-    } else if (qaFrameCount == 150) {
+    } else if (qaFrameCount == 160) {
         postPipeline.captureScreenshot("Screenshots/Polish/saturn.bmp");
         cameraCtrl.setPhotoMode(true);
         focusPlanetByName("Earth");
-    } else if (qaFrameCount == 185) {
+    } else if (qaFrameCount == 190) {
         postPipeline.triggerScreenshot("Screenshots/Polish/photo_clean.bmp");
         cameraCtrl.setPhotoMode(false);
     } else if (qaFrameCount == 200) {
@@ -1604,6 +1617,7 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
         std::cout << "[QA TEST 12] Enter Free Cam with F -> cameraMode=" << cameraCtrl.mode
                   << ", cursorCaptured=" << (isFlightMouseCaptured ? "true" : "false")
                   << " -> " << (cameraCtrl.mode == CAM_FREE && isFlightMouseCaptured ? "PASS" : "FAIL") << std::endl;
+        postPipeline.captureScreenshot("Screenshots/Polish/freecam_hud.bmp");
     } else if (qaFrameCount == 261) {
         // TEST 13: Press F to exit Free Cam -> cursor restored to normal
         keyCallback(window, GLFW_KEY_F, 0, GLFW_PRESS, 0);
@@ -1647,6 +1661,7 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
         solarUI.showMissionModal = true;
     } else if (qaFrameCount == 415) {
         postPipeline.captureScreenshot("Screenshots/Polish/mission_hud.bmp");
+        postPipeline.captureScreenshot("Screenshots/Polish/mission_modal.bmp");
         solarUI.showMissionModal = false;
         spaceship.warpSystem.cancelWarp();
         spaceship.active = false;

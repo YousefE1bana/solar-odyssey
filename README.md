@@ -1,189 +1,203 @@
-# Solar Odyssey
+# Solar Odyssey 🌌
 
 **Author:** Yousef Osama  
 **Position:** Cybersecurity Engineer  
-**University:** Egyptian Chinese University
+**University:** Egyptian Chinese University  
 
-A 3D visualization of the solar system with realistic planet textures, orbits, audio effects, and interactive controls.
+*A high-performance, modern OpenGL 4.5 Core solar system simulation, space exploration sandbox, and 6-DOF flight engine.*
 
-## Features
+---
 
-- Realistic 3D solar system with textured planets
-- Rotating and orbiting planets with accurate relative speeds
-- Detailed rings for Saturn
-- Earth with day/night texture modes and toggleable cloud overlay
-- Venus with atmosphere texture overlay
-- Starfield background using Milky Way texture
-- Light-emitting sun
-- **OpenAL Audio System** with procedural planet tones
-- Robust texture loading with fallbacks and Diagnostics panel
-- Smooth simulation timing with Pause and Time Scale controls
-- Optional VSync toggle
-- Interactive GUI with controls for planet properties, Earth day/night/clouds, sun brightness, starfield/orbits, audio, camera, atmospheres, Planet POV, and a diagnostics panel
+## Overview
 
-## Audio Features
+**Solar Odyssey** is a physically-grounded interactive celestial simulation and space exploration engine. Powered by a modern **OpenGL 4.5 Core profile** renderer utilizing **Direct State Access (DSA)** and **HDR post-processing**, Solar Odyssey bridges scientific accuracy with cinematic visual fidelity.
 
-The application now includes a complete OpenAL-based audio system:
+Navigate through 13 accurately-scaled celestial bodies, pilot a 6-DOF spacecraft with warp capabilities, plunge into the gravitational lensing of a supermassive black hole, traverse an Einstein-Rosen wormhole, and complete planetary navigation missions across the solar system.
 
-- **Planet Selection Sounds**: Each planet generates a unique procedural tone when selected
-- **POV Ambient Sounds**: Continuous looping ambient sounds when in Planet POV mode
-- **Background Music Control**: Toggle background music on/off
-- **Sound Effects Control**: Toggle planet selection sounds on/off
-- **Audio Settings**: Accessible through the Sound tab in the UI
+---
 
-### Audio File Support
+## Key Features
 
-Currently, the audio system supports procedural tone generation. To use the included MP3 sound files:
+### 🪐 1. Celestial & Orbital Physics Simulation
+- **13 Accurately Simulated Bodies**: The Sun, 8 major planets (Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune), and 4 dwarf planets (Pluto, Ceres, Haumea, Makemake, Eris).
+- **Physical Keplerian Orbits**: Real orbital eccentricities, semi-major axes, revolution rates, and rotational periods.
+- **Physical Axial Tilts**: True obliquities to orbit (Earth 23.4°, Mars 25.2°, Saturn 26.7°, Uranus 97.8° retrograde).
+- **Planetary Atmospheres**: Multi-spectral Rayleigh and Mie atmospheric limb scattering with custom day/night dynamic terminator blending.
+- **Asteroid Belt**: GPU-instanced simulation of main belt asteroids modeling gravitational **Kirkwood resonance gaps** induced by Jupiter.
+- **Dynamic Particle Systems**: Solar corona flare ejections and a hyperbolic comet with dual decoupled ion and dust tails.
 
-1. **Option 1**: Use the conversion script:
-   ```powershell
-   .\convert_audio.bat
-   ```
-   *(Requires FFmpeg to be installed and in PATH)*
+### 🚀 2. 6-DOF Flight Simulator & Warp Mechanics
+- **6 Degrees of Freedom (6-DOF)**: Pitch, yaw, roll, directional translation, inertial damping, and warp boost.
+- **Multiple Camera Modes**: Orbital Explorer, First-Person Surface POV, 6-DOF Free Flight, Cockpit View with HUD Horizon, Chase Camera, and Close Chase.
+- **Orbit Assist Autopilot**: Computes and executes prograde/retrograde orbital circularization burns.
+- **Interstellar Warp Drive**: Relativistic warp cruise with field distortion, space dilation, and target locking.
 
-2. **Option 2**: Manual conversion:
-   - Convert the MP3 files in the `Sound/` directory to WAV format
-   - Use online converters like [CloudConvert](https://cloudconvert.com/mp3-to-wav)
-   - Replace the file loading code to use WAV files
+### 🕳️ 3. Relativistic Shaders & Exotic Astrophysics
+- **Supermassive Black Hole**: Raymarched gravitational lensing with photon sphere warping, event horizon shadow, and a Doppler-boosted accretion disk.
+- **Traversable Wormhole**: Ellis-Bronnikov metric spacetime throat shader connecting disparate regions of space.
 
-### How to Use POV Ambient Sounds
+### 🎯 4. Mission System & Telemetry
+- **Campaign Objectives**: Multi-tier exploration missions spanning orbital insertion, asteroid belt navigation, and deep-space survey.
+- **Telemetry HUD**: Real-time relative distance, approach velocity, proximity alert warnings, and campaign progress trackers.
+- **Planetary Dossier**: Rich scientific database displaying physical diameters, surface gravities, atmospheric compositions, temperatures, and exploration history.
 
-1. **Enable POV Mode**: Click "Explore POV" in the Planetary Dossier card or UI tab
-2. **Select a Planet**: Click on a celestial body in the scene or top navigation bar
-3. **Enjoy Ambient Sound**: The planet's unique ambient sound will start looping
-4. **Switch Planets**: Select different planets to hear their unique ambient tones
-5. **Disable POV**: Press `Esc` or click "Reset View" to return to normal orbital mode
+### 🎨 5. Modern Post-Processing & Audio Pipeline
+- **HDR Framebuffer Pipeline**: High-precision 16-bit floating-point (`GL_RGBA16F`) rendering.
+- **Cinematic Bloom**: Multi-pass ping-pong Gaussian blur for luminous coronas and glowing accretion disks.
+- **ACES Filmic Tone Mapping**: Industry-standard dynamic range compression curve.
+- **OpenAL 3D Spatial Audio**: Procedural resonant planetary harmonic tones and environmental soundscapes.
+- **Settings Persistence**: Saves graphics presets, audio levels, and display configuration to `solar_odyssey_settings.ini`.
 
-## Controls & Hotkeys
+---
 
-- **Mouse Drag (Left/Right)**: Orbit view / Pan camera
-- **Mouse Scroll**: Zoom in / out
-- **Left Click**: Raycast-select celestial body (opens Planetary Dossier)
-- **WASD**: Orbit / Free-flight movement
-- **Space**: Pause / Resume simulation
-- **R**: Reset camera to default orbital view
-- **F**: Focus selected body / Toggle free camera
-- **T**: Start / Stop automated Guided Tour
-- **O**: Toggle orbit path rendering
-- **L**: Toggle 3D floating planet labels
-- **P**: Toggle clean Photo Mode (hides HUD)
-- **0 .. 8**: Quick-focus celestial bodies (0=Sun, 1=Mercury ... 8=Neptune)
-- **Esc**: Cancel selection / Exit Photo Mode / Stop Guided Tour
+## Master Controls & Keybinds
 
-In UI:
+| Key / Input | Context | Action |
+| :--- | :--- | :--- |
+| **`F11`** | Global | Toggle Fullscreen / Windowed Mode |
+| **`Left Click`** | Global / Explorer | Raycast-select celestial body & open Planetary Dossier |
+| **`Mouse Drag`** | Explorer | Orbit around focused celestial body / Pan view |
+| **`Mouse Scroll`** | Explorer / Free Cam | Zoom camera / Adjust flight cruising speed |
+| **`Space`** | Explorer | Pause / Resume planetary simulation clock |
+| **`R`** | Explorer | Reset camera to default solar system orbital overview |
+| **`0` .. `8`** | Explorer | Quick-focus celestial body (`0`=Sun, `1`=Mercury ... `8`=Neptune) |
+| **`F`** | Explorer | Enter / Exit 6-DOF Free Flight Camera |
+| **`X` / `Esc`** | Flight / Free Cam | Enter / Exit Spaceship Flight Mode |
+| **`W` / `S`** | Spaceship Flight | Main Thrusters (Forward Acceleration / Reverse Braking) |
+| **`A` / `D`** | Spaceship Flight | Yaw Left / Right |
+| **`Q` / `E`** | Spaceship Flight | Roll Counter-Clockwise / Clockwise |
+| **`R` / `F`** | Spaceship Flight | Pitch Up / Down |
+| **`Left Shift`** | Spaceship Flight | Warp Boost (Consumes boost energy reservoir) |
+| **`C`** | Spaceship Flight | Cycle Camera View (`Cockpit` $\leftrightarrow$ `Chase` $\leftrightarrow$ `Close`) |
+| **`J`** | Spaceship Flight | Engage / Cancel Autopilot Warp Intercept |
+| **`H`** | Spaceship Flight | Engage / Disengage Orbital Assist Circularization |
+| **`Left Alt` (Hold)** | Free Cam / Spaceship | Temporarily release captured mouse cursor for UI interaction |
+| **`M`** | Global | Open Interstellar Mission Log |
+| **`N`** | Global | Track Next Mission Objective |
+| **`O`** | Global | Toggle Keplerian Orbit Paths |
+| **`L`** | Global | Toggle 3D Projected Planet Labels |
+| **`P`** | Global | Enter / Exit Clean Photo Mode (FOV Slider + Screenshot) |
 
-- Help -> Diagnostics: view FPS, GL info, and asset status
-- Sun & Lighting: Pause, Time Scale, VSync
+---
 
-## Installation Instructions
+## Hardware & System Requirements
 
+- **Operating System**: Windows 10 / 11 (64-bit).
+- **Graphics API**: **OpenGL 4.5 Core Profile** (Requires Direct State Access support).
+- **GPU Recommendation**: Dedicated discrete GPU (NVIDIA GeForce GTX 1050 / AMD Radeon RX 560 or higher recommended for 60+ FPS at 1080p).
+- **Audio**: OpenAL compatible sound card / device.
 
+### ⚡ Hybrid-Graphics Laptops (NVIDIA Optimus & AMD PowerXpress)
+Solar Odyssey embeds the standard high-performance GPU driver hints:
+```cpp
+extern "C" {
+    __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+```
+The executable automatically runs on your discrete NVIDIA / AMD graphics card by default. If you wish to override this behavior, you can manually assign the GPU profile in **Windows Settings $\to$ Display $\to$ Graphics Settings**.
 
-### 📚 Complete Documentation
+---
 
-🌟 **For everything in one place**: See [COMPLETE_GUIDE.md](Documentation/COMPLETE_GUIDE.md) - **The definitive guide with all installation, usage, troubleshooting, and development information.**
+## Build & Installation
 
+### Option 1: CMake + Ninja Build (Recommended)
 
+#### Prerequisites:
+- CMake 3.20 or newer
+- MSYS2 MinGW-w64 (or Visual Studio C++ toolchain)
+- Required packages: `mingw-w64-x86_64-gcc`, `mingw-w64-x86_64-glew`, `mingw-w64-x86_64-glfw`, `mingw-w64-x86_64-glm`, `mingw-w64-x86_64-openal`.
 
-### Quick References
-
-📋 **For a fast setup**: See [QUICK_SETUP.md](Documentation/QUICK_SETUP.md) for essential commands only.
-
-📖 **For detailed installation**: See [requirements.txt](Documentation/requirements.txt) for comprehensive installation instructions and system requirements.
-
-📁 **For file information**: See [FILE_OVERVIEW.md](Documentation/FILE_OVERVIEW.md) for detailed explanation of all project files and their purposes.
-
-### Option 1: Using the Installation Package
-
-1. Download the `SolarOdyssey_Install.zip` file
-2. Extract the contents to a folder of your choice
-3. Run `install.bat` to install all required dependencies
-4. Run `build.bat` to compile the project
-5. Navigate to the `build` folder and run `SolarOdyssey.exe`
-
-### Option 2: Manual Installation
-
-#### Prerequisites
-
-- Windows 10 or later
-- MSYS2 (MinGW-w64 toolchain)
-
-#### Step-by-Step Installation
-
-1. **Install MSYS2**:
-   - Download MSYS2 from [https://www.msys2.org/](https://www.msys2.org/)
-   - Run the installer and follow the instructions
-
-2. **Install Required Libraries**:
-    - Open MSYS2 MinGW 64-bit terminal
-    - Run the following commands:
-
-       
+#### Build Commands:
 ```bash
-pacman -Syu
-pacman -S mingw-w64-x86_64-gcc
-pacman -S mingw-w64-x86_64-glew
-pacman -S mingw-w64-x86_64-glfw
-pacman -S mingw-w64-x86_64-glm
-pacman -S mingw-w64-x86_64-openal
+# 1. Configure CMake project
+cmake -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+# 2. Compile Solar Odyssey binary and unit tests
+cmake --build build-cmake --config Release
+
+# 3. Run Automated Unit Tests (Catch2)
+ctest --test-dir build-cmake --output-on-failure
+
+# 4. Launch Solar Odyssey
+.\build-cmake\SolarOdyssey.exe
 ```
 
-> Note: Dear ImGui is bundled in the `imgui/` folder, so no system package is needed.
+---
 
-1. **Build the Project**:
-   - Clone or download this repository
-   - Run `build.bat` to compile the project (will also copy assets and DLLs)
-   - The executable will be created in the `build` directory
+### Option 2: Direct MinGW Batch Build (`build.bat`)
 
-## Troubleshooting
+1. Open a terminal with MSYS2 MinGW 64-bit tools in `PATH` (or default `C:\msys64\mingw64\bin`).
+2. Run the provided batch file:
+```cmd
+.\build.bat
+```
+3. The compiled binary, resource icons, required DLLs, and shader assets will be assembled into the `build/` directory:
+```cmd
+.\build\SolarOdyssey.exe
+```
 
-- **Missing DLLs**: If you encounter "missing DLL" errors, make sure all required DLLs are in the same directory as the executable. These are copied automatically by the build script.
-- **Texture Loading Errors**: Ensure the `Textures` folder is in the same directory as the executable. Use Help -> Diagnostics to check missing assets; fallbacks will load but visuals may differ.
-- **OpenGL Errors**: Make sure your graphics drivers are up to date.
+---
 
-## Changelog (v3.1.0)
+## Testing & Quality Assurance
 
-- Fixed Jupiter rendering with the Sun's texture (now uses `Textures/jupiter.jpg`)
-- Shader compile/link errors are now printed to stderr instead of being silently discarded
-- Fixed audio resource leaks on shutdown (mission/warp/wormhole sources, music stream buffers)
-- Removed dead FreeGLUT and SOIL dependencies from the build (GLFW + GLU cover everything)
-- Batched particle rendering (solar flares, comet) into vertex arrays instead of immediate mode
-- Asteroid belt now renders through a cached VBO sphere mesh instead of per-asteroid `gluSphere` calls
-- New shared `gl_primitives.h`: one cached VBO unit-sphere now serves planets, moons, sun, starfield, atmospheres, black hole, and asteroids (replaces all per-frame `gluNewQuadric/gluSphere/gluDeleteQuadric` cycles)
-- Atmosphere rendering no longer pushes/restores the full GL attribute stack per planet per frame
-- Orbit paths and Saturn's rings render from cached VBOs instead of immediate mode
-- Robust WAV parser handling non-canonical RIFF chunk layouts
-- Extracted QA capture harness out of the main loop; live POV ambient volume updates
-- Documentation links corrected to point at the `Documentation/` folder
+Solar Odyssey includes a decoupled **Catch2 unit testing suite** covering 9 isolated logic domains:
+```bash
+ctest --test-dir build-cmake --verbose
+```
+Test suites include:
+- `OrbitalPhysicsTests`: Keplerian position solving, circular velocity, and orbital period math.
+- `SpaceshipPhysicsTests`: 6-DOF velocity damping, acceleration, boost drain, and yaw/pitch/roll integration.
+- `WarpSystemTests`: Warp trajectory, distance attenuation, and state machine transitions.
+- `AsteroidBeltTests`: Spatial distribution, Keplerian velocities, and Kirkwood resonance boundaries.
+- `SettingsPersistenceTests`: INI serialization, float/bool parsing, and clamp bounds.
+- `MissionSystemTests`: Objective tracking, proximity evaluation, and campaign completion logic.
+- `CameraMathTests`: Raycast unprojection, viewport aspect ratio calculations, and orbit clamping.
+- `PickingTests`: Bounding sphere raycast hit detection.
+- `PlanetDataTests`: Celestial database validation and metric integrity.
 
-## Changelog (v3.0)
+For automated rendering and input regression verification, launch with the automated capture flag:
+```bash
+.\build-cmake\SolarOdyssey.exe --qa-capture
+```
 
-- Isolated stb_image implementation to fix multiple-definition link errors
-- Added texture loading fallbacks and a Diagnostics panel to surface missing assets
-- Implemented Planet POV with looping ambient sounds (OpenAL)
-- Added particle systems (solar flares, comet tail)
-- Improved asteroid belt rendering and physics update
-- Added audio conversion helper script `convert_audio.bat` (requires ffmpeg)
-- Cleaned up build output: conditional DLL copy and quiet asset copy
-- Added orderly resource cleanup on shutdown
+---
 
-## Roadmap
+## Technical Architecture
 
-- Migrate to CMake build and optional vcpkg dependency management
-- Introduce a modern shader-based pipeline for planets and atmospheres
-- Audio streaming for background music (WAV/OGG) instead of procedural tones
-- Asset integrity check and on-screen warnings with suggested fixes
-- Optional high-res textures download and selection UI
+```
+SolarOdyssey/
+├── include/                 # Subsystem header interfaces
+│   ├── asteroid_belt.h      # GPU-instanced asteroid belt simulation
+│   ├── atmosphere_effects.h # Rayleigh/Mie atmospheric limb rendering
+│   ├── black_hole.h         # Relativistic black hole & accretion disk
+│   ├── camera_controller.h  # 6-DOF camera manager and interpolator
+│   ├── gl_primitives.h      # Cached VBO unit sphere and geometric meshes
+│   ├── modern_mesh.h        # OpenGL 4.5 VAO/VBO Direct State Access mesh
+│   ├── mission_system.h     # Objective tracking and campaign state machine
+│   ├── planet_data.h        # Celestial metrics database and orbital params
+│   ├── post_processing.h    # HDR framebuffer, ACES tone mapping, and Bloom
+│   ├── settings_persistence.h # INI file settings loader/serializer
+│   ├── solar_ui.h           # Dear ImGui telemetry, HUD, and dossier panels
+│   ├── spaceship.h          # 6-DOF flight physics and warp drive engine
+│   └── wormhole.h           # Ellis-Bronnikov spacetime throat renderer
+├── src/                     # C++ implementation files
+├── shaders/                 # GLSL 450 Core vertex and fragment shaders
+├── tests/                   # Catch2 unit test suites
+├── Textures/                # High-resolution NASA planetary textures
+├── Sound/                   # Audio soundscapes and effects
+├── CMakeLists.txt           # Modern CMake build configuration
+├── build.bat                # MSYS2 MinGW-w64 compilation script
+└── app_icon.rc              # Multi-resolution Windows resource icon
+```
 
-## Copyright & Ownership
+---
 
-**© 2025 Yousef Osama**  
-**Cybersecurity Engineer, Egyptian Chinese University**
+## Copyright & Credits
 
-This project is entirely developed and owned by Yousef Osama. All source code, documentation, and project structure are original work.
+**© 2025–2026 Yousef Osama**  
+Cybersecurity Engineer, Egyptian Chinese University  
+*All source code, shaders, simulation mathematics, and architecture are original work.*
 
-## Credits
-
-- Planet textures from NASA (public domain)
-- Saturn rings texture from NASA (public domain)
-- Starfield background from NASA (public domain)
+- **Celestial Textures**: NASA Jet Propulsion Laboratory (Public Domain).
+- **Libraries**: GLFW, GLEW, GLM, Dear ImGui, stb_image, OpenAL Soft, Catch2.
