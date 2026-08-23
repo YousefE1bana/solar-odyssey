@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(SolarOdyssey LANGUAGES CXX)
+project(SolarOdyssey LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +27,7 @@ add_executable(SolarOdyssey
   src/spaceship.cpp
   src/mission_system.cpp
   src/solar_ui.cpp
+  app_icon.rc
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
   imgui/imgui_tables.cpp
@@ -102,6 +103,8 @@ add_custom_command(TARGET SolarOdyssey POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Textures $<TARGET_FILE_DIR:SolarOdyssey>/Textures
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Sound $<TARGET_FILE_DIR:SolarOdyssey>/Sound
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:SolarOdyssey>/shaders
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.jpg $<TARGET_FILE_DIR:SolarOdyssey>/icon.jpg
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.ico $<TARGET_FILE_DIR:SolarOdyssey>/icon.ico
 )
 
 # ==============================================================================

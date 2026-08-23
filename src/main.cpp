@@ -59,16 +59,6 @@
 #include "immediate_batch.h"
 #include "orbital_physics.h"
 
-// -----------------------------------------------------------------------------
-// Dedicated High-Performance GPU Selection Hints
-// Exported symbols instructing NVIDIA Optimus and AMD PowerXpress switchable
-// graphics drivers to automatically select the discrete high-performance GPU.
-// -----------------------------------------------------------------------------
-extern "C" {
-    __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
-    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
-
 using namespace std;
 using namespace glm;
 
@@ -1705,6 +1695,25 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // Set Window and Taskbar Icon
+    int iconWidth = 0, iconHeight = 0, iconChannels = 0;
+    unsigned char* iconPixels = stbi_load("icon.jpg", &iconWidth, &iconHeight, &iconChannels, 4);
+    if (!iconPixels) {
+        iconPixels = stbi_load("../icon.jpg", &iconWidth, &iconHeight, &iconChannels, 4);
+    }
+    if (iconPixels) {
+        // Ensure 100% full opacity (alpha = 255) for all pixels
+        for (int i = 0; i < iconWidth * iconHeight; ++i) {
+            iconPixels[i * 4 + 3] = 255;
+        }
+        GLFWimage iconImage;
+        iconImage.width = iconWidth;
+        iconImage.height = iconHeight;
+        iconImage.pixels = iconPixels;
+        glfwSetWindowIcon(window, 1, &iconImage);
+        stbi_image_free(iconPixels);
+    }
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // VSync
 
@@ -1720,10 +1729,6 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Failed to initialize GLEW\n");
         return -1;
     }
-
-    std::cout << "[GPU Detection] Vendor:   " << (const char*)glGetString(GL_VENDOR) << "\n";
-    std::cout << "[GPU Detection] Renderer: " << (const char*)glGetString(GL_RENDERER) << "\n";
-    std::cout << "[GPU Detection] Version:  " << (const char*)glGetString(GL_VERSION) << "\n";
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);

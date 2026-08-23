@@ -24,6 +24,12 @@ if not exist "imgui" (
     git clone --depth 1 --branch v1.91.8 https://github.com/ocornut/imgui.git imgui
 )
 
+REM Compile Windows resource icon
+echo Compiling resource icon...
+if exist "app_icon.rc" (
+    C:\msys64\mingw64\bin\windres.exe app_icon.rc -O coff -o build\app_icon.o
+)
+
 REM Compile the project with OpenAL audio support
 echo Compiling the project...
 C:\msys64\mingw64\bin\g++.exe -o build\SolarOdyssey.exe src\main.cpp src\stb_image_impl.cpp ^
@@ -36,6 +42,7 @@ C:\msys64\mingw64\bin\g++.exe -o build\SolarOdyssey.exe src\main.cpp src\stb_ima
     src\camera_controller.cpp src\planet_pov.cpp ^
     src\warp_system.cpp src\spaceship.cpp src\mission_system.cpp ^
     src\solar_ui.cpp ^
+    build\app_icon.o ^
     imgui\imgui.cpp imgui\imgui_demo.cpp imgui\imgui_draw.cpp imgui\imgui_tables.cpp imgui\imgui_widgets.cpp ^
     imgui\backends\imgui_impl_glfw.cpp imgui\backends\imgui_impl_opengl3.cpp ^
     -Iinclude -I. -IC:\msys64\mingw64\include -IC:\msys64\mingw64\include\GL ^
@@ -81,6 +88,10 @@ REM Copy sound files to build directory
 echo Copying sound files...
 if not exist "build\Sound" mkdir build\Sound
 xcopy /E /I /Y /Q Sound build\Sound\ >nul
+
+REM Copy icon files to build directory
+if exist "icon.jpg" copy /Y "icon.jpg" build\ >nul
+if exist "icon.ico" copy /Y "icon.ico" build\ >nul
 
 echo.
 echo Build complete! The executable is located at build\SolarOdyssey.exe
