@@ -1,13 +1,12 @@
 #include "solar_ui.h"
 #include "lod_manager.h"
+#include "save_state.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <imgui.h>
 #include <cmath>
 #include <algorithm>
 #include <vector>
 #include <string>
-
-SolarOdysseyUI::SolarOdysseyUI() {}
 
 void SolarOdysseyUI::applySpaceTheme() {
         ImGuiStyle& style = ImGui::GetStyle();
@@ -589,6 +588,29 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
 
                     ImGui::SliderFloat("Atmosphere Glow Intensity", &atmosphereGlowScale, 0.0f, 3.0f, "%.2fx");
                     ImGui::SliderFloat("Saturn Ring Opacity", &ringOpacity, 0.1f, 1.0f, "%.2f");
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Simulation State & Bookmarks");
+                    ImGui::Spacing();
+
+                    if (ImGui::Button(" Save State (F5)", ImVec2(150, 28))) {
+                        requestStateSave = true;
+                    }
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Saves simulation day, speed, camera position, and mission progress to save_state.json.");
+
+                    ImGui::SameLine(0, 10);
+                    if (ImGui::Button(" Load State (F9)", ImVec2(150, 28))) {
+                        requestStateLoad = true;
+                    }
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restores simulation day, speed, camera position, and mission progress from save_state.json.");
+
+                    ImGui::Spacing();
+                    ImGui::Checkbox("Auto-save on Exit", &autoSaveOnExit);
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Automatically saves the current simulation state when closing the application.");
+
+                    std::string saveSummary = SaveStateManager::instance().getSaveSummary("save_state.json");
+                    ImGui::TextDisabled("Save file: %s", saveSummary.c_str());
 
                     ImGui::Spacing();
                     ImGui::Separator();
@@ -1219,4 +1241,19 @@ void SolarOdysseyUI::renderMissionModal(float screenWidth, float screenHeight, M
         }
         ImGui::End();
     }
+
+void SolarOdysseyUI::renderSaveStatusToast(float screenWidth, float screenHeight) {
+    (void)screenHeight;
+    if (saveStatusToastTimer <= 0.0f || saveStatusToast.empty()) return;
+
+    float toastWidth = 440.0f;
+    ImGui::SetNextWindowPos(ImVec2((screenWidth - toastWidth) * 0.5f, 75.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(toastWidth, 40.0f), ImGuiCond_Always);
+    ImGuiWindowFlags toastFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+    if (ImGui::Begin("SaveStatusToast", nullptr, toastFlags)) {
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), " [State] %s", saveStatusToast.c_str());
+    }
+    ImGui::End();
+}
 

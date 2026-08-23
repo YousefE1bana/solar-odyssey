@@ -24,6 +24,8 @@ Trash/
 *.tmp
 *.ini
 imgui.ini
+save_state*.json
+qa_save*.json
 
 # IDE & Editor
 .vs/

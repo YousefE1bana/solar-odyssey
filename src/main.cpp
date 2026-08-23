@@ -61,6 +61,7 @@
 #include "nbody_simulation.h"
 #include "audio_loader.h"
 #include "lod_manager.h"
+#include "save_state.h"
 
 using namespace std;
 using namespace glm;
@@ -1252,6 +1253,12 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         } else if (key == GLFW_KEY_N) {
             missionSystem.selectNextMission();
             return;
+        } else if (key == GLFW_KEY_F5) {
+            solarUI.requestStateSave = true;
+            return;
+        } else if (key == GLFW_KEY_F9) {
+            solarUI.requestStateLoad = true;
+            return;
         }
 
         // Mode-dependent key dispatch
@@ -1679,8 +1686,23 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
                   << ", savedTris=" << savedTris
                   << ", bodyCount=" << lodMgr.getBodyTelemetry().size()
                   << " -> " << (lodFunctioning ? "PASS" : "FAIL") << std::endl;
-    } else if (qaFrameCount >= 525) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, and LOD tests completed successfully!" << std::endl;
+    } else if (qaFrameCount == 522) {
+        // TEST 18: Persistent Simulation State save & load verification
+        SimulationSaveState testSave;
+        SaveStateManager::instance().captureState(testSave, 99.5f, 4.0f, false, 0,
+                                                  cameraCtrl, missionSystem, spaceship,
+                                                  solarUI.autoSaveOnExit);
+        bool saveOk = SaveStateManager::instance().saveToFile("qa_save_test.json", testSave);
+        SimulationSaveState testLoad;
+        bool loadOk = SaveStateManager::instance().loadFromFile("qa_save_test.json", testLoad);
+        bool stateMatches = (testLoad.elapsedSimDays > 99.0f && testLoad.timeMultiplier > 3.9f);
+        std::cout << "[QA TEST 18] Persistent Simulation State -> saveOk=" << (saveOk ? "true" : "false")
+                  << ", loadOk=" << (loadOk ? "true" : "false")
+                  << ", simDays=" << testLoad.elapsedSimDays
+                  << " -> " << (saveOk && loadOk && stateMatches ? "PASS" : "FAIL") << std::endl;
+        std::remove("qa_save_test.json");
+    } else if (qaFrameCount >= 530) {
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, and Save State tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
@@ -2235,6 +2257,39 @@ int main(int argc, char** argv) {
         // Background Music Streaming
         musicUpdate();
 
+        // Save State & Load State requests
+        if (solarUI.requestStateSave) {
+            solarUI.requestStateSave = false;
+            SimulationSaveState saveState;
+            SaveStateManager::instance().captureState(saveState, (float)simTime, solarUI.timeMultiplier,
+                                                      solarUI.isPaused, solarUI.physicsMode,
+                                                      cameraCtrl, missionSystem, spaceship,
+                                                      solarUI.autoSaveOnExit);
+            bool ok = SaveStateManager::instance().saveToFile("save_state.json", saveState);
+            solarUI.saveStatusToast = ok ? "Simulation state saved to save_state.json" : "Failed to save state!";
+            solarUI.saveStatusToastTimer = 3.5f;
+            std::cout << "[SaveState] Saved simulation state (Day " << (float)simTime << ")" << std::endl;
+        }
+
+        if (solarUI.requestStateLoad) {
+            solarUI.requestStateLoad = false;
+            SimulationSaveState loadState;
+            bool ok = SaveStateManager::instance().loadFromFile("save_state.json", loadState);
+            if (ok) {
+                float loadedTime = 0.0f;
+                SaveStateManager::instance().restoreState(loadState, loadedTime, solarUI.timeMultiplier,
+                                                          solarUI.isPaused, solarUI.physicsMode,
+                                                          cameraCtrl, missionSystem, spaceship, solarUI);
+                simTime = loadedTime;
+                updateCursorCapture(window);
+                solarUI.saveStatusToast = "Simulation state loaded from save_state.json";
+                std::cout << "[SaveState] Loaded simulation state (Day " << (float)simTime << ")" << std::endl;
+            } else {
+                solarUI.saveStatusToast = "No save_state.json file found!";
+            }
+            solarUI.saveStatusToastTimer = 3.5f;
+        }
+
         // 1. BEGIN POST-PROCESSING HDR SCENE
         postPipeline.beginScene();
 
@@ -2370,6 +2425,7 @@ int main(int argc, char** argv) {
         solarUI.renderMissionHUDTracker((float)windowWidth, (float)windowHeight, missionSystem, spaceship, cameraCtrl);
         solarUI.renderMissionToast((float)windowWidth, (float)windowHeight, missionSystem);
         solarUI.renderMissionModal((float)windowWidth, (float)windowHeight, missionSystem, spaceship, cameraCtrl);
+        solarUI.renderSaveStatusToast((float)windowWidth, (float)windowHeight);
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -2419,6 +2475,17 @@ int main(int argc, char** argv) {
     // Persist user settings on exit
     captureCurrentSettings();
     saveSettings(kSettingsPath, gAppSettings);
+
+    // Auto-save simulation state on exit if enabled
+    if (solarUI.autoSaveOnExit) {
+        SimulationSaveState exitState;
+        SaveStateManager::instance().captureState(exitState, (float)simTime, solarUI.timeMultiplier,
+                                                  solarUI.isPaused, solarUI.physicsMode,
+                                                  cameraCtrl, missionSystem, spaceship,
+                                                  solarUI.autoSaveOnExit);
+        SaveStateManager::instance().saveToFile("save_state.json", exitState);
+        std::cout << "[SaveState] Auto-saved simulation state to save_state.json on exit (Day " << (float)simTime << ")" << std::endl;
+    }
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

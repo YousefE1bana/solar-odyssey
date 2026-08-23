@@ -59,6 +59,13 @@ public:
     int  lodOverrideMode = 0; // 0 = Auto (Distance), 1 = Force Ultra (LOD0), 2 = Force High (LOD1), 3 = Force Med (LOD2), 4 = Force Low (LOD3)
     bool showLODDebugTelemetry = false;
 
+    // Simulation State Persistence
+    bool autoSaveOnExit = true;
+    bool requestStateSave = false;
+    bool requestStateLoad = false;
+    std::string saveStatusToast = "";
+    float saveStatusToastTimer = 0.0f;
+
     // Graphics Preset
     GraphicsQuality qualityPreset = QUALITY_HIGH;
 
@@ -71,7 +78,7 @@ public:
     // Selected planet name
     std::string selectedPlanetName = "";
 
-    SolarOdysseyUI();
+    SolarOdysseyUI() = default;
 
     void applySpaceTheme();
 
@@ -120,4 +127,6 @@ public:
 
     void renderMissionModal(float screenWidth, float screenHeight, MissionSystem& missions,
                             Spaceship& ship, CameraController& cam);
+
+    void renderSaveStatusToast(float screenWidth, float screenHeight);
 };
