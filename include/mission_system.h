@@ -48,6 +48,7 @@ public:
 
     void initMissions();
     Mission* getActiveMission();
+    const Mission* getActiveMission() const;
     void selectNextMission();
     void showToast(const std::string& title, const std::string& message);
     void completeMission(Mission& m);

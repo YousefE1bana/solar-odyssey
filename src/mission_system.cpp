@@ -103,6 +103,13 @@ Mission* MissionSystem::getActiveMission() {
     return nullptr;
 }
 
+const Mission* MissionSystem::getActiveMission() const {
+    if (activeMissionIndex >= 0 && activeMissionIndex < (int)missions.size()) {
+        return &missions[activeMissionIndex];
+    }
+    return nullptr;
+}
+
 void MissionSystem::selectNextMission() {
     for (size_t i = 1; i <= missions.size(); ++i) {
         int nextIdx = (activeMissionIndex + (int)i) % (int)missions.size();
