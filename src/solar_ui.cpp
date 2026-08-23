@@ -161,10 +161,15 @@ void SolarOdysseyUI::renderFloatingLabels(const std::vector<PickableBody>& bodie
     // Top Navigation & Quick Select Bar
 void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, const CelestialDatabase& db,
                                      std::vector<std::pair<std::string, int>>& planetIndexMap) {
+        (void)planetIndexMap;
         if (cam.photoModeActive) return;
 
+        float minSingleLineWidth = 1180.0f;
+        bool isCompactTwoRows = (screenWidth < minSingleLineWidth);
+        float barHeight = isCompactTwoRows ? 88.0f : 54.0f;
+
         ImGui::SetNextWindowPos(ImVec2(16, 16), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(screenWidth - 32, 54), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(screenWidth - 32, barHeight), ImGuiCond_Always);
 
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
@@ -174,43 +179,56 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
             // App Title with glowing cyan accent
             ImGui::AlignTextToFramePadding();
             ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.00f, 1.0f), " SOLAR ODYSSEY");
-            ImGui::SameLine(0, 20);
+            ImGui::SameLine(0, 16);
             ImGui::TextDisabled("|");
-            ImGui::SameLine(0, 16);            // Celestial Body Quick Selection Buttons
+            ImGui::SameLine(0, 12);
+
+            // Celestial Body Dropdown Quick Selector (Handles 13+ bodies cleanly with zero overflow)
+            std::string previewText = "Select Body ▾";
+            if (!cam.focusedBodyName.empty()) {
+                previewText = " " + cam.focusedBodyName + " ▾";
+            }
+            ImGui::SetNextItemWidth(140.0f);
             const auto& order = db.getOrder();
-            for (size_t i = 0; i < order.size(); ++i) {
-                const std::string& name = order[i];
-                // If dwarf planets are hidden, skip dwarf planets in the top nav
-                const CelestialBodyData* data = db.getBody(name);
-                if (!showDwarfPlanets && data && data->type.find("Dwarf Planet") != std::string::npos) {
-                    continue;
+            if (ImGui::BeginCombo("##CelestialBodyCombo", previewText.c_str())) {
+                for (size_t i = 0; i < order.size(); ++i) {
+                    const std::string& name = order[i];
+                    const CelestialBodyData* data = db.getBody(name);
+                    if (!showDwarfPlanets && data && data->type.find("Dwarf Planet") != std::string::npos) {
+                        continue;
+                    }
+                    bool isSelected = (cam.focusedBodyName == name);
+                    if (ImGui::Selectable(name.c_str(), isSelected)) {
+                        selectedPlanetName = name;
+                        showPlanetCard = true;
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
-
-                bool active = (cam.focusedBodyName == name);
-
-                if (active) {
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.45f, 0.75f, 0.95f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-                }
-
-                if (ImGui::Button(name.c_str())) {
-                    selectedPlanetName = name;
-                    showPlanetCard = true;
-                    // Focus is triggered via the main loop callback reading selectedPlanetName
-                }
-
-                if (active) {
-                    ImGui::PopStyleColor(2);
-                }
-
-                if (i < order.size() - 1) ImGui::SameLine(0, 6);
+                ImGui::EndCombo();
             }
 
-            // Right-aligned Actions: Free Cam, Missions, Wormhole, Black Hole, Spaceship, Tour, Reset, Settings, Photo
-            float rightWidth = 860.0f;
-            float avail = ImGui::GetContentRegionAvail().x;
-            if (avail > rightWidth + 10.0f) {
-                ImGui::SameLine(ImGui::GetWindowWidth() - rightWidth);
+            // Dynamically calculate the precise pixel width of all right-aligned action buttons
+            float btnSpacing = 5.0f;
+            float pad = ImGui::GetStyle().FramePadding.x * 2.0f;
+            float actionsWidth =
+                (ImGui::CalcTextSize(" Free Cam (F) ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Missions (M) ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Wormhole (K) ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Black Hole (B) ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Spaceship (X) ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Tour ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Reset ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Settings ").x + pad) + btnSpacing +
+                (ImGui::CalcTextSize(" Photo ").x + pad);
+
+            float cursorX = ImGui::GetCursorPosX();
+            float contentWidth = ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x * 2.0f;
+            float targetX = contentWidth - actionsWidth + ImGui::GetStyle().WindowPadding.x;
+
+            if (!isCompactTwoRows && targetX > cursorX + 16.0f) {
+                ImGui::SameLine(targetX);
             } else {
                 ImGui::SameLine(0, 10.0f);
             }
@@ -218,103 +236,103 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
             // Free Camera Button
             if (cam.mode == CAM_FREE) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.85f, 0.65f, 0.95f));
-                if (ImGui::Button(" Free Cam (F)")) {
+                if (ImGui::Button(" Free Cam (F) ")) {
                     cam.toggleFreeCam();
                 }
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button(" Free Cam (F)")) {
+                if (ImGui::Button(" Free Cam (F) ")) {
                     cam.toggleFreeCam();
                 }
             }
 
-            ImGui::SameLine(0, 6);
+            ImGui::SameLine(0, btnSpacing);
             // Missions Button
             if (showMissionModal) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.70f, 0.45f, 0.95f));
-                if (ImGui::Button(" Missions (M)")) {
+                if (ImGui::Button(" Missions (M) ")) {
                     showMissionModal = false;
                 }
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button(" Missions (M)")) {
+                if (ImGui::Button(" Missions (M) ")) {
                     showMissionModal = true;
                 }
             }
 
-            ImGui::SameLine(0, 6);
+            ImGui::SameLine(0, btnSpacing);
             // Wormhole Mode Button
             if (cam.mode == CAM_WORMHOLE || selectedPlanetName == "Wormhole") {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.75f, 0.95f, 0.95f));
-                if (ImGui::Button(" Wormhole (K)")) {
+                if (ImGui::Button(" Wormhole (K) ")) {
                     cam.resetToDefault();
                     selectedPlanetName = "";
                 }
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button(" Wormhole (K)")) {
+                if (ImGui::Button(" Wormhole (K) ")) {
                     selectedPlanetName = "Wormhole";
                     showPlanetCard = true;
                 }
             }
 
-            ImGui::SameLine(0, 6);
+            ImGui::SameLine(0, btnSpacing);
             // Black Hole Mode Button
             if (cam.mode == CAM_BLACK_HOLE || selectedPlanetName == "Black Hole") {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.85f, 0.95f));
-                if (ImGui::Button(" Black Hole (B)")) {
+                if (ImGui::Button(" Black Hole (B) ")) {
                     cam.resetToDefault();
                     selectedPlanetName = "";
                 }
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button(" Black Hole (B)")) {
+                if (ImGui::Button(" Black Hole (B) ")) {
                     selectedPlanetName = "Black Hole";
                     showPlanetCard = true;
                 }
             }
 
-            ImGui::SameLine(0, 6);
+            ImGui::SameLine(0, btnSpacing);
             // Spaceship Flight Mode Button
             if (cam.mode == CAM_SPACESHIP) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.65f, 0.95f, 0.95f));
-                if (ImGui::Button(" Spaceship (X)")) {
+                if (ImGui::Button(" Spaceship (X) ")) {
                     cam.setSpaceshipMode(false, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
                 }
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button(" Spaceship (X)")) {
+                if (ImGui::Button(" Spaceship (X) ")) {
                     cam.mode = CAM_SPACESHIP;
                 }
             }
 
-            ImGui::SameLine(0, 6);
+            ImGui::SameLine(0, btnSpacing);
             // Guided Tour Button
             if (cam.tourActive) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.35f, 0.25f, 0.90f));
-                if (ImGui::Button(" Stop Tour")) {
+                if (ImGui::Button(" Stop Tour ")) {
                     cam.stopTour();
                 }
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::Button(" Guided Tour")) {
+                if (ImGui::Button(" Tour ")) {
                     cam.startTour();
                 }
             }
 
-            ImGui::SameLine(0, 6);
-            if (ImGui::Button(" Reset View")) {
+            ImGui::SameLine(0, btnSpacing);
+            if (ImGui::Button(" Reset ")) {
                 cam.resetToDefault();
                 selectedPlanetName = "";
             }
 
-            ImGui::SameLine(0, 6);
-            if (ImGui::Button(" Settings")) {
+            ImGui::SameLine(0, btnSpacing);
+            if (ImGui::Button(" Settings ")) {
                 showSettingsModal = !showSettingsModal;
             }
 
-            ImGui::SameLine(0, 6);
-            if (ImGui::Button(" Photo")) {
+            ImGui::SameLine(0, btnSpacing);
+            if (ImGui::Button(" Photo ")) {
                 cam.togglePhotoMode();
             }
         }
