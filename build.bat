@@ -26,14 +26,23 @@ if not exist "imgui" (
 
 REM Compile the project with OpenAL audio support
 echo Compiling the project...
-C:\msys64\mingw64\bin\g++.exe -o build\SolarOdyssey.exe main.cpp stb_image_impl.cpp ^
+C:\msys64\mingw64\bin\g++.exe -o build\SolarOdyssey.exe src\main.cpp src\stb_image_impl.cpp ^
+    src\shader_utils.cpp src\settings_persistence.cpp ^
+    src\gl_primitives.cpp src\picking.cpp ^
+    src\modern_mesh.cpp src\immediate_batch.cpp ^
+    src\planet_data.cpp src\post_processing.cpp ^
+    src\atmosphere_effects.cpp src\asteroid_belt.cpp ^
+    src\black_hole.cpp src\wormhole.cpp ^
+    src\camera_controller.cpp src\planet_pov.cpp ^
+    src\warp_system.cpp src\spaceship.cpp src\mission_system.cpp ^
+    src\solar_ui.cpp ^
     imgui\imgui.cpp imgui\imgui_demo.cpp imgui\imgui_draw.cpp imgui\imgui_tables.cpp imgui\imgui_widgets.cpp ^
     imgui\backends\imgui_impl_glfw.cpp imgui\backends\imgui_impl_opengl3.cpp ^
-    -I. -IC:\msys64\mingw64\include -IC:\msys64\mingw64\include\GL ^
+    -Iinclude -I. -IC:\msys64\mingw64\include -IC:\msys64\mingw64\include\GL ^
     -IC:\msys64\mingw64\include\glm -IC:\msys64\mingw64\include\AL ^
     -Iimgui -Iimgui\backends ^
     -LC:\msys64\mingw64\lib -L. ^
-    -lglew32 -lglfw3 -lopengl32 -lglu32 -lopenal ^
+    -lglew32 -lglfw3 -lopengl32 -lopenal ^
     -std=c++17
 
 REM Check if compilation was successful

@@ -7,8 +7,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(BUILD_IMGUI "Build bundled Dear ImGui sources" ON)
 
 add_executable(SolarOdyssey
-  main.cpp
-  stb_image_impl.cpp
+  src/main.cpp
+  src/stb_image_impl.cpp
+  src/shader_utils.cpp
+  src/settings_persistence.cpp
+  src/gl_primitives.cpp
+  src/picking.cpp
+  src/modern_mesh.cpp
+  src/immediate_batch.cpp
+  src/planet_data.cpp
+  src/post_processing.cpp
+  src/atmosphere_effects.cpp
+  src/asteroid_belt.cpp
+  src/black_hole.cpp
+  src/wormhole.cpp
+  src/camera_controller.cpp
+  src/planet_pov.cpp
+  src/warp_system.cpp
+  src/spaceship.cpp
+  src/mission_system.cpp
+  src/solar_ui.cpp
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
   imgui/imgui_tables.cpp
@@ -19,6 +37,7 @@ add_executable(SolarOdyssey
 )
 
 target_include_directories(SolarOdyssey PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/imgui
   ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends
@@ -61,8 +80,7 @@ else()
 endif()
 
 if (WIN32)
-  # GLU is used for quadrics (gluSphere/gluPerspective); opengl32 for legacy GL
-  list(APPEND LINK_LIBS glu32 opengl32)
+  list(APPEND LINK_LIBS opengl32)
 endif()
 
 target_link_libraries(SolarOdyssey PRIVATE ${LINK_LIBS})
