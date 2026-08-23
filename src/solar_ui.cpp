@@ -733,6 +733,24 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
                         ImGui::Checkbox("Show LOD Inspector in Diagnostics", &showLODDebugTelemetry);
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Displays real-time distance and polygon counts per celestial body in the Diagnostics panel.");
                     }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " GPU Compute Shaders");
+                    if (asteroidBelt) {
+                        bool computeActive = asteroidBelt->isComputeEnabled();
+                        if (ImGui::Checkbox("Enable Asteroid Belt Compute Shader (SSBO)", &computeActive)) {
+                            enableGPUCompute = computeActive;
+                            asteroidBelt->setComputeEnabled(computeActive);
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Offloads 4,500+ asteroid orbital & rotation math to a GLSL compute shader (GL_ARB_compute_shader) on the GPU.");
+                        }
+
+                        const auto& astTelem = asteroidBelt->getTelemetry();
+                        ImGui::TextDisabled("Backend: %s", astTelem.backendName.c_str());
+                        ImGui::Text("Execution: %.3f ms (Workgroups: %d)", astTelem.lastUpdateTimeMs, astTelem.dispatchedWorkgroups);
+                    }
                     ImGui::EndTabItem();
                 }
 
@@ -880,11 +898,11 @@ void SolarOdysseyUI::renderPhotoModeHUD(float screenWidth, float screenHeight, C
     }
 
     // Diagnostics / FPS window
-void SolarOdysseyUI::renderDiagnostics(float screenWidth) {
+void SolarOdysseyUI::renderDiagnostics(float screenWidth, AsteroidBelt* asteroidBelt) {
         if (!showDiagnostics) return;
 
         ImGui::SetNextWindowPos(ImVec2(16, 85), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(340, 215), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(340, 240), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Diagnostics & Telemetry", &showDiagnostics)) {
             float fps = ImGui::GetIO().Framerate;
@@ -905,6 +923,16 @@ void SolarOdysseyUI::renderDiagnostics(float screenWidth) {
                                       qualityPreset == QUALITY_MEDIUM ? "Medium" :
                                       qualityPreset == QUALITY_HIGH ? "High" : "Ultra");
             ImGui::Text("Simulation: %.2fx (Day %.0f)", timeMultiplier, elapsedSimDays);
+
+            if (asteroidBelt) {
+                ImGui::Spacing();
+                ImGui::Separator();
+                const auto& astTelem = asteroidBelt->getTelemetry();
+                ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Asteroid Belt Simulation:");
+                ImGui::Text("Backend: %s", astTelem.backendName.c_str());
+                ImGui::Text("Asteroids: %d (Workgroups: %d)", astTelem.activeAsteroids, astTelem.dispatchedWorkgroups);
+                ImGui::Text("Compute Time: %.3f ms/frame", astTelem.lastUpdateTimeMs);
+            }
 
             ImGui::Spacing();
             ImGui::Separator();

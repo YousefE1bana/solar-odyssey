@@ -52,4 +52,23 @@ TEST_CASE("AsteroidBelt Procedural Generation, Bounds and Simulation Propagation
         belt.setQualityCount(5000);
         REQUIRE(belt.getAsteroidCount() == 1500);
     }
+
+    SECTION("GPUAsteroid std430 memory layout alignment") {
+        REQUIRE(sizeof(AsteroidBelt::GPUAsteroid) == 80);
+        REQUIRE(alignof(AsteroidBelt::GPUAsteroid) == 16);
+    }
+
+    SECTION("Compute fallback telemetry and toggling") {
+        REQUIRE(belt.isComputeEnabled() == true);
+        const auto& telem = belt.getTelemetry();
+        REQUIRE(!telem.backendName.empty());
+
+        belt.setComputeEnabled(false);
+        REQUIRE(belt.isComputeEnabled() == false);
+        belt.update(0.016f, 1.0f);
+        REQUIRE(belt.getTelemetry().cpuUpdateTimeMs >= 0.0f);
+
+        belt.setComputeEnabled(true);
+        REQUIRE(belt.isComputeEnabled() == true);
+    }
 }

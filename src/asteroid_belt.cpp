@@ -1,10 +1,70 @@
 #include "asteroid_belt.h"
 #include "gl_primitives.h"
+#include "lod_manager.h"
 #include <stb_image.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <chrono>
+
+static const char* kEmbeddedAsteroidComputeShader = R"(#version 430 core
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct GPUAsteroid {
+    vec4 position_size;     // xyz = position, w = size
+    vec4 rotation_speed;    // xyz = rotation (deg), w = orbitSpeed
+    vec4 rotSpeed_offset;   // xyz = rotationSpeed, w = orbitOffset
+    vec4 orbitParams;       // x = orbitRadius, y = orbitInclination, z = eccentricity, w = brightness
+    vec4 materialColor;     // rgb = materialColor, a = unused
+};
+
+layout (std430, binding = 0) buffer AsteroidBlock {
+    GPUAsteroid asteroids[];
+};
+
+uniform float uDeltaTime;
+uniform float uPlanetSpeed;
+uniform int   uAsteroidCount;
+
+const float DEG2RAD = 0.01745329251994329576923690768489;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uint(uAsteroidCount)) return;
+
+    GPUAsteroid ast = asteroids[idx];
+
+    float orbitSpeed = ast.rotation_speed.w;
+    float orbitOffset = ast.rotSpeed_offset.w;
+    float orbitRadius = ast.orbitParams.x;
+    float orbitInclination = ast.orbitParams.y;
+    float eccentricity = ast.orbitParams.z;
+
+    // Update orbital phase
+    float angle = orbitOffset + uDeltaTime * orbitSpeed * uPlanetSpeed;
+    angle = mod(angle, 360.0);
+    ast.rotSpeed_offset.w = angle;
+
+    // Keplerian elliptical coordinate computation
+    float angleRad = angle * DEG2RAD;
+    float rad = orbitRadius * (1.0 + eccentricity * cos(angleRad));
+    float px = rad * cos(angleRad);
+    float py = rad * sin(angleRad) * sin(orbitInclination);
+    float pz = rad * sin(angleRad) * cos(orbitInclination);
+    ast.position_size.xyz = vec3(px, py, pz);
+
+    // Integrate Euler rotation
+    vec3 rotSpeed = ast.rotSpeed_offset.xyz;
+    ast.rotation_speed.xyz += rotSpeed * uDeltaTime * 50.0;
+
+    asteroids[idx] = ast;
+}
+)";
 
 AsteroidBelt::AsteroidBelt(int count, float inR, float outR, const char* texturePath)
     : activeCount(count), innerRadius(inR), outerRadius(outR) {
@@ -12,6 +72,7 @@ AsteroidBelt::AsteroidBelt(int count, float inR, float outR, const char* texture
     if (texturePath && texturePath[0] != '\0') {
         loadTexture(texturePath);
     }
+    initComputeShader();
 }
 
 AsteroidBelt::~AsteroidBelt() {
@@ -19,11 +80,21 @@ AsteroidBelt::~AsteroidBelt() {
         glDeleteTextures(1, &asteroidTexture);
         asteroidTexture = 0;
     }
+    if (ssboAsteroids) {
+        glDeleteBuffers(1, &ssboAsteroids);
+        ssboAsteroids = 0;
+    }
+    if (computeProgram) {
+        glDeleteProgram(computeProgram);
+        computeProgram = 0;
+    }
 }
 
 void AsteroidBelt::generateAsteroids(int totalCapacity) {
     allAsteroids.clear();
     allAsteroids.resize(totalCapacity);
+    gpuAsteroids.clear();
+    gpuAsteroids.resize(totalCapacity);
 
     unsigned int seed = 133742;
     auto fastRand = [&seed]() -> float {
@@ -33,6 +104,7 @@ void AsteroidBelt::generateAsteroids(int totalCapacity) {
 
     for (int i = 0; i < totalCapacity; ++i) {
         Asteroid& ast = allAsteroids[i];
+        GPUAsteroid& gast = gpuAsteroids[i];
 
         float rNorm = fastRand();
         float r = innerRadius + (outerRadius - innerRadius) * rNorm;
@@ -76,13 +148,109 @@ void AsteroidBelt::generateAsteroids(int totalCapacity) {
         ast.position.x = rad * cosf(glm::radians(angle));
         ast.position.y = rad * sinf(glm::radians(angle)) * sinf(ast.orbitInclination);
         ast.position.z = rad * sinf(glm::radians(angle)) * cosf(ast.orbitInclination);
+
+        // Sync GPU struct
+        gast.position_size = glm::vec4(ast.position, ast.size);
+        gast.rotation_speed = glm::vec4(ast.rotation, ast.orbitSpeed);
+        gast.rotSpeed_offset = glm::vec4(ast.rotationSpeed, ast.orbitOffset);
+        gast.orbitParams = glm::vec4(ast.orbitRadius, ast.orbitInclination, ast.eccentricity, ast.brightness);
+        gast.materialColor = glm::vec4(ast.materialColor, 1.0f);
     }
+
+    ssboInitialized = false;
 }
 
-#include <glm/gtc/type_ptr.hpp>
-#include <iostream>
+void AsteroidBelt::initComputeShader() {
+    // Check if OpenGL context and compute shader functions exist
+    if (glCreateShader == nullptr || glDispatchCompute == nullptr || glCreateBuffers == nullptr) {
+        computeSupported = false;
+        telemetry.isSupported = false;
+        telemetry.backendName = "CPU Fallback (Headless/No GL)";
+        return;
+    }
+
+    // Try reading compute shader from file, fallback to embedded string
+    std::string shaderSource = kEmbeddedAsteroidComputeShader;
+    std::ifstream shaderFile("Shaders/asteroid_compute.glsl");
+    if (shaderFile.is_open()) {
+        std::stringstream ss;
+        ss << shaderFile.rdbuf();
+        shaderSource = ss.str();
+    }
+
+    GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
+    const char* srcPtr = shaderSource.c_str();
+    glShaderSource(computeShader, 1, &srcPtr, nullptr);
+    glCompileShader(computeShader);
+
+    GLint compiled = 0;
+    glGetShaderiv(computeShader, GL_COMPILE_STATUS, &compiled);
+    if (!compiled) {
+        GLint logLength = 0;
+        glGetShaderiv(computeShader, GL_INFO_LOG_LENGTH, &logLength);
+        std::vector<char> errorLog(logLength);
+        glGetShaderInfoLog(computeShader, logLength, nullptr, errorLog.data());
+        std::cerr << "[AsteroidBelt] Compute Shader Compilation Failed: " << errorLog.data() << std::endl;
+        glDeleteShader(computeShader);
+        computeSupported = false;
+        telemetry.isSupported = false;
+        telemetry.backendName = "CPU Fallback (Shader Compile Error)";
+        return;
+    }
+
+    computeProgram = glCreateProgram();
+    glAttachShader(computeProgram, computeShader);
+    glLinkProgram(computeProgram);
+    glDeleteShader(computeShader);
+
+    GLint linked = 0;
+    glGetProgramiv(computeProgram, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        GLint logLength = 0;
+        glGetProgramiv(computeProgram, GL_INFO_LOG_LENGTH, &logLength);
+        std::vector<char> errorLog(logLength);
+        glGetProgramInfoLog(computeProgram, logLength, nullptr, errorLog.data());
+        std::cerr << "[AsteroidBelt] Compute Shader Link Failed: " << errorLog.data() << std::endl;
+        glDeleteProgram(computeProgram);
+        computeProgram = 0;
+        computeSupported = false;
+        telemetry.isSupported = false;
+        telemetry.backendName = "CPU Fallback (Shader Link Error)";
+        return;
+    }
+
+    // Create SSBO
+    glCreateBuffers(1, &ssboAsteroids);
+    glNamedBufferStorage(ssboAsteroids, gpuAsteroids.size() * sizeof(GPUAsteroid), gpuAsteroids.data(), GL_DYNAMIC_STORAGE_BIT);
+
+    computeSupported = true;
+    ssboInitialized = true;
+    telemetry.isSupported = true;
+    telemetry.isShaderCompiled = true;
+    telemetry.backendName = "GPU Compute Shader (GL_ARB_compute_shader)";
+    std::cout << "[AsteroidBelt] GPU Compute Shader initialized successfully with SSBO for "
+              << allAsteroids.size() << " asteroids." << std::endl;
+}
+
+void AsteroidBelt::syncSSBO() {
+    if (!computeSupported || !ssboAsteroids) return;
+
+    for (size_t i = 0; i < allAsteroids.size(); ++i) {
+        const Asteroid& ast = allAsteroids[i];
+        GPUAsteroid& gast = gpuAsteroids[i];
+        gast.position_size = glm::vec4(ast.position, ast.size);
+        gast.rotation_speed = glm::vec4(ast.rotation, ast.orbitSpeed);
+        gast.rotSpeed_offset = glm::vec4(ast.rotationSpeed, ast.orbitOffset);
+        gast.orbitParams = glm::vec4(ast.orbitRadius, ast.orbitInclination, ast.eccentricity, ast.brightness);
+        gast.materialColor = glm::vec4(ast.materialColor, 1.0f);
+    }
+
+    glNamedBufferSubData(ssboAsteroids, 0, gpuAsteroids.size() * sizeof(GPUAsteroid), gpuAsteroids.data());
+}
 
 void AsteroidBelt::loadTexture(const char* texturePath) {
+    if (glCreateTextures == nullptr) return;
+
     int width, height, channels;
     unsigned char* image = stbi_load(texturePath, &width, &height, &channels, 0);
     if (image) {
@@ -109,9 +277,16 @@ int AsteroidBelt::getAsteroidCount() const {
     return activeCount;
 }
 
-void AsteroidBelt::update(float deltaTime, float planetSpeed, const glm::vec3& blackHolePos, float blackHoleStrength) {
-    (void)blackHolePos;
-    (void)blackHoleStrength;
+void AsteroidBelt::setComputeEnabled(bool enable) {
+    computeEnabled = enable;
+    if (enable && computeSupported) {
+        syncSSBO();
+    }
+}
+
+void AsteroidBelt::updateCPU(float deltaTime, float planetSpeed) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+
     int countToUpdate = std::min(activeCount, (int)allAsteroids.size());
     for (int i = 0; i < countToUpdate; ++i) {
         Asteroid& ast = allAsteroids[i];
@@ -126,19 +301,72 @@ void AsteroidBelt::update(float deltaTime, float planetSpeed, const glm::vec3& b
 
         ast.rotation += ast.rotationSpeed * deltaTime * 50.0f;
     }
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    float ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
+    telemetry.cpuUpdateTimeMs = ms;
+    telemetry.lastUpdateTimeMs = ms;
+    telemetry.backendName = "CPU Single-Thread";
+    telemetry.dispatchedWorkgroups = 0;
+    telemetry.activeAsteroids = countToUpdate;
 }
 
-#include "lod_manager.h"
+void AsteroidBelt::updateGPU(float deltaTime, float planetSpeed) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    int countToUpdate = std::min(activeCount, (int)allAsteroids.size());
+    int workgroups = (countToUpdate + 63) / 64;
+
+    glUseProgram(computeProgram);
+
+    GLint dtLoc = glGetUniformLocation(computeProgram, "uDeltaTime");
+    GLint spdLoc = glGetUniformLocation(computeProgram, "uPlanetSpeed");
+    GLint cntLoc = glGetUniformLocation(computeProgram, "uAsteroidCount");
+
+    if (dtLoc != -1) glUniform1f(dtLoc, deltaTime);
+    if (spdLoc != -1) glUniform1f(spdLoc, planetSpeed);
+    if (cntLoc != -1) glUniform1i(cntLoc, countToUpdate);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboAsteroids);
+    glDispatchCompute(workgroups, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+
+    // Read back updated coordinates to maintain host cache
+    glGetNamedBufferSubData(ssboAsteroids, 0, countToUpdate * sizeof(GPUAsteroid), gpuAsteroids.data());
+    for (int i = 0; i < countToUpdate; ++i) {
+        allAsteroids[i].position = glm::vec3(gpuAsteroids[i].position_size);
+        allAsteroids[i].rotation = glm::vec3(gpuAsteroids[i].rotation_speed);
+        allAsteroids[i].orbitOffset = gpuAsteroids[i].rotSpeed_offset.w;
+    }
+
+    glUseProgram(0);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    float ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
+    telemetry.gpuUpdateTimeMs = ms;
+    telemetry.lastUpdateTimeMs = ms;
+    telemetry.backendName = "GPU Compute (GL_ARB_compute_shader)";
+    telemetry.dispatchedWorkgroups = workgroups;
+    telemetry.activeAsteroids = countToUpdate;
+}
+
+void AsteroidBelt::update(float deltaTime, float planetSpeed, const glm::vec3& blackHolePos, float blackHoleStrength) {
+    (void)blackHolePos;
+    (void)blackHoleStrength;
+
+    telemetry.isEnabled = computeEnabled;
+
+    if (computeSupported && computeEnabled && computeProgram != 0 && ssboAsteroids != 0) {
+        updateGPU(deltaTime, planetSpeed);
+    } else {
+        updateCPU(deltaTime, planetSpeed);
+    }
+}
 
 void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat,
                           const glm::vec3& sunEyePos, const glm::vec3& camEye,
                           bool enableLOD, int lodOverride) {
     if (!program || allAsteroids.empty()) return;
-
-    GLenum errPre = glGetError();
-    if (errPre != GL_NO_ERROR) {
-        std::cerr << "[AsteroidBelt] Warning: GL error before render: 0x" << std::hex << errPre << std::dec << std::endl;
-    }
 
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
@@ -212,9 +440,4 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
     glUseProgram(0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
-
-    GLenum errPost = glGetError();
-    if (errPost != GL_NO_ERROR) {
-        std::cerr << "[AsteroidBelt] Warning: GL error after render: 0x" << std::hex << errPost << std::dec << std::endl;
-    }
 }

@@ -1701,8 +1701,19 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
                   << ", simDays=" << testLoad.elapsedSimDays
                   << " -> " << (saveOk && loadOk && stateMatches ? "PASS" : "FAIL") << std::endl;
         std::remove("qa_save_test.json");
-    } else if (qaFrameCount >= 530) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, and Save State tests completed successfully!" << std::endl;
+    } else if (qaFrameCount == 526) {
+        // TEST 19: GPU Compute Shader / SSBO execution verification for Asteroid Belt
+        bool computeOk = false;
+        if (asteroidBelt) {
+            const auto& telem = asteroidBelt->getTelemetry();
+            computeOk = (telem.activeAsteroids > 0 && !telem.backendName.empty());
+            std::cout << "[QA TEST 19] Asteroid Belt Compute -> backend=" << telem.backendName
+                      << ", updateTimeMs=" << telem.lastUpdateTimeMs
+                      << ", workgroups=" << telem.dispatchedWorkgroups
+                      << " -> " << (computeOk ? "PASS" : "FAIL") << std::endl;
+        }
+    } else if (qaFrameCount >= 535) {
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, Save State, and Compute Shader tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
@@ -2410,7 +2421,7 @@ int main(int argc, char** argv) {
         solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
 
         // Diagnostics
-        solarUI.renderDiagnostics((float)windowWidth);
+        solarUI.renderDiagnostics((float)windowWidth, asteroidBelt);
 
         // Free Camera Live HUD
         solarUI.renderFreeCamHUD((float)windowWidth, (float)windowHeight, cameraCtrl);

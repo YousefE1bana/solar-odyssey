@@ -59,6 +59,9 @@ public:
     int  lodOverrideMode = 0; // 0 = Auto (Distance), 1 = Force Ultra (LOD0), 2 = Force High (LOD1), 3 = Force Med (LOD2), 4 = Force Low (LOD3)
     bool showLODDebugTelemetry = false;
 
+    // GPU Compute Shader (Asteroid Belt)
+    bool enableGPUCompute = true;
+
     // Simulation State Persistence
     bool autoSaveOnExit = true;
     bool requestStateSave = false;
@@ -115,7 +118,7 @@ public:
     void renderPhotoModeHUD(float screenWidth, float screenHeight, CameraController& cam,
                             PostProcessingPipeline& postProc);
 
-    void renderDiagnostics(float screenWidth);
+    void renderDiagnostics(float screenWidth, AsteroidBelt* asteroidBelt = nullptr);
 
     void renderSpaceshipHUD(float screenWidth, float screenHeight, Spaceship& ship,
                             CameraController& cam, const CelestialDatabase& db);
