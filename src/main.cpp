@@ -22,6 +22,7 @@
 #include <imgui_impl_opengl3.h>
 
 #include <vector>
+#include <memory>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -69,14 +70,14 @@ AppSettings gAppSettings;
 int windowWidth = 1920;
 int windowHeight = 1080;
 
-// Subsystem singletons
+// Subsystem singletons & RAII owners
 CelestialDatabase celestialDb;
 CameraController cameraCtrl;
 SolarOdysseyUI solarUI;
 PostProcessingPipeline postPipeline;
-AtmosphereEffects* atmosphereEffects = nullptr;
-AsteroidBelt* asteroidBelt = nullptr;
-PlanetPOV* planetPov = nullptr;
+std::unique_ptr<AtmosphereEffects> atmosphereEffects;
+std::unique_ptr<AsteroidBelt> asteroidBelt;
+std::unique_ptr<PlanetPOV> planetPov;
 
 // Push persisted settings into the live UI/subsystem state
 static void applyLoadedSettings() {
@@ -1721,9 +1722,9 @@ int main(int argc, char** argv) {
     setupSpecialPlanetTextures();
 
     // Initialize Systems
-    asteroidBelt = new AsteroidBelt(800, 13.5f, 15.8f, "Textures/moon.jpg");
-    planetPov = new PlanetPOV();
-    atmosphereEffects = new AtmosphereEffects();
+    asteroidBelt = std::make_unique<AsteroidBelt>(800, 13.5f, 15.8f, "Textures/moon.jpg");
+    planetPov = std::make_unique<PlanetPOV>();
+    atmosphereEffects = std::make_unique<AtmosphereEffects>();
     postPipeline.init(windowWidth, windowHeight);
 
     // Compile Planet Shader
@@ -1838,7 +1839,7 @@ int main(int argc, char** argv) {
     }
 
     // Set initial quality preset
-    solarUI.applyQualityPreset(QUALITY_HIGH, postPipeline, asteroidBelt);
+    solarUI.applyQualityPreset(QUALITY_HIGH, postPipeline, asteroidBelt.get());
 
     // Main Game Loop
     while (!glfwWindowShouldClose(window)) {
@@ -2199,7 +2200,7 @@ int main(int argc, char** argv) {
                                     [](const string& name) { explorePlanetPOVByName(name); });
 
         // Settings Panel
-        solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
+        solarUI.renderSettingsPanel(postPipeline, asteroidBelt.get(), atmosphereEffects.get(), cameraCtrl);
 
         // Diagnostics
         solarUI.renderDiagnostics((float)windowWidth);
@@ -2231,10 +2232,10 @@ int main(int argc, char** argv) {
         glfwPollEvents();
     }
 
-    // Cleanup
-    if (asteroidBelt) { delete asteroidBelt; asteroidBelt = nullptr; }
-    if (planetPov) { delete planetPov; planetPov = nullptr; }
-    if (atmosphereEffects) { delete atmosphereEffects; atmosphereEffects = nullptr; }
+    // Cleanup & RAII Release
+    asteroidBelt.reset();
+    planetPov.reset();
+    atmosphereEffects.reset();
     postPipeline.cleanup();
 
     auto safeDeleteTex = [](GLuint &tex) {
@@ -2256,10 +2257,11 @@ int main(int argc, char** argv) {
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
 
-    if (planetProgram) glDeleteProgram(planetProgram);
-    if (sunProgram) glDeleteProgram(sunProgram);
-    if (blackHoleProgram) glDeleteProgram(blackHoleProgram);
-    if (wormholeProgram) glDeleteProgram(wormholeProgram);
+    if (starfieldProgram) { glDeleteProgram(starfieldProgram); starfieldProgram = 0; }
+    if (planetProgram) { glDeleteProgram(planetProgram); planetProgram = 0; }
+    if (sunProgram) { glDeleteProgram(sunProgram); sunProgram = 0; }
+    if (blackHoleProgram) { glDeleteProgram(blackHoleProgram); blackHoleProgram = 0; }
+    if (wormholeProgram) { glDeleteProgram(wormholeProgram); wormholeProgram = 0; }
 
     cleanupAudio();
 
