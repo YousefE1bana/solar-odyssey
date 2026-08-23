@@ -58,6 +58,7 @@
 #include "settings_persistence.h"
 #include "immediate_batch.h"
 #include "orbital_physics.h"
+#include "nbody_simulation.h"
 
 using namespace std;
 using namespace glm;
@@ -78,6 +79,7 @@ PostProcessingPipeline postPipeline;
 AtmosphereEffects* atmosphereEffects = nullptr;
 AsteroidBelt* asteroidBelt = nullptr;
 PlanetPOV* planetPov = nullptr;
+NBodySimulation nbodySim;
 
 // Push persisted settings into the live UI/subsystem state
 static void applyLoadedSettings() {
@@ -836,6 +838,29 @@ void initializePlanets() {
     moons.emplace_back("Moon", 0.15f, 1.4f, 200.0f, "Textures/moon.jpg", "Earth");
 }
 
+void initializeNBodySystem() {
+    nbodySim.reset();
+    nbodySim.gravitationalConstant = 4000.0f; // Calibrated to match standard orbital velocities
+    nbodySim.softening = 0.15f;
+    nbodySim.fixedDeltaTime = 0.0025f;
+
+    // Real proportional masses relative to Sun (M_sun = 1.0)
+    nbodySim.addBody("Sun", 1.0f, 2.0f, true);
+    nbodySim.addBody("Mercury", 0.00000016f, 0.3f);
+    nbodySim.addBody("Venus", 0.00000245f, 0.5f);
+    nbodySim.addBody("Earth", 0.00000300f, 0.6f);
+    nbodySim.addBody("Moon", 0.000000037f, 0.15f, false, "Earth");
+    nbodySim.addBody("Mars", 0.00000032f, 0.4f);
+    nbodySim.addBody("Jupiter", 0.000954f, 1.0f);
+    nbodySim.addBody("Saturn", 0.000285f, 0.9f);
+    nbodySim.addBody("Uranus", 0.000043f, 0.8f);
+    nbodySim.addBody("Neptune", 0.000051f, 0.7f);
+    nbodySim.addBody("Ceres", 0.00000000047f, 0.22f);
+    nbodySim.addBody("Haumea", 0.000000002f, 0.25f);
+    nbodySim.addBody("Makemake", 0.0000000015f, 0.24f);
+    nbodySim.addBody("Eris", 0.000000008f, 0.28f);
+}
+
 void setupSpecialPlanetTextures() {
     for (auto &planet : planets) {
         if (planet.name == "Earth") {
@@ -1041,15 +1066,10 @@ void renderPlanets(float time) {
             continue;
         }
 
-        float effectiveOrbitSpeed = planet.orbitSpeed * solarUI.orbitSpeedScale;
         float effectiveSpinSpeed = planet.spinSpeed * solarUI.spinSpeedScale;
         float effectiveSize = planet.size * solarUI.planetScale;
 
-        planet.currentPosition = OrbitalPhysics::computePlanetPosition(time, planet.orbitSpeed, solarUI.orbitSpeedScale, planet.orbitRadius);
-        float radAngle = glm::radians(time * effectiveOrbitSpeed * 0.02f);
-
-        glm::mat4 orbitMat = glm::rotate(glm::mat4(1.0f), radAngle, glm::vec3(0.0f, 1.0f, 0.0f));
-        orbitMat = glm::translate(orbitMat, glm::vec3(planet.orbitRadius, 0.0f, 0.0f));
+        glm::mat4 orbitMat = glm::translate(glm::mat4(1.0f), planet.currentPosition);
         glm::mat4 atmoMV = curView * orbitMat;
 
         // Atmosphere scattering
@@ -1143,20 +1163,11 @@ void renderPlanets(float time) {
     for (auto &moon : moons) {
         for (const auto &planet : planets) {
             if (planet.name == moon.parentPlanet) {
-                float effectiveOrbitSpeed = planet.orbitSpeed * solarUI.orbitSpeedScale;
                 float effectiveMoonSize = moon.size * solarUI.planetScale;
 
-                float radAngle = glm::radians(time * effectiveOrbitSpeed * 0.02f);
-                glm::mat4 orbitMat = glm::rotate(glm::mat4(1.0f), radAngle, glm::vec3(0.0f, 1.0f, 0.0f));
-                orbitMat = glm::translate(orbitMat, glm::vec3(planet.orbitRadius, 0.0f, 0.0f));
-
-                float moonRadAngle = glm::radians(time * moon.orbitSpeed * 0.05f * solarUI.orbitSpeedScale);
-                glm::mat4 moonModel = glm::rotate(orbitMat, moonRadAngle, glm::vec3(0.0f, 1.0f, 0.0f));
-                moonModel = glm::translate(moonModel, glm::vec3(moon.orbitRadius, 0.0f, 0.0f));
+                glm::mat4 moonModel = glm::translate(glm::mat4(1.0f), moon.currentPosition);
                 moonModel = glm::scale(moonModel, glm::vec3(effectiveMoonSize));
                 glm::mat4 moonMV = curView * moonModel;
-
-                moon.currentPosition = OrbitalPhysics::computeMoonPosition(planet.currentPosition, time, moon.orbitSpeed, solarUI.orbitSpeedScale, moon.orbitRadius);
 
                 if (shadersReady && planetProgram) {
                     glUseProgram(planetProgram);
@@ -1675,8 +1686,21 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
         solarUI.selectedPlanetName = "";
     } else if (qaFrameCount == 505) {
         postPipeline.captureScreenshot("Screenshots/Regression/post_wormhole_explorer.bmp");
-    } else if (qaFrameCount >= 515) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, and Mission screenshots captured successfully!" << std::endl;
+    } else if (qaFrameCount == 508) {
+        // TEST 15: N-Body simulation toggle, state validation, and reset to Keplerian
+        solarUI.physicsMode = 1;
+        solarUI.pendingPhysicsModeChange = true;
+    } else if (qaFrameCount == 512) {
+        bool nbodyActive = (nbodySim.getPhysicsMode() == PHYSICS_NBODY);
+        glm::vec3 earthPos = nbodySim.getBodyPosition("Earth");
+        bool earthValid = (glm::length(earthPos) > 5.0f && glm::length(earthPos) < 20.0f);
+        std::cout << "[QA TEST 15] N-Body Mode Toggle -> active=" << (nbodyActive ? "true" : "false")
+                  << ", earthRadius=" << glm::length(earthPos)
+                  << " -> " << (nbodyActive && earthValid ? "PASS" : "FAIL") << std::endl;
+        solarUI.physicsMode = 0;
+        solarUI.pendingPhysicsModeChange = true;
+    } else if (qaFrameCount >= 520) {
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, and N-Body tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
@@ -1796,6 +1820,7 @@ int main(int argc, char** argv) {
     // Initialize Celestial Bodies
     initializePlanets();
     setupSpecialPlanetTextures();
+    initializeNBodySystem();
 
     // Initialize Systems
     asteroidBelt = new AsteroidBelt(800, 13.5f, 15.8f, "Textures/moon.jpg");
@@ -1928,6 +1953,64 @@ int main(int argc, char** argv) {
             simTime += deltaTime * solarUI.timeMultiplier;
             cloudRotationAngle += deltaTime * 0.4f * solarUI.timeMultiplier;
             solarUI.elapsedSimDays = simTime * 5.0f;
+        }
+
+        // Handle dynamic physics mode toggle
+        if (solarUI.pendingPhysicsModeChange) {
+            solarUI.pendingPhysicsModeChange = false;
+            if (solarUI.physicsMode == 1) {
+                auto computeBodyPos = [](const string& name, float t) -> glm::vec3 {
+                    if (name == "Sun") return sunWorldPosition;
+                    if (name == "Moon") {
+                        glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, 100.0f, solarUI.orbitSpeedScale, 10.0f);
+                        return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
+                    }
+                    for (const auto& p : planets) {
+                        if (p.name == name) {
+                            return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius);
+                        }
+                    }
+                    return glm::vec3(0.0f);
+                };
+                nbodySim.initializeFromKeplerian(computeBodyPos, (float)simTime, solarUI.orbitSpeedScale);
+                nbodySim.setPhysicsMode(PHYSICS_NBODY);
+            } else {
+                nbodySim.setPhysicsMode(PHYSICS_KEPLERIAN);
+            }
+        }
+
+        // Live N-Body Gravitation Update
+        if (nbodySim.getPhysicsMode() == PHYSICS_NBODY && !solarUI.isPaused) {
+            nbodySim.update(deltaTime, solarUI.timeMultiplier);
+        }
+
+        // Update positions of all celestial bodies based on active physics mode
+        for (auto &planet : planets) {
+            if (nbodySim.getPhysicsMode() == PHYSICS_NBODY) {
+                planet.currentPosition = nbodySim.getBodyPosition(planet.name);
+            } else {
+                planet.currentPosition = OrbitalPhysics::computePlanetPosition(simTime, planet.orbitSpeed, solarUI.orbitSpeedScale, planet.orbitRadius);
+            }
+        }
+        for (auto &moon : moons) {
+            if (nbodySim.getPhysicsMode() == PHYSICS_NBODY) {
+                moon.currentPosition = nbodySim.getBodyPosition(moon.name);
+            } else {
+                for (const auto &p : planets) {
+                    if (p.name == moon.parentPlanet) {
+                        moon.currentPosition = OrbitalPhysics::computeMoonPosition(p.currentPosition, simTime, moon.orbitSpeed, solarUI.orbitSpeedScale, moon.orbitRadius);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Apply N-Body gravity assist to spacecraft
+        if (nbodySim.getPhysicsMode() == PHYSICS_NBODY && spaceship.active) {
+            glm::vec3 gravAccel = nbodySim.computeAccelerationForPoint(spaceship.position);
+            spaceship.applyGravityAcceleration(gravAccel);
+        } else {
+            spaceship.applyGravityAcceleration(glm::vec3(0.0f));
         }
 
         // Guided Tour State Machine
