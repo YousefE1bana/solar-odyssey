@@ -5,7 +5,7 @@
 namespace glprims {
 
 void UnitSphere::ensure(int slices, int stacks) {
-    if (vbo) return;
+    if (vao) return;
 
     const int vertsPerRow = slices + 1;
     std::vector<float> verts;
@@ -41,34 +41,35 @@ void UnitSphere::ensure(int slices, int stacks) {
     }
     indexCount = (int)idx.size();
 
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
-    glGenBuffers(1, &ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.size() * sizeof(unsigned short), idx.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glCreateVertexArrays(1, &vao);
+    glCreateBuffers(1, &vbo);
+    glNamedBufferData(vbo, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, 8 * sizeof(float));
+
+    glEnableVertexArrayAttrib(vao, 0);
+    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(vao, 0, 0);
+
+    glEnableVertexArrayAttrib(vao, 1);
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 1, 0);
+
+    glEnableVertexArrayAttrib(vao, 2);
+    glVertexArrayAttribFormat(vao, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 2, 0);
+
+    glCreateBuffers(1, &ibo);
+    glNamedBufferData(ibo, idx.size() * sizeof(unsigned short), idx.data(), GL_STATIC_DRAW);
+    glVertexArrayElementBuffer(vao, ibo);
 }
 
 void UnitSphere::bind() {
-    if (!vbo) ensure();
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_NORMAL_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 8 * sizeof(float), (const void*)0);
-    glNormalPointer(GL_FLOAT, 8 * sizeof(float), (const void*)(3 * sizeof(float)));
-    glTexCoordPointer(2, GL_FLOAT, 8 * sizeof(float), (const void*)(6 * sizeof(float)));
+    if (!vao) ensure();
+    glBindVertexArray(vao);
 }
 
 void UnitSphere::unbind() {
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 void UnitSphere::drawIndexed() const {
@@ -76,18 +77,16 @@ void UnitSphere::drawIndexed() const {
 }
 
 void UnitSphere::draw(float radius) {
-    if (!vbo) ensure();
-    glPushMatrix();
-    glScalef(radius, radius, radius);
+    if (!vao) ensure();
     bind();
     drawIndexed();
     unbind();
-    glPopMatrix();
 }
 
 void UnitSphere::destroy() {
     if (ibo) { glDeleteBuffers(1, &ibo); ibo = 0; }
     if (vbo) { glDeleteBuffers(1, &vbo); vbo = 0; }
+    if (vao) { glDeleteVertexArrays(1, &vao); vao = 0; }
     indexCount = 0;
 }
 
@@ -129,22 +128,26 @@ void ModernSphere::ensure(int slices, int stacks) {
     }
     indexCount = (int)idx.size();
 
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (const void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (const void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (const void*)(6 * sizeof(float)));
-    glGenBuffers(1, &ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.size() * sizeof(unsigned short), idx.data(), GL_STATIC_DRAW);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glCreateVertexArrays(1, &vao);
+    glCreateBuffers(1, &vbo);
+    glNamedBufferData(vbo, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, 8 * sizeof(float));
+
+    glEnableVertexArrayAttrib(vao, 0);
+    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(vao, 0, 0);
+
+    glEnableVertexArrayAttrib(vao, 1);
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 1, 0);
+
+    glEnableVertexArrayAttrib(vao, 2);
+    glVertexArrayAttribFormat(vao, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 2, 0);
+
+    glCreateBuffers(1, &ibo);
+    glNamedBufferData(ibo, idx.size() * sizeof(unsigned short), idx.data(), GL_STATIC_DRAW);
+    glVertexArrayElementBuffer(vao, ibo);
 }
 
 void ModernSphere::drawUnit() {
@@ -176,15 +179,14 @@ void FullscreenQuad::ensure() {
          1.0f,  1.0f,
         -1.0f,  1.0f,
     };
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (const void*)0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glCreateVertexArrays(1, &vao);
+    glCreateBuffers(1, &vbo);
+    glNamedBufferData(vbo, sizeof(verts), verts, GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, 2 * sizeof(float));
+
+    glEnableVertexArrayAttrib(vao, 0);
+    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(vao, 0, 0);
 }
 
 void FullscreenQuad::draw() {
@@ -205,10 +207,12 @@ FullscreenQuad& sharedFullscreenQuad() {
 }
 
 void drawUnitCircle(int segments) {
+    static GLuint vao = 0;
     static GLuint vbo = 0;
     static int cachedSegments = 0;
-    if (!vbo || cachedSegments != segments) {
+    if (!vao || cachedSegments != segments) {
         if (vbo) { glDeleteBuffers(1, &vbo); vbo = 0; }
+        if (vao) { glDeleteVertexArrays(1, &vao); vao = 0; }
         const float PI = 3.14159265358979323846f;
         std::vector<float> pts;
         pts.reserve((size_t)segments * 3);
@@ -216,19 +220,19 @@ void drawUnitCircle(int segments) {
             float t = 2.0f * PI * (float)i / (float)segments;
             pts.push_back(cosf(t)); pts.push_back(0.0f); pts.push_back(sinf(t));
         }
-        glGenBuffers(1, &vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, pts.size() * sizeof(float), pts.data(), GL_STATIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glCreateVertexArrays(1, &vao);
+        glCreateBuffers(1, &vbo);
+        glNamedBufferData(vbo, pts.size() * sizeof(float), pts.data(), GL_STATIC_DRAW);
+        glVertexArrayVertexBuffer(vao, 0, vbo, 0, 3 * sizeof(float));
+        glEnableVertexArrayAttrib(vao, 0);
+        glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribBinding(vao, 0, 0);
         cachedSegments = segments;
     }
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 3 * sizeof(float), (const void*)0);
+    glBindVertexArray(vao);
     glDrawArrays(GL_LINE_LOOP, 0, segments);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 } // namespace glprims

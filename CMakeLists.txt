@@ -80,7 +80,8 @@ else()
 endif()
 
 if (WIN32)
-  list(APPEND LINK_LIBS opengl32)
+  # GLU is used for quadrics (gluSphere/gluPerspective); opengl32 for legacy GL
+  list(APPEND LINK_LIBS glu32 opengl32)
 endif()
 
 target_link_libraries(SolarOdyssey PRIVATE ${LINK_LIBS})

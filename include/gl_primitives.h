@@ -4,6 +4,7 @@
 namespace glprims {
 
 struct UnitSphere {
+    GLuint vao = 0;
     GLuint vbo = 0;
     GLuint ibo = 0;
     int indexCount = 0;

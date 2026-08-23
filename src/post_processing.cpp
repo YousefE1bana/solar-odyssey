@@ -57,46 +57,39 @@ bool PostProcessingPipeline::init(int w, int h) {
 void PostProcessingPipeline::setupFramebuffers() {
     cleanupBuffers();
 
-    glGenFramebuffers(1, &sceneFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
+    glCreateFramebuffers(1, &sceneFBO);
 
-    glGenTextures(1, &sceneColorTex);
-    glBindTexture(GL_TEXTURE_2D, sceneColorTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sceneColorTex, 0);
+    glCreateTextures(GL_TEXTURE_2D, 1, &sceneColorTex);
+    glTextureStorage2D(sceneColorTex, 1, GL_RGBA16F, width, height);
+    glTextureParameteri(sceneColorTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(sceneColorTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(sceneColorTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(sceneColorTex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glNamedFramebufferTexture(sceneFBO, GL_COLOR_ATTACHMENT0, sceneColorTex, 0);
 
-    glGenRenderbuffers(1, &sceneDepthRBO);
-    glBindRenderbuffer(GL_RENDERBUFFER, sceneDepthRBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRBO);
+    glCreateRenderbuffers(1, &sceneDepthRBO);
+    glNamedRenderbufferStorage(sceneDepthRBO, GL_DEPTH_COMPONENT24, width, height);
+    glNamedFramebufferRenderbuffer(sceneFBO, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRBO);
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+    if (glCheckNamedFramebufferStatus(sceneFBO, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         std::cerr << "[PostProcess] Scene Framebuffer incomplete!" << std::endl;
     }
 
-    glGenFramebuffers(2, pingPongFBO);
-    glGenTextures(2, pingPongColorTex);
+    glCreateFramebuffers(2, pingPongFBO);
+    glCreateTextures(GL_TEXTURE_2D, 2, pingPongColorTex);
 
     for (int i = 0; i < 2; ++i) {
-        glBindFramebuffer(GL_FRAMEBUFFER, pingPongFBO[i]);
-        glBindTexture(GL_TEXTURE_2D, pingPongColorTex[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, bloomWidth, bloomHeight, 0, GL_RGBA, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingPongColorTex[i], 0);
+        glTextureStorage2D(pingPongColorTex[i], 1, GL_RGBA16F, bloomWidth, bloomHeight);
+        glTextureParameteri(pingPongColorTex[i], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(pingPongColorTex[i], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(pingPongColorTex[i], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(pingPongColorTex[i], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glNamedFramebufferTexture(pingPongFBO[i], GL_COLOR_ATTACHMENT0, pingPongColorTex[i], 0);
 
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        if (glCheckNamedFramebufferStatus(pingPongFBO[i], GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "[PostProcess] Bloom Ping-Pong Framebuffer " << i << " incomplete!" << std::endl;
         }
     }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void PostProcessingPipeline::resize(int w, int h) {

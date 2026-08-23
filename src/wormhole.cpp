@@ -88,24 +88,26 @@ void Wormhole::initGeometry() {
     }
     sphereIndexCount = (int)sphereIndices.size();
 
-    glGenVertexArrays(1, &sphereVAO);
-    glGenBuffers(1, &sphereVBO);
-    glGenBuffers(1, &sphereEBO);
+    glCreateVertexArrays(1, &sphereVAO);
+    glCreateBuffers(1, &sphereVBO);
+    glNamedBufferData(sphereVBO, sphereVerts.size() * sizeof(float), sphereVerts.data(), GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(sphereVAO, 0, sphereVBO, 0, 8 * sizeof(float));
 
-    glBindVertexArray(sphereVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
-    glBufferData(GL_ARRAY_BUFFER, sphereVerts.size() * sizeof(float), sphereVerts.data(), GL_STATIC_DRAW);
+    glEnableVertexArrayAttrib(sphereVAO, 0);
+    glVertexArrayAttribFormat(sphereVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(sphereVAO, 0, 0);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(unsigned int), sphereIndices.data(), GL_STATIC_DRAW);
+    glEnableVertexArrayAttrib(sphereVAO, 1);
+    glVertexArrayAttribFormat(sphereVAO, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(sphereVAO, 1, 0);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glBindVertexArray(0);
+    glEnableVertexArrayAttrib(sphereVAO, 2);
+    glVertexArrayAttribFormat(sphereVAO, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribBinding(sphereVAO, 2, 0);
+
+    glCreateBuffers(1, &sphereEBO);
+    glNamedBufferData(sphereEBO, sphereIndices.size() * sizeof(unsigned int), sphereIndices.data(), GL_STATIC_DRAW);
+    glVertexArrayElementBuffer(sphereVAO, sphereEBO);
 
     std::vector<float> diskVerts;
     int diskSegments = 120;
@@ -133,19 +135,22 @@ void Wormhole::initGeometry() {
     }
     diskVertexCount = (int)diskVerts.size() / 8;
 
-    glGenVertexArrays(1, &diskVAO);
-    glGenBuffers(1, &diskVBO);
-    glBindVertexArray(diskVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, diskVBO);
-    glBufferData(GL_ARRAY_BUFFER, diskVerts.size() * sizeof(float), diskVerts.data(), GL_STATIC_DRAW);
+    glCreateVertexArrays(1, &diskVAO);
+    glCreateBuffers(1, &diskVBO);
+    glNamedBufferData(diskVBO, diskVerts.size() * sizeof(float), diskVerts.data(), GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(diskVAO, 0, diskVBO, 0, 8 * sizeof(float));
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glBindVertexArray(0);
+    glEnableVertexArrayAttrib(diskVAO, 0);
+    glVertexArrayAttribFormat(diskVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(diskVAO, 0, 0);
+
+    glEnableVertexArrayAttrib(diskVAO, 1);
+    glVertexArrayAttribFormat(diskVAO, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(diskVAO, 1, 0);
+
+    glEnableVertexArrayAttrib(diskVAO, 2);
+    glVertexArrayAttribFormat(diskVAO, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribBinding(diskVAO, 2, 0);
 
     std::vector<float> archVerts;
     int archSegments = 80;
@@ -171,19 +176,22 @@ void Wormhole::initGeometry() {
     }
     archVertexCount = (int)archVerts.size() / 8;
 
-    glGenVertexArrays(1, &archVAO);
-    glGenBuffers(1, &archVBO);
-    glBindVertexArray(archVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, archVBO);
-    glBufferData(GL_ARRAY_BUFFER, archVerts.size() * sizeof(float), archVerts.data(), GL_STATIC_DRAW);
+    glCreateVertexArrays(1, &archVAO);
+    glCreateBuffers(1, &archVBO);
+    glNamedBufferData(archVBO, archVerts.size() * sizeof(float), archVerts.data(), GL_STATIC_DRAW);
+    glVertexArrayVertexBuffer(archVAO, 0, archVBO, 0, 8 * sizeof(float));
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glBindVertexArray(0);
+    glEnableVertexArrayAttrib(archVAO, 0);
+    glVertexArrayAttribFormat(archVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(archVAO, 0, 0);
+
+    glEnableVertexArrayAttrib(archVAO, 1);
+    glVertexArrayAttribFormat(archVAO, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(archVAO, 1, 0);
+
+    glEnableVertexArrayAttrib(archVAO, 2);
+    glVertexArrayAttribFormat(archVAO, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribBinding(archVAO, 2, 0);
 }
 
 void Wormhole::update(float dt) {

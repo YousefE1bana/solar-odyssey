@@ -8,29 +8,32 @@ void GPUMesh::build(const std::vector<Vertex>& verts, const std::vector<uint32_t
     vertexCount = (GLsizei)verts.size();
     indexCount = (GLsizei)indices.size();
 
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    glCreateVertexArrays(1, &vao);
 
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
+    glCreateBuffers(1, &vbo);
+    glNamedBufferData(vbo, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
 
-    // Core-profile attribute setup
-    glEnableVertexAttribArray(kPosLoc);
-    glVertexAttribPointer(kPosLoc, 3, GL_FLOAT, GL_FALSE, kStride, (const void*)0);
-    glEnableVertexAttribArray(kNormalLoc);
-    glVertexAttribPointer(kNormalLoc, 3, GL_FLOAT, GL_FALSE, kStride, (const void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(kTexCoordLoc);
-    glVertexAttribPointer(kTexCoordLoc, 2, GL_FLOAT, GL_FALSE, kStride, (const void*)(6 * sizeof(float)));
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, (GLsizei)sizeof(Vertex));
+
+    // Core-profile attribute setup via DSA
+    glEnableVertexArrayAttrib(vao, kPosLoc);
+    glVertexArrayAttribFormat(vao, kPosLoc, 3, GL_FLOAT, GL_FALSE, (GLuint)offsetof(Vertex, pos));
+    glVertexArrayAttribBinding(vao, kPosLoc, 0);
+
+    glEnableVertexArrayAttrib(vao, kNormalLoc);
+    glVertexArrayAttribFormat(vao, kNormalLoc, 3, GL_FLOAT, GL_FALSE, (GLuint)offsetof(Vertex, normal));
+    glVertexArrayAttribBinding(vao, kNormalLoc, 0);
+
+    glEnableVertexArrayAttrib(vao, kTexCoordLoc);
+    glVertexArrayAttribFormat(vao, kTexCoordLoc, 2, GL_FLOAT, GL_FALSE, (GLuint)offsetof(Vertex, uv));
+    glVertexArrayAttribBinding(vao, kTexCoordLoc, 0);
 
     if (!indices.empty()) {
-        glGenBuffers(1, &ibo);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint32_t), indices.data(), GL_STATIC_DRAW);
+        glCreateBuffers(1, &ibo);
+        glNamedBufferData(ibo, indices.size() * sizeof(uint32_t), indices.data(), GL_STATIC_DRAW);
+        glVertexArrayElementBuffer(vao, ibo);
     }
 
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
     built = true;
 }
 

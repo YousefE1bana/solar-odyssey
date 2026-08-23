@@ -1,72 +1,37 @@
-# Build output directories
+# Build output
 build/
 build_cmake/
 build-cmake/
 build-*/
-cmake-build-*/
 out/
 bin/
-dist/
-
-# Compiled Object files, Libraries, Binaries
 *.o
 *.obj
 *.exe
 *.dll
-*.so
-*.dylib
 *.a
 *.lib
 *.pdb
-*.ilk
-*.exp
-
-# CMake generated files
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-Testing/
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps/
-
-# Ninja build logs
 *.ninja_log
 *.ninja_deps
 .ninja_log
-.ninja_deps
+CMakeCache.txt
+CMakeFiles/
 
-# IDE & Editor files
-.vs/
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/c_cpp_properties.json
-*.user
-*.suo
-*.sln.docstates
-*.idb
-*.VC.db
-*.opendb
-.idea/
-*.swp
-*~
-
-# Temporary & Runtime Configs
+# Temporary / Trash / Logs
 Trash/
 *.log
 *.tmp
-*.bak
+*.ini
 imgui.ini
-solar_odyssey_settings.ini
 
-# OS generated files
+# IDE & Editor
+.vs/
+.vscode/ipch/
+*.user
+*.suo
+*.sln.docstates
+
+# OS junk
 Thumbs.db
-[Dd]esktop.ini
 .DS_Store
-.directory
-

@@ -797,11 +797,8 @@ void drawComet() {
 
 // Scene Geometry & Rendering
 void setupProjection(int width, int height) {
-    glMatrixMode(GL_PROJECTION);
     float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
-    glm::mat4 proj = glm::perspective(glm::radians(cameraCtrl.fieldOfView), aspect, 0.1f, 600.0f);
-    glLoadMatrixf(glm::value_ptr(proj));
-    glMatrixMode(GL_MODELVIEW);
+    currentProjMatrix = glm::perspective(glm::radians(cameraCtrl.fieldOfView), aspect, 0.1f, 600.0f);
 }
 
 void initializePlanets() {
@@ -1689,6 +1686,11 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+
     GLFWwindow* window = glfwCreateWindow(windowWidth, windowHeight, "Solar Odyssey", NULL, NULL);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
@@ -1706,6 +1708,7 @@ int main(int argc, char** argv) {
     glfwSetScrollCallback(window, scrollCallback);
     glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
+    glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to initialize GLEW\n");
         return -1;
@@ -1714,14 +1717,11 @@ int main(int argc, char** argv) {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    // Core-profile batch for points/lines (lazy-init: GL context must exist first)
-    // gBatch.init(kFlatVS, kFlatFS); // deferred to first use (renderSolarFlares / orbit rings)
-
     // Initialize Dear ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 120");
+    ImGui_ImplOpenGL3_Init("#version 450");
     solarUI.applySpaceTheme();
     applyLoadedSettings();
 
@@ -1835,7 +1835,7 @@ int main(int argc, char** argv) {
     // Compile Starfield Background Shader
     {
         const char* vs = R"(
-            #version 330 core
+            #version 450 core
             layout(location = 0) in vec3 aPos;
             layout(location = 2) in vec2 aTexCoord;
             out vec2 vTexCoord;
@@ -1847,7 +1847,7 @@ int main(int argc, char** argv) {
             }
         )";
         const char* fs = R"(
-            #version 330 core
+            #version 450 core
             in vec2 vTexCoord;
             out vec4 FragColor;
             uniform sampler2D uStarTex;

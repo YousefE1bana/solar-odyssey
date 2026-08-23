@@ -2,7 +2,7 @@
 #include "shader_utils.h"
 
 const char* kFlatVS = R"(
-#version 330 core
+#version 450 core
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec4 aColor;
 layout(location = 2) in float aPointSize;
@@ -17,7 +17,7 @@ void main() {
 )";
 
 const char* kFlatFS = R"(
-#version 330 core
+#version 450 core
 in vec4 vColor;
 out vec4 FragColor;
 void main() {
@@ -33,19 +33,23 @@ bool ImmediateBatch::init(const std::string& vsSource, const std::string& fsSour
     uProjLoc = glGetUniformLocation(program, "uProjection");
     uViewLoc = glGetUniformLocation(program, "uView");
 
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, kCapacityBytes, nullptr, GL_STREAM_DRAW);
-    glEnableVertexAttribArray(0); // aPos
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, kStrideFloats * sizeof(float), (const void*)0);
-    glEnableVertexAttribArray(1); // aColor
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, kStrideFloats * sizeof(float), (const void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(2); // aPointSize
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, kStrideFloats * sizeof(float), (const void*)(7 * sizeof(float)));
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glCreateVertexArrays(1, &vao);
+    glCreateBuffers(1, &vbo);
+    glNamedBufferData(vbo, kCapacityBytes, nullptr, GL_STREAM_DRAW);
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, kStrideFloats * sizeof(float));
+
+    glEnableVertexArrayAttrib(vao, 0); // aPos
+    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(vao, 0, 0);
+
+    glEnableVertexArrayAttrib(vao, 1); // aColor
+    glVertexArrayAttribFormat(vao, 1, 4, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 1, 0);
+
+    glEnableVertexArrayAttrib(vao, 2); // aPointSize
+    glVertexArrayAttribFormat(vao, 2, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 2, 0);
+
     ready = true;
     return true;
 }
@@ -74,10 +78,8 @@ void ImmediateBatch::end() {
     glUniformMatrix4fv(uProjLoc, 1, GL_FALSE, &proj[0][0]);
     glUniformMatrix4fv(uViewLoc, 1, GL_FALSE, &viewM[0][0]);
 
+    glNamedBufferSubData(vbo, 0, verts.size() * sizeof(float), verts.data());
     glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, kCapacityBytes, nullptr, GL_STREAM_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, verts.size() * sizeof(float), verts.data());
     if (prim == GL_POINTS) glEnable(GL_PROGRAM_POINT_SIZE);
     glDrawArrays(prim, 0, (GLsizei)(verts.size() / kStrideFloats));
     if (prim == GL_POINTS) glDisable(GL_PROGRAM_POINT_SIZE);
