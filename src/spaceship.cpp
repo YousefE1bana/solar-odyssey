@@ -408,257 +408,259 @@ glm::vec3 Spaceship::getCameraTarget() const {
     }
 
 float Spaceship::getSpeedKmh() const {
-        return glm::length(velocity) * 1250.0f; // Scale to simulated cinematic km/s
-    }
+    return glm::length(velocity) * 1250.0f; // Scale to simulated cinematic km/s
+}
 
-    // Procedural Sci-Fi Spaceship Mesh Rendering (High Fidelity)
-    // Core-profile path: all geometry streams through ImmediateBatch with
-    // per-vertex colors (material diffuse values baked in). Fixed-function
-    // materials/lighting are retired; setMat is kept as a no-op so historic
-    // call sites remain valid.
+// Procedural Sci-Fi Spaceship Mesh Rendering (High Fidelity)
 void Spaceship::render(const glm::mat4& projection, const glm::mat4& view) {
-    if (!active) return;
-    if (!renderBatch.isReady()) renderBatch.init(kFlatVS, kFlatFS);
+        if (!active) return;
+        if (!renderBatch.isReady()) renderBatch.init(kFlatVS, kFlatFS);
 
-    // In cockpit view, render interior framing instead of exterior 3rd person body
-    if (cameraView == SHIP_CAM_COCKPIT) {
-        renderCockpitInterior(projection, view);
-        return;
-    }
+        // In cockpit view, render interior framing instead of exterior 3rd person body
+        if (cameraView == SHIP_CAM_COCKPIT) {
+            renderCockpitInterior(projection, view);
+            return;
+        }
 
-    // Compute orientation matrix with dynamic banking roll
-    glm::mat4 rotMat = glm::mat4_cast(orientation);
-    rotMat = glm::rotate(rotMat, glm::radians(visualBankAngle), glm::vec3(0.0f, 0.0f, 1.0f));
-    shipModelMat = glm::translate(glm::mat4(1.0f), position) * rotMat;
+        // Compute orientation matrix with dynamic banking roll
+        glm::mat4 rotMat = glm::mat4_cast(orientation);
+        rotMat = glm::rotate(rotMat, glm::radians(visualBankAngle), glm::vec3(0.0f, 0.0f, 1.0f));
+        shipModelMat = glm::translate(glm::mat4(1.0f), position) * rotMat;
 
-    // Local-space -> world-space helper for batch vertices
-    auto V = [&](float x, float y, float z) {
-        return glm::vec3(shipModelMat * glm::vec4(x, y, z, 1.0f));
-    };
-
-    // --- MATERIAL PALETTE CONSTANTS ---
-    const glm::vec4 hullWhite(0.88f, 0.91f, 0.95f, 1.0f);
-    const glm::vec4 carbonDark(0.20f, 0.22f, 0.26f, 1.0f);
-    const glm::vec4 titanium(0.48f, 0.52f, 0.58f, 1.0f);
-    const glm::vec4 canopyGlass(0.15f, 0.68f, 0.92f, 0.85f);
-    const glm::vec4 canopyFrame(0.28f, 0.30f, 0.34f, 1.0f);
-    const glm::vec4 cyanGlow(0.10f, 0.80f, 1.00f, 1.0f);
-
-    // -------------------------------------------------------------
-    // 1. PRIMARY FUSELAGE & SCULPTED CHINES (White Aerospace Plating)
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-            renderBatch.vertex(a, hullWhite); renderBatch.vertex(b, hullWhite); renderBatch.vertex(c, hullWhite);
+        // Local-space -> world-space helper for batch vertices
+        auto V = [&](float x, float y, float z) {
+            return glm::vec3(shipModelMat * glm::vec4(x, y, z, 1.0f));
         };
-        // Forward Nose Radome Upper Apex
-        T(V(0.0f, 0.16f, -2.15f), V(-0.36f, 0.24f, -1.05f), V(0.36f, 0.24f, -1.05f));
-        // Forward Nose Upper-Mid Transition
-        T(V(-0.36f, 0.24f, -1.05f), V(-0.52f, 0.22f, -0.15f), V(0.52f, 0.22f, -0.15f));
-        T(V(-0.36f, 0.24f, -1.05f), V(0.52f, 0.22f, -0.15f), V(0.36f, 0.24f, -1.05f));
-        // Dorsal Spine Ridge
-        T(V(0.0f, 0.44f, -0.15f), V(-0.52f, 0.22f, -0.15f), V(-0.46f, 0.20f, 1.45f));
-        T(V(0.0f, 0.44f, -0.15f), V(-0.46f, 0.20f, 1.45f), V(0.0f, 0.38f, 1.45f));
-        T(V(0.0f, 0.44f, -0.15f), V(0.0f, 0.38f, 1.45f), V(0.46f, 0.20f, 1.45f));
-        T(V(0.0f, 0.44f, -0.15f), V(0.46f, 0.20f, 1.45f), V(0.52f, 0.22f, -0.15f));
-        // Port & Starboard Chamfered Chine Flanges
-        T(V(0.0f, 0.16f, -2.15f), V(-0.38f, -0.06f, -1.05f), V(-0.36f, 0.24f, -1.05f));
-        T(V(0.0f, 0.16f, -2.15f), V(0.36f, 0.24f, -1.05f), V(0.38f, -0.06f, -1.05f));
-        // Mid Fuselage Side Flanks
-        T(V(-0.36f, 0.24f, -1.05f), V(-0.38f, -0.06f, -1.05f), V(-0.52f, 0.22f, -0.15f));
-        T(V(-0.38f, -0.06f, -1.05f), V(-0.54f, -0.08f, -0.15f), V(-0.52f, 0.22f, -0.15f));
-        T(V(0.36f, 0.24f, -1.05f), V(0.52f, 0.22f, -0.15f), V(0.38f, -0.06f, -1.05f));
-        T(V(0.38f, -0.06f, -1.05f), V(0.52f, 0.22f, -0.15f), V(0.54f, -0.08f, -0.15f));
-    }
-    renderBatch.end();
 
-    // -------------------------------------------------------------
-    // 2. VENTRAL HEAT SHIELD & INTAKE UNDERBELLIES (Dark Carbon Ceramic)
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-            renderBatch.vertex(a, carbonDark); renderBatch.vertex(b, carbonDark); renderBatch.vertex(c, carbonDark);
-        };
-        // Forward Ventral Nose Ramp
-        T(V(0.0f, -0.12f, -2.15f), V(0.38f, -0.06f, -1.05f), V(-0.38f, -0.06f, -1.05f));
-        // Ventral Belly Tiling (Centerline heatshield)
-        T(V(-0.38f, -0.06f, -1.05f), V(0.38f, -0.06f, -1.05f), V(0.48f, -0.12f, 1.45f));
-        T(V(-0.38f, -0.06f, -1.05f), V(0.48f, -0.12f, 1.45f), V(-0.48f, -0.12f, 1.45f));
-        // Aft Bulkhead
-        T(V(-0.48f, 0.22f, 1.45f), V(0.48f, 0.22f, 1.45f), V(0.48f, -0.12f, 1.45f));
-        T(V(-0.48f, 0.22f, 1.45f), V(0.48f, -0.12f, 1.45f), V(-0.48f, -0.12f, 1.45f));
-    }
-    renderBatch.end();
+        // --- MATERIAL PALETTE CONSTANTS ---
+        const glm::vec4 hullWhite(0.88f, 0.91f, 0.95f, 1.0f);
+        const glm::vec4 carbonDark(0.20f, 0.22f, 0.26f, 1.0f);
+        const glm::vec4 titanium(0.48f, 0.52f, 0.58f, 1.0f);
+        const glm::vec4 canopyGlass(0.15f, 0.68f, 0.92f, 0.85f);
+        const glm::vec4 canopyFrame(0.28f, 0.30f, 0.34f, 1.0f);
+        const glm::vec4 cyanGlow(0.10f, 0.80f, 1.00f, 1.0f);
 
-    // -------------------------------------------------------------
-    // 3. LATERAL INTAKE SCOOPS & INTAKE CAVITIES (Port & Starboard)
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-            renderBatch.vertex(a, titanium); renderBatch.vertex(b, titanium); renderBatch.vertex(c, titanium);
-        };
-        // Starboard Intake Cowling Outer Lip
-        T(V(0.50f, 0.22f, -0.55f), V(0.78f, 0.16f, -0.30f), V(0.52f, 0.04f, 0.35f));
-        T(V(0.78f, 0.16f, -0.30f), V(0.76f, -0.06f, -0.30f), V(0.52f, 0.04f, 0.35f));
-        // Port Intake Cowling Outer Lip
-        T(V(-0.50f, 0.22f, -0.55f), V(-0.52f, 0.04f, 0.35f), V(-0.78f, 0.16f, -0.30f));
-        T(V(-0.78f, 0.16f, -0.30f), V(-0.52f, 0.04f, 0.35f), V(-0.76f, -0.06f, -0.30f));
-    }
-    renderBatch.end();
-
-    // Recessed Dark Intake Inlets (Black/Cyan cavity)
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto Q = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d) {
-            renderBatch.vertex(a, carbonDark); renderBatch.vertex(b, carbonDark); renderBatch.vertex(c, carbonDark);
-            renderBatch.vertex(a, carbonDark); renderBatch.vertex(c, carbonDark); renderBatch.vertex(d, carbonDark);
-        };
-        // Starboard inlet mouth
-        Q(V(0.50f, 0.22f, -0.55f), V(0.78f, 0.16f, -0.30f), V(0.76f, -0.06f, -0.30f), V(0.50f, -0.04f, -0.55f));
-        // Port inlet mouth
-        Q(V(-0.50f, 0.22f, -0.55f), V(-0.50f, -0.04f, -0.55f), V(-0.76f, -0.06f, -0.30f), V(-0.78f, 0.16f, -0.30f));
-    }
-    renderBatch.end();
-
-    // -------------------------------------------------------------
-    // 4. CRANKED-DELTA WINGS & WINGLETS (Aerospace Ceramic + Carbon Trim)
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-            renderBatch.vertex(a, hullWhite); renderBatch.vertex(b, hullWhite); renderBatch.vertex(c, hullWhite);
-        };
-        // Starboard Wing Upper Surface
-        T(V(0.52f, 0.12f, -0.35f), V(2.35f, 0.06f, 1.15f), V(0.48f, 0.12f, 1.35f));
-        // Port Wing Upper Surface
-        T(V(-0.52f, 0.12f, -0.35f), V(-0.48f, 0.12f, 1.35f), V(-2.35f, 0.06f, 1.15f));
-        // Wing Underbellies
-        T(V(0.52f, -0.06f, -0.35f), V(0.48f, -0.06f, 1.35f), V(2.35f, -0.02f, 1.15f));
-        T(V(-0.52f, -0.06f, -0.35f), V(-2.35f, -0.02f, 1.15f), V(-0.48f, -0.06f, 1.35f));
-        // Canted Wingtip Winglets (Angled Outward & Upward)
-        T(V(2.35f, 0.06f, 1.15f), V(2.55f, 0.68f, 1.35f), V(1.85f, 0.08f, 1.35f));
-        T(V(-2.35f, 0.06f, 1.15f), V(-1.85f, 0.08f, 1.35f), V(-2.55f, 0.68f, 1.35f));
-    }
-    renderBatch.end();
-
-    // -------------------------------------------------------------
-    // 5. TWIN ANGLED VERTICAL STABILIZERS (Outward-Canted Twin Tailfins)
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-            renderBatch.vertex(a, hullWhite); renderBatch.vertex(b, hullWhite); renderBatch.vertex(c, hullWhite);
-        };
-        // Starboard Tailfin (Canted Outward at ~16 deg)
-        T(V(0.42f, 0.20f, 0.45f), V(0.68f, 0.82f, 1.30f), V(0.46f, 0.20f, 1.50f));
-        // Port Tailfin
-        T(V(-0.42f, 0.20f, 0.45f), V(-0.46f, 0.20f, 1.50f), V(-0.68f, 0.82f, 1.30f));
-    }
-    renderBatch.end();
-
-    // Tailfin Leading Edge Carbon Ceramic Trim
-    renderBatch.begin(GL_LINES, projection, view);
-    {
-        auto L = [&](const glm::vec3& a, const glm::vec3& b) {
-            renderBatch.vertex(a, carbonDark); renderBatch.vertex(b, carbonDark);
-        };
-        L(V(0.42f, 0.20f, 0.45f), V(0.68f, 0.82f, 1.30f));
-        L(V(-0.42f, 0.20f, 0.45f), V(-0.68f, 0.82f, 1.30f));
-    }
-    renderBatch.end();
-
-    // -------------------------------------------------------------
-    // 6. COCKPIT CRYSTALLINE GLASS CANOPY (Multi-Pane Sci-Fi Glass)
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-            renderBatch.vertex(a, canopyGlass); renderBatch.vertex(b, canopyGlass); renderBatch.vertex(c, canopyGlass);
-        };
-        // Front Main Windshield Pane
-        T(V(0.0f, 0.36f, -1.25f), V(-0.28f, 0.28f, -0.45f), V(0.28f, 0.28f, -0.45f));
-        // Overhead Canopy Roof Pane
-        T(V(0.0f, 0.45f, -0.25f), V(0.28f, 0.28f, -0.45f), V(-0.28f, 0.28f, -0.45f));
-        T(V(0.0f, 0.45f, -0.25f), V(0.24f, 0.32f, 0.05f), V(0.28f, 0.28f, -0.45f));
-        T(V(0.0f, 0.45f, -0.25f), V(-0.28f, 0.28f, -0.45f), V(-0.24f, 0.32f, 0.05f));
-    }
-    renderBatch.end();
-
-    // Canopy Structural Framing Mullions (Dark Graphite Ribs)
-    renderBatch.begin(GL_LINES, projection, view);
-    {
-        auto L = [&](const glm::vec3& a, const glm::vec3& b) {
-            renderBatch.vertex(a, canopyFrame); renderBatch.vertex(b, canopyFrame);
-        };
-        L(V(0.0f, 0.36f, -1.25f), V(0.0f, 0.45f, -0.25f));
-        L(V(-0.28f, 0.28f, -0.45f), V(0.0f, 0.45f, -0.25f));
-        L(V(0.28f, 0.28f, -0.45f), V(0.0f, 0.45f, -0.25f));
-        L(V(-0.28f, 0.28f, -0.45f), V(0.28f, 0.28f, -0.45f));
-    }
-    renderBatch.end();
-
-    // -------------------------------------------------------------
-    // 7. LUMINESCENT CYAN STATUS STRIPES & SENSOR SUITE
-    // -------------------------------------------------------------
-    renderBatch.begin(GL_TRIANGLES, projection, view);
-    {
-        auto Q = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d) {
-            renderBatch.vertex(a, cyanGlow); renderBatch.vertex(b, cyanGlow); renderBatch.vertex(c, cyanGlow);
-            renderBatch.vertex(a, cyanGlow); renderBatch.vertex(c, cyanGlow); renderBatch.vertex(d, cyanGlow);
-        };
-        // Dorsal Spine Avionics Status Strip
-        Q(V(-0.04f, 0.44f, -0.15f), V(0.04f, 0.44f, -0.15f), V(0.03f, 0.38f, 1.45f), V(-0.03f, 0.38f, 1.45f));
-        // Forward Nose Sensor Optical Window
-        Q(V(-0.06f, 0.17f, -2.12f), V(0.06f, 0.17f, -2.12f), V(0.05f, 0.21f, -1.75f), V(-0.05f, 0.21f, -1.75f));
-    }
-    renderBatch.end();
-
-    // Forward Sensor Needle Probe
-    renderBatch.begin(GL_LINES, projection, view);
-    {
-        renderBatch.vertex(V(0.0f, 0.16f, -2.15f), titanium);
-        renderBatch.vertex(V(0.0f, 0.16f, -2.55f), titanium);
-    }
-    renderBatch.end();
-
-    // -------------------------------------------------------------
-    // 8. DUAL VECTORING ENGINE NOZZLES & MAGNETIC CONFINEMENT RINGS
-    // -------------------------------------------------------------
-    float engX[2] = {-0.30f, 0.30f};
-    for (int e = 0; e < 2; ++e) {
-        float ex = engX[e];
-
-        // Cylindrical Titanium Nozzle Bell (quad strip -> triangles)
+        // -------------------------------------------------------------
+        // 1. PRIMARY FUSELAGE & SCULPTED CHINES (White Aerospace Plating)
+        // -------------------------------------------------------------
         renderBatch.begin(GL_TRIANGLES, projection, view);
-        for (int i = 0; i < 16; ++i) {
-            float a0 = (float)i * 6.2831853f / 16.0f;
-            float a1 = (float)(i + 1) * 6.2831853f / 16.0f;
-            glm::vec3 b0 = V(ex + cos(a0) * 0.19f, sin(a0) * 0.19f, 1.40f);
-            glm::vec3 t0 = V(ex + cos(a0) * 0.22f, sin(a0) * 0.22f, 1.58f);
-            glm::vec3 b1 = V(ex + cos(a1) * 0.19f, sin(a1) * 0.19f, 1.40f);
-            glm::vec3 t1 = V(ex + cos(a1) * 0.22f, sin(a1) * 0.22f, 1.58f);
-            renderBatch.vertex(b0, titanium); renderBatch.vertex(t0, titanium); renderBatch.vertex(b1, titanium);
-            renderBatch.vertex(b1, titanium); renderBatch.vertex(t0, titanium); renderBatch.vertex(t1, titanium);
+        {
+            auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+                renderBatch.vertex(a, hullWhite); renderBatch.vertex(b, hullWhite); renderBatch.vertex(c, hullWhite);
+            };
+            // Forward Nose Radome Upper Apex
+            T(V(0.0f, 0.16f, -2.15f), V(-0.36f, 0.24f, -1.05f), V(0.36f, 0.24f, -1.05f));
+            // Forward Nose Upper-Mid Transition
+            T(V(-0.36f, 0.24f, -1.05f), V(-0.52f, 0.22f, -0.15f), V(0.52f, 0.22f, -0.15f));
+            T(V(-0.36f, 0.24f, -1.05f), V(0.52f, 0.22f, -0.15f), V(0.36f, 0.24f, -1.05f));
+            // Dorsal Spine Ridge
+            T(V(0.0f, 0.44f, -0.15f), V(-0.52f, 0.22f, -0.15f), V(-0.46f, 0.20f, 1.45f));
+            T(V(0.0f, 0.44f, -0.15f), V(-0.46f, 0.20f, 1.45f), V(0.0f, 0.38f, 1.45f));
+            T(V(0.0f, 0.44f, -0.15f), V(0.0f, 0.38f, 1.45f), V(0.46f, 0.20f, 1.45f));
+            T(V(0.0f, 0.44f, -0.15f), V(0.46f, 0.20f, 1.45f), V(0.52f, 0.22f, -0.15f));
+            // Port & Starboard Chamfered Chine Flanges
+            T(V(0.0f, 0.16f, -2.15f), V(-0.38f, -0.06f, -1.05f), V(-0.36f, 0.24f, -1.05f));
+            T(V(0.0f, 0.16f, -2.15f), V(0.36f, 0.24f, -1.05f), V(0.38f, -0.06f, -1.05f));
+            // Mid Fuselage Side Flanks
+            T(V(-0.36f, 0.24f, -1.05f), V(-0.38f, -0.06f, -1.05f), V(-0.52f, 0.22f, -0.15f));
+            T(V(-0.38f, -0.06f, -1.05f), V(-0.54f, -0.08f, -0.15f), V(-0.52f, 0.22f, -0.15f));
+            T(V(0.36f, 0.24f, -1.05f), V(0.52f, 0.22f, -0.15f), V(0.38f, -0.06f, -1.05f));
+            T(V(0.38f, -0.06f, -1.05f), V(0.52f, 0.22f, -0.15f), V(0.54f, -0.08f, -0.15f));
         }
         renderBatch.end();
 
-        // Inner Magnetic Confinement Ring (Emissive Blue)
+        // -------------------------------------------------------------
+        // 2. VENTRAL HEAT SHIELD & INTAKE UNDERBELLIES (Dark Carbon Ceramic)
+        // -------------------------------------------------------------
+        
         renderBatch.begin(GL_TRIANGLES, projection, view);
-        for (int i = 0; i < 12; ++i) {
-            float a0 = (float)i * 6.2831853f / 12.0f;
-            float a1 = (float)(i + 1) * 6.2831853f / 12.0f;
-            glm::vec3 lo0 = V(ex + cos(a0) * 0.16f, sin(a0) * 0.16f, 1.44f);
-            glm::vec3 hi0 = V(ex + cos(a0) * 0.16f, sin(a0) * 0.16f, 1.52f);
-            glm::vec3 lo1 = V(ex + cos(a1) * 0.16f, sin(a1) * 0.16f, 1.44f);
-            glm::vec3 hi1 = V(ex + cos(a1) * 0.16f, sin(a1) * 0.16f, 1.52f);
-            renderBatch.vertex(lo0, cyanGlow); renderBatch.vertex(hi0, cyanGlow); renderBatch.vertex(lo1, cyanGlow);
-            renderBatch.vertex(lo1, cyanGlow); renderBatch.vertex(hi0, cyanGlow); renderBatch.vertex(hi1, cyanGlow);
+        {
+            auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+                renderBatch.vertex(a, carbonDark); renderBatch.vertex(b, carbonDark); renderBatch.vertex(c, carbonDark);
+            };
+            // Forward Ventral Nose Ramp
+            T(V(0.0f, -0.12f, -2.15f), V(0.38f, -0.06f, -1.05f), V(-0.38f, -0.06f, -1.05f));
+            // Ventral Belly Tiling (Centerline heatshield)
+            T(V(-0.38f, -0.06f, -1.05f), V(0.38f, -0.06f, -1.05f), V(0.48f, -0.12f, 1.45f));
+            T(V(-0.38f, -0.06f, -1.05f), V(0.48f, -0.12f, 1.45f), V(-0.48f, -0.12f, 1.45f));
+            // Aft Bulkhead
+            T(V(-0.48f, 0.22f, 1.45f), V(0.48f, 0.22f, 1.45f), V(0.48f, -0.12f, 1.45f));
+            T(V(-0.48f, 0.22f, 1.45f), V(0.48f, -0.12f, 1.45f), V(-0.48f, -0.12f, 1.45f));
         }
         renderBatch.end();
-    }
+
+        // -------------------------------------------------------------
+        // 3. LATERAL INTAKE SCOOPS & INTAKE CAVITIES (Port & Starboard)
+        // -------------------------------------------------------------
+        
+        renderBatch.begin(GL_TRIANGLES, projection, view);
+        {
+            auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+                renderBatch.vertex(a, titanium); renderBatch.vertex(b, titanium); renderBatch.vertex(c, titanium);
+            };
+            // Starboard Intake Cowling Outer Lip
+            T(V(0.50f, 0.22f, -0.55f), V(0.78f, 0.16f, -0.30f), V(0.52f, 0.04f, 0.35f));
+            T(V(0.78f, 0.16f, -0.30f), V(0.76f, -0.06f, -0.30f), V(0.52f, 0.04f, 0.35f));
+            // Port Intake Cowling Outer Lip
+            T(V(-0.50f, 0.22f, -0.55f), V(-0.52f, 0.04f, 0.35f), V(-0.78f, 0.16f, -0.30f));
+            T(V(-0.78f, 0.16f, -0.30f), V(-0.52f, 0.04f, 0.35f), V(-0.76f, -0.06f, -0.30f));
+        }
+        renderBatch.end();
+
+        // Recessed Dark Intake Inlets (Black/Cyan cavity)
+        renderBatch.begin(GL_TRIANGLES, projection, view);
+        {
+            auto Q = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d) {
+                renderBatch.vertex(a, carbonDark); renderBatch.vertex(b, carbonDark); renderBatch.vertex(c, carbonDark);
+                renderBatch.vertex(a, carbonDark); renderBatch.vertex(c, carbonDark); renderBatch.vertex(d, carbonDark);
+            };
+            // Starboard inlet mouth
+            Q(V(0.50f, 0.22f, -0.55f), V(0.78f, 0.16f, -0.30f), V(0.76f, -0.06f, -0.30f), V(0.50f, -0.04f, -0.55f));
+            // Port inlet mouth
+            Q(V(-0.50f, 0.22f, -0.55f), V(-0.50f, -0.04f, -0.55f), V(-0.76f, -0.06f, -0.30f), V(-0.78f, 0.16f, -0.30f));
+        }
+        renderBatch.end();
+
+        // -------------------------------------------------------------
+        // 4. CRANKED-DELTA WINGS & WINGLETS (Aerospace Ceramic + Carbon Trim)
+        // -------------------------------------------------------------
+        renderBatch.begin(GL_TRIANGLES, projection, view);
+        {
+            auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+                renderBatch.vertex(a, hullWhite); renderBatch.vertex(b, hullWhite); renderBatch.vertex(c, hullWhite);
+            };
+            // Starboard Wing Upper Surface
+            T(V(0.52f, 0.12f, -0.35f), V(2.35f, 0.06f, 1.15f), V(0.48f, 0.12f, 1.35f));
+            // Port Wing Upper Surface
+            T(V(-0.52f, 0.12f, -0.35f), V(-0.48f, 0.12f, 1.35f), V(-2.35f, 0.06f, 1.15f));
+            // Wing Underbellies
+            T(V(0.52f, -0.06f, -0.35f), V(0.48f, -0.06f, 1.35f), V(2.35f, -0.02f, 1.15f));
+            T(V(-0.52f, -0.06f, -0.35f), V(-2.35f, -0.02f, 1.15f), V(-0.48f, -0.06f, 1.35f));
+            // Canted Wingtip Winglets (Angled Outward & Upward)
+            T(V(2.35f, 0.06f, 1.15f), V(2.55f, 0.68f, 1.35f), V(1.85f, 0.08f, 1.35f));
+            T(V(-2.35f, 0.06f, 1.15f), V(-1.85f, 0.08f, 1.35f), V(-2.55f, 0.68f, 1.35f));
+        }
+        renderBatch.end();
+
+        // -------------------------------------------------------------
+        // 5. TWIN ANGLED VERTICAL STABILIZERS (Outward-Canted Twin Tailfins)
+        // -------------------------------------------------------------
+        renderBatch.begin(GL_TRIANGLES, projection, view);
+        {
+            auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+                renderBatch.vertex(a, hullWhite); renderBatch.vertex(b, hullWhite); renderBatch.vertex(c, hullWhite);
+            };
+            // Starboard Tailfin (Canted Outward at ~16 deg)
+            T(V(0.42f, 0.20f, 0.45f), V(0.68f, 0.82f, 1.30f), V(0.46f, 0.20f, 1.50f));
+            // Port Tailfin
+            T(V(-0.42f, 0.20f, 0.45f), V(-0.46f, 0.20f, 1.50f), V(-0.68f, 0.82f, 1.30f));
+        }
+        renderBatch.end();
+
+        // Tailfin Leading Edge Carbon Ceramic Trim
+        renderBatch.begin(GL_LINES, projection, view);
+        {
+            auto L = [&](const glm::vec3& a, const glm::vec3& b) {
+                renderBatch.vertex(a, carbonDark); renderBatch.vertex(b, carbonDark);
+            };
+            L(V(0.42f, 0.20f, 0.45f), V(0.68f, 0.82f, 1.30f));
+            L(V(-0.42f, 0.20f, 0.45f), V(-0.68f, 0.82f, 1.30f));
+        }
+        renderBatch.end();
+
+        // -------------------------------------------------------------
+        // 6. COCKPIT CRYSTALLINE GLASS CANOPY (Multi-Pane Sci-Fi Glass)
+        // -------------------------------------------------------------
+        
+        renderBatch.begin(GL_TRIANGLES, projection, view);
+        {
+            auto T = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+                renderBatch.vertex(a, canopyGlass); renderBatch.vertex(b, canopyGlass); renderBatch.vertex(c, canopyGlass);
+            };
+            // Front Main Windshield Pane
+            T(V(0.0f, 0.36f, -1.25f), V(-0.28f, 0.28f, -0.45f), V(0.28f, 0.28f, -0.45f));
+            // Overhead Canopy Roof Pane
+            T(V(0.0f, 0.45f, -0.25f), V(0.28f, 0.28f, -0.45f), V(-0.28f, 0.28f, -0.45f));
+            T(V(0.0f, 0.45f, -0.25f), V(0.24f, 0.32f, 0.05f), V(0.28f, 0.28f, -0.45f));
+            T(V(0.0f, 0.45f, -0.25f), V(-0.28f, 0.28f, -0.45f), V(-0.24f, 0.32f, 0.05f));
+        }
+        renderBatch.end();
+
+        // Canopy Structural Framing Mullions (Dark Graphite Ribs)
+        
+        renderBatch.begin(GL_LINES, projection, view);
+        {
+            auto L = [&](const glm::vec3& a, const glm::vec3& b) {
+                renderBatch.vertex(a, canopyFrame); renderBatch.vertex(b, canopyFrame);
+            };
+            L(V(0.0f, 0.36f, -1.25f), V(0.0f, 0.45f, -0.25f));
+            L(V(-0.28f, 0.28f, -0.45f), V(0.0f, 0.45f, -0.25f));
+            L(V(0.28f, 0.28f, -0.45f), V(0.0f, 0.45f, -0.25f));
+            L(V(-0.28f, 0.28f, -0.45f), V(0.28f, 0.28f, -0.45f));
+        }
+        renderBatch.end();
+
+        // -------------------------------------------------------------
+        // 7. LUMINESCENT CYAN STATUS STRIPES & SENSOR SUITE
+        // -------------------------------------------------------------
+        
+        renderBatch.begin(GL_TRIANGLES, projection, view);
+        {
+            auto Q = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d) {
+                renderBatch.vertex(a, cyanGlow); renderBatch.vertex(b, cyanGlow); renderBatch.vertex(c, cyanGlow);
+                renderBatch.vertex(a, cyanGlow); renderBatch.vertex(c, cyanGlow); renderBatch.vertex(d, cyanGlow);
+            };
+            // Dorsal Spine Avionics Status Strip
+            Q(V(-0.04f, 0.44f, -0.15f), V(0.04f, 0.44f, -0.15f), V(0.03f, 0.38f, 1.45f), V(-0.03f, 0.38f, 1.45f));
+            // Forward Nose Sensor Optical Window
+            Q(V(-0.06f, 0.17f, -2.12f), V(0.06f, 0.17f, -2.12f), V(0.05f, 0.21f, -1.75f), V(-0.05f, 0.21f, -1.75f));
+        }
+        renderBatch.end();
+
+        // Forward Sensor Needle Probe
+        renderBatch.begin(GL_LINES, projection, view);
+        {
+            renderBatch.vertex(V(0.0f, 0.16f, -2.15f), titanium);
+            renderBatch.vertex(V(0.0f, 0.16f, -2.55f), titanium);
+        }
+        renderBatch.end();
+
+        // -------------------------------------------------------------
+        // 8. DUAL VECTORING ENGINE NOZZLES & MAGNETIC CONFINEMENT RINGS
+        // -------------------------------------------------------------
+
+        float engX[2] = {-0.30f, 0.30f};
+        for (int e = 0; e < 2; ++e) {
+            float ex = engX[e];
+
+            // Cylindrical Titanium Nozzle Bell (quad strip -> triangles)
+            renderBatch.begin(GL_TRIANGLES, projection, view);
+            for (int i = 0; i < 16; ++i) {
+                float a0 = (float)i * 6.2831853f / 16.0f;
+                float a1 = (float)(i + 1) * 6.2831853f / 16.0f;
+                glm::vec3 b0 = V(ex + cos(a0) * 0.19f, sin(a0) * 0.19f, 1.40f);
+                glm::vec3 t0 = V(ex + cos(a0) * 0.22f, sin(a0) * 0.22f, 1.58f);
+                glm::vec3 b1 = V(ex + cos(a1) * 0.19f, sin(a1) * 0.19f, 1.40f);
+                glm::vec3 t1 = V(ex + cos(a1) * 0.22f, sin(a1) * 0.22f, 1.58f);
+                renderBatch.vertex(b0, titanium); renderBatch.vertex(t0, titanium); renderBatch.vertex(b1, titanium);
+                renderBatch.vertex(b1, titanium); renderBatch.vertex(t0, titanium); renderBatch.vertex(t1, titanium);
+            }
+            renderBatch.end();
+
+            // Inner Magnetic Confinement Ring (Emissive Blue)
+            renderBatch.begin(GL_TRIANGLES, projection, view);
+            for (int i = 0; i < 12; ++i) {
+                float a0 = (float)i * 6.2831853f / 12.0f;
+                float a1 = (float)(i + 1) * 6.2831853f / 12.0f;
+                glm::vec3 lo0 = V(ex + cos(a0) * 0.16f, sin(a0) * 0.16f, 1.44f);
+                glm::vec3 hi0 = V(ex + cos(a0) * 0.16f, sin(a0) * 0.16f, 1.52f);
+                glm::vec3 lo1 = V(ex + cos(a1) * 0.16f, sin(a1) * 0.16f, 1.44f);
+                glm::vec3 hi1 = V(ex + cos(a1) * 0.16f, sin(a1) * 0.16f, 1.52f);
+                renderBatch.vertex(lo0, cyanGlow); renderBatch.vertex(hi0, cyanGlow); renderBatch.vertex(lo1, cyanGlow);
+                renderBatch.vertex(lo1, cyanGlow); renderBatch.vertex(hi0, cyanGlow); renderBatch.vertex(hi1, cyanGlow);
+            }
+            renderBatch.end();
+        }
 
         // -------------------------------------------------------------
         // 9. DYNAMIC DUAL ION THRUSTER PLUMES (Nested Hot Core + Plasma Mantle)
@@ -794,4 +796,3 @@ void Spaceship::renderCockpitInterior(const glm::mat4& projection, const glm::ma
         }
         renderBatch.end();
     }
-
