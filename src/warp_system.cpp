@@ -218,10 +218,8 @@ void WarpSystem::renderStreaks(const glm::mat4& view, const glm::mat4& proj, con
 
     float alphaMultiplier = (state == WARP_CRUISE) ? 1.0f : (state == WARP_JUMP) ? (stateTimer / jumpDuration) : (1.0f - stateTimer / decelDuration);
 
-    glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glLineWidth(2.2f);
     glDepthMask(GL_FALSE);
 
     streakBatch.begin(GL_LINES, proj, view, alphaMultiplier);
@@ -234,9 +232,7 @@ void WarpSystem::renderStreaks(const glm::mat4& view, const glm::mat4& proj, con
     }
     streakBatch.end();
 
-    glLineWidth(1.0f);
     glDisable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LIGHTING);
     glDepthMask(GL_TRUE);
 }

@@ -131,7 +131,6 @@ void AtmosphereEffects::renderAtmosphere(const std::string& planetName, float pl
     const AtmosphereProperties& atmo = it->second;
     float atmoRadius = planetRadius * (1.0f + atmo.height);
 
-    glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glDepthMask(GL_FALSE);
@@ -151,14 +150,8 @@ void AtmosphereEffects::renderAtmosphere(const std::string& planetName, float pl
             modelView = glm::scale(inModelView, glm::vec3(atmoRadius));
             projection = inProjection;
         } else {
-            glPushMatrix();
-            glScalef(atmoRadius, atmoRadius, atmoRadius);
-            GLfloat mv[16], proj[16];
-            glGetFloatv(GL_MODELVIEW_MATRIX, mv);
-            glGetFloatv(GL_PROJECTION_MATRIX, proj);
-            modelView = glm::make_mat4(mv);
-            projection = glm::make_mat4(proj);
-            glPopMatrix();
+            modelView = glm::scale(glm::mat4(1.0f), glm::vec3(atmoRadius));
+            projection = inProjection;
         }
 
         glm::mat3 normalMat = glm::mat3(glm::transpose(glm::inverse(modelView)));
@@ -171,13 +164,11 @@ void AtmosphereEffects::renderAtmosphere(const std::string& planetName, float pl
         glUseProgram(0);
     } else {
         float alpha = atmo.density * 0.4f;
-        glColor4f(atmo.color.r, atmo.color.g, atmo.color.b, alpha);
-        glprims::sharedSphere().draw(atmoRadius);
+        glprims::sharedModernSphere().drawUnit();
     }
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
 }
 
 const AtmosphereEffects::AtmosphereProperties& AtmosphereEffects::getAtmosphereProperties(const std::string& planetName) const {

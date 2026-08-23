@@ -164,7 +164,6 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
     }
 
     glDisable(GL_DEPTH_TEST);
-    glDisable(GL_LIGHTING);
     glUseProgram(program);
 
     if (bloomEnabled) {

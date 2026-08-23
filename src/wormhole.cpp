@@ -305,6 +305,9 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 
+    if (!particleBatch.isReady()) {
+        particleBatch.init(kFlatVS, kFlatFS);
+    }
     if (particleBatch.isReady()) {
         particleBatch.begin(GL_POINTS, proj, view);
         for (const auto& p : particles) {
@@ -313,6 +316,7 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
         particleBatch.end();
     }
 
+    glUseProgram(0);
     glEnable(GL_CULL_FACE);
     glDisable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

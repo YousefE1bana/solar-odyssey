@@ -37,5 +37,5 @@ public:
     void setQualityCount(int count);
     int getAsteroidCount() const;
     void update(float deltaTime, float planetSpeed, const glm::vec3& blackHolePos = glm::vec3(0.0f), float blackHoleStrength = 0.0f);
-    void render(float focusFade = 1.0f);
+    void render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunEyePos);
 };

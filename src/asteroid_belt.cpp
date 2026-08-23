@@ -78,19 +78,24 @@ void AsteroidBelt::generateAsteroids(int totalCapacity) {
     }
 }
 
+#include <glm/gtc/type_ptr.hpp>
+#include <iostream>
+
 void AsteroidBelt::loadTexture(const char* texturePath) {
     int width, height, channels;
     unsigned char* image = stbi_load(texturePath, &width, &height, &channels, 0);
     if (image) {
-        glGenTextures(1, &asteroidTexture);
-        glBindTexture(GL_TEXTURE_2D, asteroidTexture);
+        glCreateTextures(GL_TEXTURE_2D, 1, &asteroidTexture);
+        GLenum internalFormat = (channels == 4) ? GL_RGBA8 : GL_RGB8;
         GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, image);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        int levels = 1 + (int)std::floor(std::log2(std::max(width, height)));
+        glTextureStorage2D(asteroidTexture, levels, internalFormat, width, height);
+        glTextureSubImage2D(asteroidTexture, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, image);
+        glGenerateTextureMipmap(asteroidTexture);
+        glTextureParameteri(asteroidTexture, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTextureParameteri(asteroidTexture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(asteroidTexture, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTextureParameteri(asteroidTexture, GL_TEXTURE_WRAP_T, GL_REPEAT);
         stbi_image_free(image);
     }
 }
@@ -122,53 +127,86 @@ void AsteroidBelt::update(float deltaTime, float planetSpeed, const glm::vec3& b
     }
 }
 
-void AsteroidBelt::render(float focusFade) {
-    glDisable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunEyePos) {
+    if (!program || allAsteroids.empty()) return;
+
+    GLenum errPre = glGetError();
+    if (errPre != GL_NO_ERROR) {
+        std::cerr << "[AsteroidBelt] Warning: GL error before render: 0x" << std::hex << errPre << std::dec << std::endl;
+    }
+
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
-    glEnable(GL_LIGHTING);
+    glDisable(GL_BLEND);
 
-    glEnable(GL_TEXTURE_2D);
+    glUseProgram(program);
+
+    // Bind texture to unit 0
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, asteroidTexture);
+    GLint dayTexLoc = glGetUniformLocation(program, "uDayTex");
+    if (dayTexLoc != -1) glUniform1i(dayTexLoc, 0);
+
+    GLint hasNightLoc = glGetUniformLocation(program, "uHasNightTex");
+    if (hasNightLoc != -1) glUniform1i(hasNightLoc, 0);
+
+    GLint hasCloudsLoc = glGetUniformLocation(program, "uHasClouds");
+    if (hasCloudsLoc != -1) glUniform1i(hasCloudsLoc, 0);
+
+    GLint specLoc = glGetUniformLocation(program, "uSpecularStrength");
+    if (specLoc != -1) glUniform1f(specLoc, 0.0f);
+
+    GLint atmoGlowLoc = glGetUniformLocation(program, "uAtmosphereGlow");
+    if (atmoGlowLoc != -1) glUniform1f(atmoGlowLoc, 0.0f);
+
+    GLint emissiveLoc = glGetUniformLocation(program, "uEmissive");
+    if (emissiveLoc != -1) glUniform3f(emissiveLoc, 0.0f, 0.0f, 0.0f);
+
+    GLint sunIntensityLoc = glGetUniformLocation(program, "uSunIntensity");
+    if (sunIntensityLoc != -1) glUniform1f(sunIntensityLoc, 1.20f);
+
+    GLint sunEyePosLoc = glGetUniformLocation(program, "uSunEyePos");
+    if (sunEyePosLoc != -1) glUniform3f(sunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
+
+    GLint modelViewLoc = glGetUniformLocation(program, "uModelView");
+    GLint projLoc = glGetUniformLocation(program, "uProjection");
+    GLint normalLoc = glGetUniformLocation(program, "uNormalMatrix");
+
+    if (projLoc != -1) {
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projMat));
+    }
 
     float countMult = 0.20f + 0.80f * std::max(0.0f, std::min(1.0f, focusFade));
     int countToRender = (int)(std::min(activeCount, (int)allAsteroids.size()) * countMult);
-    float brightMult = 0.40f + 0.60f * std::max(0.0f, std::min(1.0f, focusFade));
 
-    glprims::sharedSphere().bind();
+    glprims::sharedModernSphere().ensure();
+    glBindVertexArray(glprims::sharedModernSphere().vao);
 
     for (int i = 0; i < countToRender; ++i) {
         const Asteroid& ast = allAsteroids[i];
 
-        glPushMatrix();
-        glTranslatef(ast.position.x, ast.position.y, ast.position.z);
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), ast.position);
+        model = glm::rotate(model, glm::radians(ast.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(ast.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(ast.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        model = glm::scale(model, glm::vec3(ast.size, ast.size * 0.85f, ast.size));
 
-        glRotatef(ast.rotation.x, 1.0f, 0.0f, 0.0f);
-        glRotatef(ast.rotation.y, 0.0f, 1.0f, 0.0f);
-        glRotatef(ast.rotation.z, 0.0f, 0.0f, 1.0f);
+        glm::mat4 mv = viewMat * model;
+        glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(mv)));
 
-        glm::vec3 col = ast.materialColor * (ast.brightness * brightMult);
-        GLfloat mat_ambient[] = {col.r * 0.35f, col.g * 0.35f, col.b * 0.35f, 1.0f};
-        GLfloat mat_diffuse[] = {col.r, col.g, col.b, 1.0f};
-        GLfloat mat_specular[] = {0.05f, 0.05f, 0.05f, 1.0f};
-        GLfloat mat_shininess[] = {4.0f};
+        if (modelViewLoc != -1) glUniformMatrix4fv(modelViewLoc, 1, GL_FALSE, glm::value_ptr(mv));
+        if (normalLoc != -1) glUniformMatrix3fv(normalLoc, 1, GL_FALSE, glm::value_ptr(normalMat));
 
-        glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
-        glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
-        glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
-        glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
-
-        glScalef(ast.size, ast.size * 0.85f, ast.size);
-
-        glprims::sharedSphere().drawIndexed();
-
-        glPopMatrix();
+        glDrawElements(GL_TRIANGLES, glprims::sharedModernSphere().indexCount, GL_UNSIGNED_SHORT, nullptr);
     }
 
-    glprims::UnitSphere::unbind();
+    glBindVertexArray(0);
+    glUseProgram(0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
-    glDisable(GL_TEXTURE_2D);
-    glDisable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    GLenum errPost = glGetError();
+    if (errPost != GL_NO_ERROR) {
+        std::cerr << "[AsteroidBelt] Warning: GL error after render: 0x" << std::hex << errPost << std::dec << std::endl;
+    }
 }

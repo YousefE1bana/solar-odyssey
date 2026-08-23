@@ -104,18 +104,9 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
         baseMV = glm::translate(inViewMat, position);
         projMat = inProjMat;
     } else {
-        glPushMatrix();
-        glTranslatef(position.x, position.y, position.z);
-        GLfloat mv[16], proj[16];
-        glGetFloatv(GL_MODELVIEW_MATRIX, mv);
-        glGetFloatv(GL_PROJECTION_MATRIX, proj);
-        baseMV = glm::make_mat4(mv);
-        projMat = glm::make_mat4(proj);
-        glPopMatrix();
+        baseMV = glm::translate(glm::mat4(1.0f), position);
+        projMat = inProjMat;
     }
-
-    glPushMatrix();
-    glTranslatef(position.x, position.y, position.z);
 
     if (program != 0) {
         glUseProgram(program);
@@ -133,7 +124,6 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
         if (uNormalMatrixLoc != -1) glUniformMatrix3fv(uNormalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMat));
     }
 
-    glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
@@ -153,21 +143,13 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
         glm::mat3 archNorm1 = glm::mat3(glm::transpose(glm::inverse(archMV1)));
         if (uModelViewLoc != -1) glUniformMatrix4fv(uModelViewLoc, 1, GL_FALSE, glm::value_ptr(archMV1));
         if (uNormalMatrixLoc != -1) glUniformMatrix3fv(uNormalMatrixLoc, 1, GL_FALSE, glm::value_ptr(archNorm1));
-
-        glPushMatrix();
-        glRotatef(82.0f, 1.0f, 0.0f, 0.0f);
         renderDiskMesh(accretionDiskInner * 0.95f, accretionDiskOuter * 0.65f, 90);
-        glPopMatrix();
 
         glm::mat4 archMV2 = glm::rotate(baseMV, glm::radians(-82.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         glm::mat3 archNorm2 = glm::mat3(glm::transpose(glm::inverse(archMV2)));
         if (uModelViewLoc != -1) glUniformMatrix4fv(uModelViewLoc, 1, GL_FALSE, glm::value_ptr(archMV2));
         if (uNormalMatrixLoc != -1) glUniformMatrix3fv(uNormalMatrixLoc, 1, GL_FALSE, glm::value_ptr(archNorm2));
-
-        glPushMatrix();
-        glRotatef(-82.0f, 1.0f, 0.0f, 0.0f);
         renderDiskMesh(accretionDiskInner * 0.95f, accretionDiskOuter * 0.65f, 90);
-        glPopMatrix();
     }
 
     if (program != 0 && uRenderPassLoc != -1) {
@@ -178,13 +160,7 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
     glm::mat3 shadowNorm = glm::mat3(glm::transpose(glm::inverse(shadowMV)));
     if (uModelViewLoc != -1) glUniformMatrix4fv(uModelViewLoc, 1, GL_FALSE, glm::value_ptr(shadowMV));
     if (uNormalMatrixLoc != -1) glUniformMatrix3fv(uNormalMatrixLoc, 1, GL_FALSE, glm::value_ptr(shadowNorm));
-
-    {
-        glPushMatrix();
-        glScalef(shadowRadius, shadowRadius, shadowRadius);
-        glprims::sharedModernSphere().drawUnit();
-        glPopMatrix();
-    }
+    glprims::sharedModernSphere().drawUnit();
 
     if (showJets) {
         if (program != 0 && uRenderPassLoc != -1) {
@@ -197,11 +173,7 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
         
         glm::mat4 southJetMV = glm::rotate(baseMV, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         if (uModelViewLoc != -1) glUniformMatrix4fv(uModelViewLoc, 1, GL_FALSE, glm::value_ptr(southJetMV));
-
-        glPushMatrix();
-        glRotatef(180.0f, 1.0f, 0.0f, 0.0f);
         renderJetCylinder(22.0f, 0.45f, 2.2f, 32);
-        glPopMatrix();
     }
 
     if (program != 0) {
@@ -222,9 +194,6 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
 
     glEnable(GL_CULL_FACE);
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
-
-    glPopMatrix();
 }
 
 bool BlackHole::keyMatches(const StripMesh& m, float innerR, float outerR, int segments) {

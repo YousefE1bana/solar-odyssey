@@ -733,7 +733,6 @@ static void drawParticleBatch(const vector<Particle>& particles, float pointSize
     if (particles.empty()) return;
     if (!gBatch.isReady()) gBatch.init(kFlatVS, kFlatFS);
 
-    glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glDepthMask(GL_FALSE);
@@ -747,7 +746,6 @@ static void drawParticleBatch(const vector<Particle>& particles, float pointSize
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
 }
 
 void drawSolarFlares() {
@@ -849,7 +847,6 @@ void setupSpecialPlanetTextures() {
 }
 
 void drawStarfield() {
-    glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
     glDepthMask(GL_FALSE);
@@ -877,27 +874,17 @@ void drawStarfield() {
 
         glUseProgram(0);
     } else {
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, starfieldTexture);
-        glPushMatrix();
-        glTranslatef(cameraCtrl.currentEye.x, cameraCtrl.currentEye.y, cameraCtrl.currentEye.z);
-        glFrontFace(GL_CW);
-        glprims::sharedSphere().draw(450.0f);
-        glFrontFace(GL_CCW);
-        glPopMatrix();
-        glDisable(GL_TEXTURE_2D);
+        glprims::sharedModernSphere().drawUnit();
     }
 
     if (cullWasOn) glEnable(GL_CULL_FACE);
     glDepthMask(GL_TRUE);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_LIGHTING);
 }
 
 void drawOrbit(float radius, bool isSelected) {
     if (cameraCtrl.photoModeActive) return;
 
-    glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -908,7 +895,6 @@ void drawOrbit(float radius, bool isSelected) {
         } else if (cameraCtrl.mode == CAM_POV) {
             // Hide unrelated orbits in POV mode
             glDisable(GL_BLEND);
-            glEnable(GL_LIGHTING);
             return;
         } else {
             // Strong contextual fading for background orbits
@@ -944,71 +930,88 @@ void drawOrbit(float radius, bool isSelected) {
     }
 
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
 }
 
-void drawSaturnRings(float innerRadius, float outerRadius) {
-    glPushMatrix();
-    glDisable(GL_LIGHTING);
+void drawSaturnRings(float innerRadius, float outerRadius, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos) {
+    if (!planetProgram) return;
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, saturnRingTexture);
-
-    // Double-sided concentric ring rendering with radial UV mapping
     glDisable(GL_CULL_FACE);
-    glColor4f(1.0f, 0.98f, 0.94f, solarUI.ringOpacity);
 
-    // Ring strip cached per (inner,outer) radii pair (only Saturn uses this)
     const int segments = 180;
+    static GLuint ringVAO = 0;
     static GLuint ringVBO = 0;
     static float cachedInner = -1.0f, cachedOuter = -1.0f;
-    if (!ringVBO || cachedInner != innerRadius || cachedOuter != outerRadius) {
+    if (!ringVAO || cachedInner != innerRadius || cachedOuter != outerRadius) {
+        if (ringVAO) { glDeleteVertexArrays(1, &ringVAO); ringVAO = 0; }
         if (ringVBO) { glDeleteBuffers(1, &ringVBO); ringVBO = 0; }
         std::vector<float> verts;
-        verts.reserve((size_t)(segments + 1) * 5); // pos3 + uv2
+        verts.reserve((size_t)(segments + 1) * 8); // pos3 + norm3 + uv2
         for (int i = 0; i <= segments; ++i) {
             float angle = (float)i * 2.0f * 3.14159265f / (float)segments;
             float cosA = cos(angle);
             float sinA = sin(angle);
-            // Inner edge: u = 0.0 (Cassini / Inner C ring)
-            verts.insert(verts.end(), {innerRadius * cosA, 0.0f, innerRadius * sinA, 0.0f, 0.5f});
-            // Outer edge: u = 1.0 (Outer A ring edge)
-            verts.insert(verts.end(), {outerRadius * cosA, 0.0f, outerRadius * sinA, 1.0f, 0.5f});
+            float u = (float)i / (float)segments;
+            // Inner edge: u = 0.0, v = 0.0
+            verts.insert(verts.end(), {innerRadius * cosA, 0.0f, innerRadius * sinA, 0.0f, 1.0f, 0.0f, 0.0f, u});
+            // Outer edge: u = 1.0, v = 1.0
+            verts.insert(verts.end(), {outerRadius * cosA, 0.0f, outerRadius * sinA, 0.0f, 1.0f, 0.0f, 1.0f, u});
         }
-        glGenBuffers(1, &ringVBO);
-        glBindBuffer(GL_ARRAY_BUFFER, ringVBO);
-        glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
+        glCreateVertexArrays(1, &ringVAO);
+        glCreateBuffers(1, &ringVBO);
+        glNamedBufferData(ringVBO, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
+
+        glVertexArrayVertexBuffer(ringVAO, 0, ringVBO, 0, 8 * sizeof(float));
+        // aPos: loc 0
+        glEnableVertexArrayAttrib(ringVAO, 0);
+        glVertexArrayAttribFormat(ringVAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribBinding(ringVAO, 0, 0);
+
+        // aNormal: loc 1
+        glEnableVertexArrayAttrib(ringVAO, 1);
+        glVertexArrayAttribFormat(ringVAO, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+        glVertexArrayAttribBinding(ringVAO, 1, 0);
+
+        // aTexCoord: loc 2
+        glEnableVertexArrayAttrib(ringVAO, 2);
+        glVertexArrayAttribFormat(ringVAO, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+        glVertexArrayAttribBinding(ringVAO, 2, 0);
+
         cachedInner = innerRadius;
         cachedOuter = outerRadius;
-    } else {
-        glBindBuffer(GL_ARRAY_BUFFER, ringVBO);
     }
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 5 * sizeof(float), (const void*)0);
-    glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(float), (const void*)(3 * sizeof(float)));
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, (segments + 1) * 2);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glUseProgram(planetProgram);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, saturnRingTexture);
+    glUniform1i(uDayTexLoc, 0);
+    glUniform1i(uHasNightTexLoc, 0);
+    glUniform1i(uHasCloudsLoc, 0);
+    glUniform1f(uSpecularStrengthLoc, 0.0f);
+    glUniform1f(uAtmosphereGlowLoc, 0.0f);
+    glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
+    glUniform1f(uSunIntensityLoc, 1.35f);
+    glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
 
+    uploadCoreMatricesDirect(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, ringMV, projMat);
+
+    glBindVertexArray(ringVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, (segments + 1) * 2);
+    glBindVertexArray(0);
+
+    glUseProgram(0);
     glEnable(GL_CULL_FACE);
-    glDisable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
-    glPopMatrix();
 }
 
 void drawTexturedSphere(float radius, int slices = 40, int stacks = 40) {
-    glprims::sharedSphere().draw(radius);
+    (void)slices;
+    (void)stacks;
+    glprims::sharedModernSphere().drawUnit();
 }
 
 void renderSun(float time) {
-    glPushMatrix();
-    glRotatef(time * 5.0f, 0, 1, 0);
-
     if (shadersReady && sunProgram) {
         glUseProgram(sunProgram);
         glUniform1f(uSunTimeLoc, time);
@@ -1024,17 +1027,8 @@ void renderSun(float time) {
         glprims::sharedModernSphere().drawUnit();
         glUseProgram(0);
     } else {
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, sunTexture);
-        GLfloat emission[] = {1.5f, 1.1f, 0.3f, 1.0f};
-        glMaterialfv(GL_FRONT, GL_EMISSION, emission);
-        drawTexturedSphere(2.0f * solarUI.planetScale, 36, 36);
-        GLfloat zeroEmis[] = {0.0f, 0.0f, 0.0f, 1.0f};
-        glMaterialfv(GL_FRONT, GL_EMISSION, zeroEmis);
-        glDisable(GL_TEXTURE_2D);
+        glprims::sharedModernSphere().drawUnit();
     }
-
-    glPopMatrix();
 }
 
 void renderPlanets(float time) {
@@ -1057,10 +1051,6 @@ void renderPlanets(float time) {
         orbitMat = glm::translate(orbitMat, glm::vec3(planet.orbitRadius, 0.0f, 0.0f));
         glm::mat4 atmoMV = curView * orbitMat;
 
-        glPushMatrix();
-        glRotatef(time * effectiveOrbitSpeed * 0.02f, 0, 1, 0);
-        glTranslatef(planet.orbitRadius, 0, 0);
-
         // Atmosphere scattering
         if (solarUI.showAtmospheres && atmosphereEffects) {
             atmosphereEffects->renderAtmosphere(planet.name, effectiveSize, time, sunEyePos, atmoMV, currentProjMatrix);
@@ -1069,12 +1059,10 @@ void renderPlanets(float time) {
         // Axial Tilt
         const CelestialBodyData* data = celestialDb.getBody(planet.name);
         if (solarUI.enableAxialTilt && data && data->axialTiltDeg != 0.0f) {
-            glRotatef(data->axialTiltDeg, 1.0f, 0.0f, 0.2f);
             orbitMat = glm::rotate(orbitMat, glm::radians(data->axialTiltDeg), glm::vec3(1.0f, 0.0f, 0.2f));
         }
 
         // Axial rotation
-        glRotatef(time * effectiveSpinSpeed * 0.1f, 0, 1, 0);
         glm::mat4 planetModel = glm::rotate(orbitMat, glm::radians(time * effectiveSpinSpeed * 0.1f), glm::vec3(0.0f, 1.0f, 0.0f));
         planetModel = glm::scale(planetModel, glm::vec3(effectiveSize));
         glm::mat4 planetMV = curView * planetModel;
@@ -1137,22 +1125,17 @@ void renderPlanets(float time) {
             glUseProgram(0);
             glActiveTexture(GL_TEXTURE0);
         } else {
-            glEnable(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, planet.texture);
-            drawTexturedSphere(effectiveSize, 32, 32);
-            glDisable(GL_TEXTURE_2D);
+            glprims::sharedModernSphere().drawUnit();
         }
 
         // Saturn Rings
         if (planet.hasRings) {
-            glPushMatrix();
-            glRotatef(90.0f, 1.0f, 0.0f, 0.0f);
-            glRotatef(26.7f, 1.0f, 0.0f, 0.2f); // Saturn's axial ring tilt
-            drawSaturnRings(planet.ringInnerRadius * solarUI.planetScale, planet.ringOuterRadius * solarUI.planetScale);
-            glPopMatrix();
+            glm::mat4 ringModel = orbitMat;
+            ringModel = glm::rotate(ringModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            ringModel = glm::rotate(ringModel, glm::radians(26.7f), glm::vec3(1.0f, 0.0f, 0.2f));
+            glm::mat4 ringMV = curView * ringModel;
+            drawSaturnRings(planet.ringInnerRadius * solarUI.planetScale, planet.ringOuterRadius * solarUI.planetScale, ringMV, currentProjMatrix, sunEyePos);
         }
-
-        glPopMatrix();
     }
 
     // Moons
@@ -1171,13 +1154,6 @@ void renderPlanets(float time) {
                 moonModel = glm::translate(moonModel, glm::vec3(moon.orbitRadius, 0.0f, 0.0f));
                 moonModel = glm::scale(moonModel, glm::vec3(effectiveMoonSize));
                 glm::mat4 moonMV = curView * moonModel;
-
-                glPushMatrix();
-                glRotatef(time * effectiveOrbitSpeed * 0.02f, 0, 1, 0);
-                glTranslatef(planet.orbitRadius, 0, 0);
-
-                glRotatef(time * moon.orbitSpeed * 0.05f * solarUI.orbitSpeedScale, 0, 1, 0);
-                glTranslatef(moon.orbitRadius, 0, 0);
 
                 moon.currentPosition = planet.currentPosition + glm::vec3(
                     cos(moonRadAngle) * moon.orbitRadius,
@@ -1200,13 +1176,8 @@ void renderPlanets(float time) {
                     glprims::sharedModernSphere().drawUnit();
                     glUseProgram(0);
                 } else {
-                    glEnable(GL_TEXTURE_2D);
-                    glBindTexture(GL_TEXTURE_2D, moon.texture);
-                    drawTexturedSphere(effectiveMoonSize, 20, 20);
-                    glDisable(GL_TEXTURE_2D);
+                    glprims::sharedModernSphere().drawUnit();
                 }
-
-                glPopMatrix();
                 break;
             }
         }
@@ -2123,13 +2094,10 @@ int main(int argc, char** argv) {
         glm::mat4 projMat = glm::perspective(glm::radians(currentFOV),
                                              (float)windowWidth / (float)windowHeight, 0.1f, 600.0f);
 
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
         glm::mat4 viewMat = cameraCtrl.getViewMatrix();
         if (spaceship.active && spaceship.warpSystem.cameraShakeIntensity > 0.001f) {
             viewMat = glm::translate(viewMat, spaceship.warpSystem.cameraShakeOffset);
         }
-        glLoadMatrixf(glm::value_ptr(viewMat));
 
         // Publish this frame's matrices for core-profile batch draws
         currentViewMatrix = viewMat;
@@ -2137,18 +2105,6 @@ int main(int argc, char** argv) {
 
         // Draw Starfield Background
         drawStarfield();
-
-        // Setup Sunlight
-        glEnable(GL_LIGHTING);
-        glEnable(GL_LIGHT0);
-        GLfloat lightPos[] = {0.0f, 0.0f, 0.0f, 1.0f};
-        GLfloat lightAmbient[] = {0.05f, 0.05f, 0.07f, 1.0f};
-        GLfloat lightDiffuse[] = {1.2f, 1.15f, 1.05f, 1.0f};
-        GLfloat lightSpecular[] = {1.0f, 1.0f, 1.0f, 1.0f};
-        glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
-        glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
-        glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
 
         // Draw Orbit Paths
         if (solarUI.showOrbits) {
@@ -2189,7 +2145,8 @@ int main(int argc, char** argv) {
             if (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || (cameraCtrl.tourActive && cameraCtrl.focusedPlanetIndex >= 0)) {
                 focusFade = 0.20f;
             }
-            asteroidBelt->render(focusFade);
+            glm::vec3 sunEyePos = glm::vec3(viewMat * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+            asteroidBelt->render(focusFade, planetProgram, viewMat, projMat, sunEyePos);
         }
 
         // 2. END POST-PROCESSING & COMPOSITE TO SCREEN
