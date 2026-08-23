@@ -103,3 +103,47 @@ add_custom_command(TARGET SolarOdyssey POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Sound $<TARGET_FILE_DIR:SolarOdyssey>/Sound
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:SolarOdyssey>/shaders
 )
+
+# ==============================================================================
+# Unit Test Suite (Catch2)
+# ==============================================================================
+enable_testing()
+
+add_executable(SolarOdysseyTests
+  tests/test_main.cpp
+  tests/test_planet_data.cpp
+  tests/test_picking.cpp
+  tests/test_camera_math.cpp
+  tests/test_missions.cpp
+  tests/test_settings.cpp
+  tests/test_orbital_physics.cpp
+  tests/test_spaceship_physics.cpp
+  tests/test_warp_system.cpp
+  tests/test_asteroid_belt.cpp
+  src/planet_data.cpp
+  src/picking.cpp
+  src/camera_controller.cpp
+  src/mission_system.cpp
+  src/settings_persistence.cpp
+  imgui/imgui.cpp
+  imgui/imgui_draw.cpp
+  imgui/imgui_tables.cpp
+  imgui/imgui_widgets.cpp
+)
+
+target_include_directories(SolarOdysseyTests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/imgui
+)
+
+target_link_libraries(SolarOdysseyTests PRIVATE ${LINK_LIBS})
+if (TARGET glm::glm)
+  target_link_libraries(SolarOdysseyTests PRIVATE glm::glm)
+elseif (glm_INCLUDE_DIRS)
+  target_include_directories(SolarOdysseyTests PRIVATE ${glm_INCLUDE_DIRS})
+endif()
+
+add_test(NAME UnitTests COMMAND SolarOdysseyTests)
+
