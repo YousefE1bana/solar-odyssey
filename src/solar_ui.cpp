@@ -690,7 +690,7 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
 void SolarOdysseyUI::renderFreeCamHUD(float screenWidth, float screenHeight, CameraController& cam) {
         if (cam.mode != CAM_FREE || cam.photoModeActive) return;
 
-        float hudW = 320.0f;
+        float hudW = 380.0f;
         float hudH = 80.0f;
         ImGui::SetNextWindowPos(ImVec2(24.0f, screenHeight - hudH - 24.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(hudW, hudH), ImGuiCond_Always);
@@ -703,7 +703,7 @@ void SolarOdysseyUI::renderFreeCamHUD(float screenWidth, float screenHeight, Cam
             ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.65f, 1.0f), " 6-DOF FREE FLIGHT CAMERA");
             ImGui::Separator();
             ImGui::Text("Speed: %.1f u/s (Scroll to adjust)", cam.freeSpeed);
-            ImGui::TextDisabled("W/S: Move | A/D: Strafe | Space/C: Up/Down | [F] Exit");
+            ImGui::TextDisabled("WASD: Move | Space/C: Elevate | [Alt] UI Cursor | [F] Exit");
         }
         ImGui::End();
     }

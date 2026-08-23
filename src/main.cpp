@@ -314,7 +314,7 @@ bool uiReleaseCursorHeld = false;
 
 void updateCursorCapture(GLFWwindow* window) {
     if (!window) return;
-    bool shouldCapture = spaceship.active && !uiReleaseCursorHeld;
+    bool shouldCapture = (spaceship.active || cameraCtrl.mode == CAM_FREE) && !uiReleaseCursorHeld;
     if (shouldCapture != isFlightMouseCaptured) {
         isFlightMouseCaptured = shouldCapture;
         if (isFlightMouseCaptured) {
@@ -1355,8 +1355,10 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                 cameraCtrl.resetToDefault();
                 solarUI.selectedPlanetName = "";
                 stopPOVAmbientSound();
+                updateCursorCapture(window);
             } else if (key == GLFW_KEY_F) {
                 cameraCtrl.toggleFreeCam();
+                updateCursorCapture(window);
             } else if (key == GLFW_KEY_T) {
                 if (cameraCtrl.tourActive) {
                     cameraCtrl.stopTour();
@@ -1364,6 +1366,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                     cameraCtrl.startTour();
                     focusPlanetTourByName(cameraCtrl.tourSequence[0]);
                 }
+                updateCursorCapture(window);
             } else if (key == GLFW_KEY_B) {
                 if (cameraCtrl.mode == CAM_BLACK_HOLE || solarUI.selectedPlanetName == "Black Hole") {
                     cameraCtrl.resetToDefault();
@@ -1371,6 +1374,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                 } else {
                     focusPlanetByName("Black Hole");
                 }
+                updateCursorCapture(window);
             } else if (key == GLFW_KEY_K) {
                 if (cameraCtrl.mode == CAM_WORMHOLE || solarUI.selectedPlanetName == "Wormhole") {
                     cameraCtrl.resetToDefault();
@@ -1378,12 +1382,15 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                 } else {
                     focusPlanetByName("Wormhole");
                 }
+                updateCursorCapture(window);
             } else if (key == GLFW_KEY_0) {
                 focusPlanetByName("Sun");
+                updateCursorCapture(window);
             } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_8) {
                 int pIdx = key - GLFW_KEY_1;
                 if (pIdx < (int)planets.size()) {
                     focusPlanetByName(planets[pIdx].name);
+                    updateCursorCapture(window);
                 }
             } else if (key == GLFW_KEY_ESCAPE) {
                 if (solarUI.showMissionModal) {
@@ -1394,10 +1401,11 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                     cameraCtrl.stopTour();
                 } else if (solarUI.showPlanetCard) {
                     solarUI.showPlanetCard = false;
-                } else if (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || cameraCtrl.mode == CAM_BLACK_HOLE || cameraCtrl.mode == CAM_WORMHOLE) {
+                } else if (cameraCtrl.mode == CAM_FREE || cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || cameraCtrl.mode == CAM_BLACK_HOLE || cameraCtrl.mode == CAM_WORMHOLE) {
                     cameraCtrl.resetToDefault();
                     solarUI.selectedPlanetName = "";
                     stopPOVAmbientSound();
+                    updateCursorCapture(window);
                 }
             }
         }
@@ -1464,7 +1472,9 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     // Flight mouse steering in Spaceship Mode
     if (spaceship.active && isFlightMouseCaptured && !uiReleaseCursorHeld) {
         spaceship.processMouseMovement(xoffset, yoffset);
-    } else if (!ImGui::GetIO().WantCaptureMouse && (isLeftMouseDown || isRightMouseDown || cameraCtrl.mode == CAM_FREE)) {
+    } else if (cameraCtrl.mode == CAM_FREE && isFlightMouseCaptured && !uiReleaseCursorHeld) {
+        cameraCtrl.processMouseDrag(xoffset, yoffset);
+    } else if (!ImGui::GetIO().WantCaptureMouse && (isLeftMouseDown || isRightMouseDown)) {
         cameraCtrl.processMouseDrag(xoffset, yoffset);
     }
 }
@@ -1583,27 +1593,46 @@ void runQACaptureSequence(GLFWwindow* window, int qaFrameCount) {
     } else if (qaFrameCount == 255) {
         // TEST 11: Press Esc in manual flight -> exit Spaceship Mode and return to Explorer
         keyCallback(window, GLFW_KEY_ESCAPE, 0, GLFW_PRESS, 0);
+        updateCursorCapture(window);
         std::cout << "[QA TEST 11] Press Esc in manual flight -> spaceship.active=" << (spaceship.active ? "true" : "false")
                   << ", cursorCaptured=" << (isFlightMouseCaptured ? "true" : "false")
                   << " -> " << (!spaceship.active && !isFlightMouseCaptured ? "PASS" : "FAIL") << std::endl;
-    } else if (qaFrameCount == 260) {
-        // TEST 12: In Explorer mode press R -> Reset view works normally
+    } else if (qaFrameCount == 258) {
+        // TEST 12: Press F to enter Free Cam -> cursor captured
+        keyCallback(window, GLFW_KEY_F, 0, GLFW_PRESS, 0);
+        updateCursorCapture(window);
+        std::cout << "[QA TEST 12] Enter Free Cam with F -> cameraMode=" << cameraCtrl.mode
+                  << ", cursorCaptured=" << (isFlightMouseCaptured ? "true" : "false")
+                  << " -> " << (cameraCtrl.mode == CAM_FREE && isFlightMouseCaptured ? "PASS" : "FAIL") << std::endl;
+    } else if (qaFrameCount == 261) {
+        // TEST 13: Press F to exit Free Cam -> cursor restored to normal
+        keyCallback(window, GLFW_KEY_F, 0, GLFW_PRESS, 0);
+        updateCursorCapture(window);
+        std::cout << "[QA TEST 13] Exit Free Cam with F -> cameraMode=" << cameraCtrl.mode
+                  << ", cursorCaptured=" << (isFlightMouseCaptured ? "true" : "false")
+                  << " -> " << (cameraCtrl.mode == CAM_ORBITAL && !isFlightMouseCaptured ? "PASS" : "FAIL") << std::endl;
+    } else if (qaFrameCount == 264) {
+        // TEST 14: In Explorer mode press R -> Reset view works normally and cursor remains uncaptured
         cameraCtrl.mode = CAM_FREE;
+        updateCursorCapture(window);
         solarUI.selectedPlanetName = "Mars";
         keyCallback(window, GLFW_KEY_R, 0, GLFW_PRESS, 0);
+        updateCursorCapture(window);
         bool resetActive = (cameraCtrl.mode == CAM_ORBITAL || (cameraCtrl.mode == CAM_TRANSITION && cameraCtrl.postTransitionMode == CAM_ORBITAL));
-        std::cout << "[QA TEST 12] Press R in Explorer -> cameraMode=" << cameraCtrl.mode
-                  << ", postMode=" << cameraCtrl.postTransitionMode
+        std::cout << "[QA TEST 14] Press R in Explorer -> cameraMode=" << cameraCtrl.mode
+                  << ", cursorCaptured=" << (isFlightMouseCaptured ? "true" : "false")
                   << ", selectedPlanet=" << solarUI.selectedPlanetName
-                  << " -> " << (resetActive && solarUI.selectedPlanetName.empty() ? "PASS" : "FAIL") << std::endl;
-    } else if (qaFrameCount == 265) {
+                  << " -> " << (resetActive && !isFlightMouseCaptured && solarUI.selectedPlanetName.empty() ? "PASS" : "FAIL") << std::endl;
+    } else if (qaFrameCount == 268) {
         spaceship.active = true;
         spaceship.cameraView = SHIP_CAM_COCKPIT;
         cameraCtrl.setSpaceshipMode(true, spaceship.getCameraEye(), spaceship.getCameraTarget(), spaceship.smoothCameraUp);
+        updateCursorCapture(window);
         postPipeline.captureScreenshot("Screenshots/Polish/spaceship_cockpit.bmp");
         postPipeline.captureScreenshot("Screenshots/Regression/spaceship_cockpit.bmp");
         spaceship.active = false;
         cameraCtrl.setSpaceshipMode(false, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        updateCursorCapture(window);
         focusPlanetByName("Black Hole");
     } else if (qaFrameCount == 310) {
         postPipeline.captureScreenshot("Screenshots/Polish/black_hole.bmp");
@@ -1987,8 +2016,17 @@ int main(int argc, char** argv) {
                 if (sState != AL_PLAYING) alSourcePlay(spaceshipSource);
             }
         } else {
-            if (uiReleaseCursorHeld) {
-                uiReleaseCursorHeld = false;
+            // Poll Left Alt for temporary UI cursor release in Free Cam
+            if (cameraCtrl.mode == CAM_FREE) {
+                bool leftAltDown = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
+                if (leftAltDown != uiReleaseCursorHeld) {
+                    uiReleaseCursorHeld = leftAltDown;
+                    updateCursorCapture(window);
+                }
+            } else {
+                if (uiReleaseCursorHeld) {
+                    uiReleaseCursorHeld = false;
+                }
             }
             updateCursorCapture(window);
             if (spaceshipSource) alSourceStop(spaceshipSource);
