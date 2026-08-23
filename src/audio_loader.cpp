@@ -22,8 +22,11 @@ std::string resolveAudioPath(const std::string& filename) {
         filename,
         "Sound/" + filename,
         "../Sound/" + filename,
+        "../../Sound/" + filename,
         "build/Sound/" + filename,
-        "build-cmake/Sound/" + filename
+        "build-cmake/Sound/" + filename,
+        "../build/Sound/" + filename,
+        "../build-cmake/Sound/" + filename
     };
 
     for (const auto& candidate : candidates) {

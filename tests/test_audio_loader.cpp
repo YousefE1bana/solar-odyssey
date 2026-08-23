@@ -2,12 +2,12 @@
 #include "audio_loader.h"
 
 TEST_CASE("AudioLoader - Path Resolution", "[audio]") {
+    // Must find existing track unconditionally
     std::string path = AudioLoader::resolveAudioPath("earth.mp3");
-    // Should resolve to Sound/earth.mp3 or similar valid path if file exists
-    if (!path.empty()) {
-        REQUIRE(path.find("earth.mp3") != std::string::npos);
-    }
+    REQUIRE(!path.empty());
+    REQUIRE(path.find("earth.mp3") != std::string::npos);
 
+    // Nonexistent file must return empty string
     std::string missing = AudioLoader::resolveAudioPath("non_existent_track_9999.mp3");
     REQUIRE(missing.empty());
 }
@@ -18,20 +18,18 @@ TEST_CASE("AudioLoader - Native MP3 Decoding with dr_mp3", "[audio]") {
     ALsizei sampleRate = 0;
 
     std::string target = AudioLoader::resolveAudioPath("earth.mp3");
-    if (target.empty()) {
-        target = "Sound/earth.mp3";
-    }
+    REQUIRE(!target.empty());
 
     bool success = AudioLoader::loadAudioFromMP3(target, pcm, format, sampleRate);
-    if (success) {
-        REQUIRE(!pcm.empty());
-        REQUIRE((format == AL_FORMAT_MONO16 || format == AL_FORMAT_STEREO16));
-        REQUIRE(sampleRate >= 22050);
-        REQUIRE(sampleRate <= 48000);
-        // PCM size must be a multiple of sample size (2 bytes per channel)
-        size_t bytesPerSample = (format == AL_FORMAT_STEREO16) ? 4 : 2;
-        REQUIRE(pcm.size() % bytesPerSample == 0);
-    }
+    REQUIRE(success);
+    REQUIRE(!pcm.empty());
+    REQUIRE((format == AL_FORMAT_MONO16 || format == AL_FORMAT_STEREO16));
+    REQUIRE(sampleRate == 44100);
+    // Real Earth track is ~27MB of uncompressed 16-bit PCM
+    REQUIRE(pcm.size() > 1000000);
+    // PCM size must be an exact multiple of 16-bit frame size (4 bytes for stereo, 2 for mono)
+    size_t bytesPerSample = (format == AL_FORMAT_STEREO16) ? 4 : 2;
+    REQUIRE(pcm.size() % bytesPerSample == 0);
 }
 
 TEST_CASE("AudioLoader - Multi-track Asset Validation", "[audio]") {
@@ -40,24 +38,23 @@ TEST_CASE("AudioLoader - Multi-track Asset Validation", "[audio]") {
         "neptune.mp3", "saturn.mp3", "uranus.mp3", "venus.mp3"
     };
 
-    int loadedCount = 0;
     for (const auto& track : tracks) {
+        INFO("Validating required audio asset: " << track);
+        std::string resolved = AudioLoader::resolveAudioPath(track);
+        REQUIRE(!resolved.empty());
+
         std::vector<char> pcm;
         ALenum format = 0;
         ALsizei sampleRate = 0;
 
-        if (AudioLoader::loadAudioFile(track, pcm, format, sampleRate)) {
-            loadedCount++;
-            REQUIRE(!pcm.empty());
-            REQUIRE((format == AL_FORMAT_MONO16 || format == AL_FORMAT_STEREO16));
-            REQUIRE(sampleRate >= 22050);
-        }
-    }
-
-    // If Sound/ assets are present, all 8 tracks should load cleanly
-    std::string testPath = AudioLoader::resolveAudioPath("earth.mp3");
-    if (!testPath.empty()) {
-        REQUIRE(loadedCount >= 8);
+        bool loaded = AudioLoader::loadAudioFile(track, pcm, format, sampleRate);
+        REQUIRE(loaded);
+        REQUIRE(!pcm.empty());
+        REQUIRE((format == AL_FORMAT_MONO16 || format == AL_FORMAT_STEREO16));
+        REQUIRE(sampleRate >= 22050);
+        REQUIRE(sampleRate <= 48000);
+        // Each bundled track has authentic multi-megabyte sound data
+        REQUIRE(pcm.size() > 500000);
     }
 }
 
