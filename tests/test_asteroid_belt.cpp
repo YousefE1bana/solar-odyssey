@@ -4,20 +4,20 @@
 
 TEST_CASE("AsteroidBelt Procedural Generation, Bounds and Simulation Propagation", "[asteroid_belt]") {
     // Instantiate real AsteroidBelt with no texture file
-    AsteroidBelt belt(500, 13.5f, 15.8f, nullptr);
+    AsteroidBelt belt(500, 15.0f, 17.8f, nullptr);
 
     SECTION("Asteroid belt generates valid procedural population") {
         REQUIRE(belt.getAsteroidCount() == 500);
-        REQUIRE(belt.getInnerRadius() == Approx(13.5f));
-        REQUIRE(belt.getOuterRadius() == Approx(15.8f));
+        REQUIRE(belt.getInnerRadius() == Approx(15.0f));
+        REQUIRE(belt.getOuterRadius() == Approx(17.8f));
 
         const auto& asteroids = belt.getAsteroids();
         REQUIRE(asteroids.size() == 1500);
 
         for (size_t i = 0; i < 100; ++i) {
             const auto& ast = asteroids[i];
-            REQUIRE(ast.orbitRadius >= 13.0f);
-            REQUIRE(ast.orbitRadius <= 16.5f);
+            REQUIRE(ast.orbitRadius >= 14.5f);
+            REQUIRE(ast.orbitRadius <= 18.5f);
             REQUIRE(ast.orbitSpeed > 0.0f);
             REQUIRE(ast.size > 0.0f);
             REQUIRE(glm::length(ast.position) > 0.0f);

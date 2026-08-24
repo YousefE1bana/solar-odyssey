@@ -9,6 +9,14 @@
 #include <cmath>
 #include <cstring>
 
+#ifdef _WIN32
+#ifndef GLFW_EXPOSE_NATIVE_WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
+#include <GLFW/glfw3native.h>
+#include <windows.h>
+#endif
+
 static const char* kSettingsPath = "solar_odyssey_settings.ini";
 
 Engine::Engine() {}
@@ -104,17 +112,17 @@ void Engine::initPlanetsAndMoons() {
     planets.emplace_back("Venus", 0.5f, 7.5f, 80.0f, 120.0f, "Textures/venus_surface.jpg", false, 0.0f, 0.0f, false, 135.0f);
     planets.emplace_back("Earth", 0.6f, 10.0f, 90.0f, 100.0f, "Textures/earth_daymap.jpg", false, 0.0f, 0.0f, false, 210.0f);
     planets.emplace_back("Mars", 0.4f, 12.5f, 70.0f, 80.0f, "Textures/mars.jpg", false, 0.0f, 0.0f, false, 330.0f);
-    planets.emplace_back("Jupiter", 1.0f, 16.0f, 40.0f, 50.0f, "Textures/jupiter.jpg", false, 0.0f, 0.0f, false, 75.0f);
-    planets.emplace_back("Saturn", 0.9f, 20.0f, 30.0f, 40.0f, "Textures/saturn.jpg",
+    planets.emplace_back("Jupiter", 1.0f, 21.0f, 40.0f, 50.0f, "Textures/jupiter.jpg", false, 0.0f, 0.0f, false, 75.0f);
+    planets.emplace_back("Saturn", 0.9f, 27.0f, 30.0f, 40.0f, "Textures/saturn.jpg",
                          true, 0.9f * 1.25f, 0.9f * 2.2f, false, 190.0f);
-    planets.emplace_back("Uranus", 0.8f, 25.0f, 20.0f, 30.0f, "Textures/uranus.jpg", false, 0.0f, 0.0f, false, 290.0f);
-    planets.emplace_back("Neptune", 0.7f, 30.0f, 15.0f, 20.0f, "Textures/neptune.jpg", false, 0.0f, 0.0f, false, 15.0f);
+    planets.emplace_back("Uranus", 0.8f, 33.5f, 20.0f, 30.0f, "Textures/uranus.jpg", false, 0.0f, 0.0f, false, 290.0f);
+    planets.emplace_back("Neptune", 0.7f, 39.5f, 15.0f, 20.0f, "Textures/neptune.jpg", false, 0.0f, 0.0f, false, 15.0f);
 
     // Dwarf Planets (Asteroid Belt & Trans-Neptunian Worlds)
-    planets.emplace_back("Ceres", 0.22f, 14.2f, 22.0f, 16.0f, "Textures/4k_ceres_fictional.jpg", false, 0, 0, true, 110.0f);
-    planets.emplace_back("Haumea", 0.25f, 35.0f, 55.0f, 12.0f, "Textures/4k_haumea_fictional.jpg", false, 0, 0, true, 240.0f);
-    planets.emplace_back("Makemake", 0.24f, 39.0f, 18.0f, 10.0f, "Textures/4k_makemake_fictional.jpg", false, 0, 0, true, 60.0f);
-    planets.emplace_back("Eris", 0.28f, 44.0f, 15.0f, 8.0f, "Textures/4k_eris_fictional.jpg", false, 0, 0, true, 170.0f);
+    planets.emplace_back("Ceres", 0.22f, 16.2f, 22.0f, 16.0f, "Textures/4k_ceres_fictional.jpg", false, 0, 0, true, 110.0f);
+    planets.emplace_back("Haumea", 0.25f, 45.0f, 55.0f, 12.0f, "Textures/4k_haumea_fictional.jpg", false, 0, 0, true, 240.0f);
+    planets.emplace_back("Makemake", 0.24f, 49.5f, 18.0f, 10.0f, "Textures/4k_makemake_fictional.jpg", false, 0, 0, true, 60.0f);
+    planets.emplace_back("Eris", 0.28f, 55.0f, 15.0f, 8.0f, "Textures/4k_eris_fictional.jpg", false, 0, 0, true, 170.0f);
 
     moons.emplace_back("Moon", 0.15f, 1.4f, 200.0f, "Textures/moon.jpg", "Earth");
 
@@ -595,11 +603,11 @@ bool Engine::init(int width, int height, const char* title) {
     int iconWidth = 0, iconHeight = 0, iconChannels = 0;
     unsigned char* iconPixels = nullptr;
     const char* iconCandidates[] = {
-        "icon.jpg", "icon.png",
-        "Textures/icon.jpg", "Textures/icon.png",
-        "../icon.jpg", "../icon.png",
-        "build/icon.jpg", "build/icon.png",
-        "build-cmake/icon.jpg", "build-cmake/icon.png"
+        "icon.png", "icon.jpg",
+        "Textures/icon.png", "Textures/icon.jpg",
+        "build/icon.png", "build/icon.jpg",
+        "build-cmake/icon.png", "build-cmake/icon.jpg",
+        "../icon.png", "../icon.jpg"
     };
     const char* loadedPath = nullptr;
     for (const char* path : iconCandidates) {
@@ -623,6 +631,35 @@ bool Engine::init(int width, int height, const char* title) {
                   << " from " << loadedPath << ")" << std::endl;
         stbi_image_free(iconPixels);
     }
+
+#ifdef _WIN32
+    HWND hwnd = glfwGetWin32Window(window);
+    if (hwnd) {
+        // Load high-resolution embedded resource icon for Windows Taskbar and Alt+Tab
+        HICON hIconBig = (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(1), IMAGE_ICON, 48, 48, LR_DEFAULTCOLOR);
+        HICON hIconSmall = (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(1), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
+
+        if (!hIconBig) {
+            const wchar_t* icoCandidates[] = { L"icon.ico", L"build/icon.ico", L"build-cmake/icon.ico", L"Textures/icon.ico", L"../icon.ico" };
+            for (const wchar_t* icoPath : icoCandidates) {
+                hIconBig = (HICON)LoadImageW(NULL, icoPath, IMAGE_ICON, 48, 48, LR_LOADFROMFILE | LR_DEFAULTCOLOR);
+                if (hIconBig) {
+                    hIconSmall = (HICON)LoadImageW(NULL, icoPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE | LR_DEFAULTCOLOR);
+                    break;
+                }
+            }
+        }
+
+        if (hIconBig) {
+            SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIconBig);
+            SetClassLongPtrW(hwnd, GCLP_HICON, (LONG_PTR)hIconBig);
+        }
+        if (hIconSmall) {
+            SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIconSmall);
+            SetClassLongPtrW(hwnd, GCLP_HICONSM, (LONG_PTR)hIconSmall);
+        }
+    }
+#endif
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
@@ -655,7 +692,7 @@ bool Engine::init(int width, int height, const char* title) {
     blackHole.initShader(renderer.blackHoleProgram);
     initPlanetsAndMoons();
 
-    asteroidBelt = new AsteroidBelt(800, 13.5f, 15.8f, "Textures/moon.jpg");
+    asteroidBelt = new AsteroidBelt(800, 15.0f, 17.8f, "Textures/moon.jpg");
     planetPov = new PlanetPOV();
     atmosphereEffects = new AtmosphereEffects();
     postPipeline.init(windowWidth, windowHeight);

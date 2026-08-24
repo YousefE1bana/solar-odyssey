@@ -109,9 +109,9 @@ void AsteroidBelt::generateAsteroids(int totalCapacity) {
         float rNorm = fastRand();
         float r = innerRadius + (outerRadius - innerRadius) * rNorm;
         
-        float gap1 = std::abs(r - 14.35f);
-        if (gap1 < 0.15f && fastRand() > 0.3f) {
-            r += (fastRand() > 0.5f ? 0.25f : -0.25f);
+        float gap1 = std::abs(r - 16.25f);
+        if (gap1 < 0.18f && fastRand() > 0.3f) {
+            r += (fastRand() > 0.5f ? 0.30f : -0.30f);
         }
 
         ast.orbitRadius = r;

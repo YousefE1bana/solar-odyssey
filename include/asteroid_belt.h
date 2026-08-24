@@ -46,8 +46,8 @@ private:
     std::vector<Asteroid> allAsteroids;
     std::vector<GPUAsteroid> gpuAsteroids;
     int activeCount = 500;
-    float innerRadius = 13.5f;
-    float outerRadius = 15.8f;
+    float innerRadius = 15.0f;
+    float outerRadius = 17.8f;
     GLuint asteroidTexture = 0;
 
     // GPU Compute State
@@ -66,7 +66,7 @@ private:
     void updateGPU(float deltaTime, float planetSpeed);
 
 public:
-    AsteroidBelt(int count = 500, float inR = 13.5f, float outR = 15.8f, const char* texturePath = "Textures/moon.jpg");
+    AsteroidBelt(int count = 500, float inR = 15.0f, float outR = 17.8f, const char* texturePath = "Textures/moon.jpg");
     ~AsteroidBelt();
 
     void setQualityCount(int count);

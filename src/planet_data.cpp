@@ -264,7 +264,7 @@ void CelestialDatabase::initDatabase() {
         };
         jupiter.themeColor = glm::vec3(0.85f, 0.68f, 0.48f);
         jupiter.visualSize = 1.0f;
-        jupiter.visualOrbitRadius = 16.0f;
+        jupiter.visualOrbitRadius = 21.0f;
         jupiter.visualSpinSpeed = 40.0f;
         jupiter.visualOrbitSpeed = 50.0f;
         jupiter.textureFile = "Textures/sun.jpg"; // Using sun texture fallback as in original project
@@ -301,7 +301,7 @@ void CelestialDatabase::initDatabase() {
         };
         saturn.themeColor = glm::vec3(0.90f, 0.82f, 0.58f);
         saturn.visualSize = 0.9f;
-        saturn.visualOrbitRadius = 20.0f;
+        saturn.visualOrbitRadius = 27.0f;
         saturn.visualSpinSpeed = 30.0f;
         saturn.visualOrbitSpeed = 40.0f;
         saturn.textureFile = "Textures/saturn.jpg";
@@ -340,7 +340,7 @@ void CelestialDatabase::initDatabase() {
         };
         uranus.themeColor = glm::vec3(0.55f, 0.85f, 0.88f);
         uranus.visualSize = 0.8f;
-        uranus.visualOrbitRadius = 25.0f;
+        uranus.visualOrbitRadius = 33.5f;
         uranus.visualSpinSpeed = 20.0f;
         uranus.visualOrbitSpeed = 30.0f;
         uranus.textureFile = "Textures/uranus.jpg";
@@ -377,7 +377,7 @@ void CelestialDatabase::initDatabase() {
         };
         neptune.themeColor = glm::vec3(0.32f, 0.52f, 0.95f);
         neptune.visualSize = 0.7f;
-        neptune.visualOrbitRadius = 30.0f;
+        neptune.visualOrbitRadius = 39.5f;
         neptune.visualSpinSpeed = 15.0f;
         neptune.visualOrbitSpeed = 20.0f;
         neptune.textureFile = "Textures/neptune.jpg";
@@ -453,7 +453,7 @@ void CelestialDatabase::initDatabase() {
         };
         ceres.themeColor = glm::vec3(0.72f, 0.68f, 0.62f);
         ceres.visualSize = 0.22f;
-        ceres.visualOrbitRadius = 14.2f;
+        ceres.visualOrbitRadius = 16.2f;
         ceres.visualSpinSpeed = 22.0f;
         ceres.visualOrbitSpeed = 16.0f;
         ceres.textureFile = "Textures/4k_ceres_fictional.jpg";
@@ -490,7 +490,7 @@ void CelestialDatabase::initDatabase() {
         };
         haumea.themeColor = glm::vec3(0.65f, 0.75f, 0.88f);
         haumea.visualSize = 0.25f;
-        haumea.visualOrbitRadius = 35.0f;
+        haumea.visualOrbitRadius = 45.0f;
         haumea.visualSpinSpeed = 55.0f;
         haumea.visualOrbitSpeed = 12.0f;
         haumea.textureFile = "Textures/4k_haumea_fictional.jpg";
@@ -527,7 +527,7 @@ void CelestialDatabase::initDatabase() {
         };
         makemake.themeColor = glm::vec3(0.85f, 0.45f, 0.32f);
         makemake.visualSize = 0.24f;
-        makemake.visualOrbitRadius = 39.0f;
+        makemake.visualOrbitRadius = 49.5f;
         makemake.visualSpinSpeed = 18.0f;
         makemake.visualOrbitSpeed = 10.0f;
         makemake.textureFile = "Textures/4k_makemake_fictional.jpg";
@@ -564,7 +564,7 @@ void CelestialDatabase::initDatabase() {
         };
         eris.themeColor = glm::vec3(0.88f, 0.88f, 0.94f);
         eris.visualSize = 0.28f;
-        eris.visualOrbitRadius = 44.0f;
+        eris.visualOrbitRadius = 55.0f;
         eris.visualSpinSpeed = 15.0f;
         eris.visualOrbitSpeed = 8.0f;
         eris.textureFile = "Textures/4k_eris_fictional.jpg";
