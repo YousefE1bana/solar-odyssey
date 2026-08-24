@@ -72,6 +72,8 @@ public:
     GLuint venusAtmosphereTexture = 0;
 
     // VAOs & VBOs
+    GLuint starfieldVAO = 0;
+    GLuint starfieldVBO = 0;
     GLuint ringVAO = 0;
     GLuint ringVBO = 0;
 
@@ -110,5 +112,6 @@ public:
     void renderWormhole(Wormhole& wh, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& eyePos, float time);
 
 private:
+    void initStarfield();
     void initRings();
 };

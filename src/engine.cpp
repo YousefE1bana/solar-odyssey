@@ -652,6 +652,7 @@ bool Engine::init(int width, int height, const char* title) {
     initAudio();
     initParticles();
     renderer.init();
+    blackHole.initShader(renderer.blackHoleProgram);
     initPlanetsAndMoons();
 
     asteroidBelt = new AsteroidBelt(800, 13.5f, 15.8f, "Textures/moon.jpg");

@@ -118,6 +118,57 @@ Moon::Moon(const std::string& name, float size, float orbitRadius, float orbitSp
     texture = loadTexture(texturePath.c_str());
 }
 
+void SceneRenderer::initStarfield() {
+    struct StarVertex {
+        float x, y, z;
+        float r, g, b, a;
+        float size;
+    };
+
+    const int kNumStars = 4000;
+    std::vector<StarVertex> stars;
+    stars.reserve(kNumStars);
+
+    srand(1337);
+    for (int i = 0; i < kNumStars; ++i) {
+        float theta = (float)(rand()) / RAND_MAX * 2.0f * 3.14159265f;
+        float phi = acosf(2.0f * (float)(rand()) / RAND_MAX - 1.0f);
+        float dist = 420.0f + (float)(rand()) / RAND_MAX * 50.0f;
+
+        float x = dist * sinf(phi) * cosf(theta);
+        float y = dist * sinf(phi) * sinf(theta);
+        float z = dist * cosf(phi);
+
+        float brightness = 0.5f + (float)(rand()) / RAND_MAX * 0.5f;
+        float colorTint = (float)(rand()) / RAND_MAX;
+        glm::vec3 col(brightness);
+        if (colorTint < 0.25f) col = glm::vec3(brightness * 0.75f, brightness * 0.85f, brightness * 1.15f);
+        else if (colorTint < 0.40f) col = glm::vec3(brightness * 1.15f, brightness * 0.95f, brightness * 0.75f);
+
+        float starSize = 1.2f + (float)(rand()) / RAND_MAX * 1.8f;
+        stars.push_back({x, y, z, col.r, col.g, col.b, 0.9f, starSize});
+    }
+
+    glGenVertexArrays(1, &starfieldVAO);
+    glGenBuffers(1, &starfieldVBO);
+
+    glBindVertexArray(starfieldVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, starfieldVBO);
+    glBufferData(GL_ARRAY_BUFFER, stars.size() * sizeof(StarVertex), stars.data(), GL_STATIC_DRAW);
+
+    GLsizei stride = sizeof(StarVertex);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(StarVertex, x));
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(StarVertex, r));
+
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(StarVertex, size));
+
+    glBindVertexArray(0);
+}
+
 bool SceneRenderer::init() {
     sunProgram = loadProgramFromFiles("shaders/sun.vert", "shaders/sun.frag");
     planetProgram = loadProgramFromFiles("shaders/planet.vert", "shaders/planet.frag");
@@ -206,6 +257,7 @@ bool SceneRenderer::init() {
         uEclipseRadiusLoc = glGetUniformLocation(planetProgram, "uEclipseRadius");
     }
 
+    initStarfield();
     initRings();
     return true;
 }
@@ -222,6 +274,8 @@ void SceneRenderer::cleanup() {
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
 
+    if (starfieldVAO) { glDeleteVertexArrays(1, &starfieldVAO); starfieldVAO = 0; }
+    if (starfieldVBO) { glDeleteBuffers(1, &starfieldVBO); starfieldVBO = 0; }
     if (ringVAO) { glDeleteVertexArrays(1, &ringVAO); ringVAO = 0; }
     if (ringVBO) { glDeleteBuffers(1, &ringVBO); ringVBO = 0; }
 
@@ -234,7 +288,6 @@ void SceneRenderer::cleanup() {
 
 void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& cameraEye) {
     glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
     glDepthMask(GL_FALSE);
 
     GLboolean cullWasOn = GL_FALSE;
@@ -248,6 +301,7 @@ void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& p
         glUniform1i(uStarTexLoc, 0);
 
         glm::mat4 modelMat = glm::translate(glm::mat4(1.0f), cameraEye);
+        modelMat = glm::rotate(modelMat, glm::radians(60.0f), glm::vec3(1.0f, 0.2f, 0.4f));
         modelMat = glm::scale(modelMat, glm::vec3(450.0f));
         glm::mat4 mv = viewMat * modelMat;
 
@@ -259,8 +313,22 @@ void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& p
         glFrontFace(GL_CCW);
 
         glUseProgram(0);
-    } else {
-        glprims::sharedModernSphere().drawUnit();
+    }
+
+    // Dense glittering pinpoint stars across the entire sky sphere
+    if (starfieldVAO) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+        if (!batch.isReady()) batch.init(kFlatVS, kFlatFS);
+        glm::mat4 starMV = glm::translate(viewMat, cameraEye);
+        batch.begin(GL_POINTS, projMat, starMV, 1.0f);
+        glBindVertexArray(starfieldVAO);
+        glDrawArrays(GL_POINTS, 0, 4000);
+        glBindVertexArray(0);
+        batch.end();
+
+        glDisable(GL_BLEND);
     }
 
     if (cullWasOn) glEnable(GL_CULL_FACE);
