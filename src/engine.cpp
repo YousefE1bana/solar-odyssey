@@ -100,21 +100,21 @@ void Engine::initPlanetsAndMoons() {
     moons.clear();
 
     // Major Planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune
-    planets.emplace_back("Mercury", 0.3f, 5.0f, 100.0f, 150.0f, "Textures/mercury.jpg");
-    planets.emplace_back("Venus", 0.5f, 7.5f, 80.0f, 120.0f, "Textures/venus_surface.jpg");
-    planets.emplace_back("Earth", 0.6f, 10.0f, 90.0f, 100.0f, "Textures/earth_daymap.jpg");
-    planets.emplace_back("Mars", 0.4f, 12.5f, 70.0f, 80.0f, "Textures/mars.jpg");
-    planets.emplace_back("Jupiter", 1.0f, 16.0f, 40.0f, 50.0f, "Textures/jupiter.jpg");
+    planets.emplace_back("Mercury", 0.3f, 5.0f, 100.0f, 150.0f, "Textures/mercury.jpg", false, 0.0f, 0.0f, false, 48.0f);
+    planets.emplace_back("Venus", 0.5f, 7.5f, 80.0f, 120.0f, "Textures/venus_surface.jpg", false, 0.0f, 0.0f, false, 135.0f);
+    planets.emplace_back("Earth", 0.6f, 10.0f, 90.0f, 100.0f, "Textures/earth_daymap.jpg", false, 0.0f, 0.0f, false, 210.0f);
+    planets.emplace_back("Mars", 0.4f, 12.5f, 70.0f, 80.0f, "Textures/mars.jpg", false, 0.0f, 0.0f, false, 330.0f);
+    planets.emplace_back("Jupiter", 1.0f, 16.0f, 40.0f, 50.0f, "Textures/jupiter.jpg", false, 0.0f, 0.0f, false, 75.0f);
     planets.emplace_back("Saturn", 0.9f, 20.0f, 30.0f, 40.0f, "Textures/saturn.jpg",
-                         true, 0.9f * 1.25f, 0.9f * 2.2f);
-    planets.emplace_back("Uranus", 0.8f, 25.0f, 20.0f, 30.0f, "Textures/uranus.jpg");
-    planets.emplace_back("Neptune", 0.7f, 30.0f, 15.0f, 20.0f, "Textures/neptune.jpg");
+                         true, 0.9f * 1.25f, 0.9f * 2.2f, false, 190.0f);
+    planets.emplace_back("Uranus", 0.8f, 25.0f, 20.0f, 30.0f, "Textures/uranus.jpg", false, 0.0f, 0.0f, false, 290.0f);
+    planets.emplace_back("Neptune", 0.7f, 30.0f, 15.0f, 20.0f, "Textures/neptune.jpg", false, 0.0f, 0.0f, false, 15.0f);
 
     // Dwarf Planets (Asteroid Belt & Trans-Neptunian Worlds)
-    planets.emplace_back("Ceres", 0.22f, 14.2f, 22.0f, 16.0f, "Textures/4k_ceres_fictional.jpg", false, 0, 0, true);
-    planets.emplace_back("Haumea", 0.25f, 35.0f, 55.0f, 12.0f, "Textures/4k_haumea_fictional.jpg", false, 0, 0, true);
-    planets.emplace_back("Makemake", 0.24f, 39.0f, 18.0f, 10.0f, "Textures/4k_makemake_fictional.jpg", false, 0, 0, true);
-    planets.emplace_back("Eris", 0.28f, 44.0f, 15.0f, 8.0f, "Textures/4k_eris_fictional.jpg", false, 0, 0, true);
+    planets.emplace_back("Ceres", 0.22f, 14.2f, 22.0f, 16.0f, "Textures/4k_ceres_fictional.jpg", false, 0, 0, true, 110.0f);
+    planets.emplace_back("Haumea", 0.25f, 35.0f, 55.0f, 12.0f, "Textures/4k_haumea_fictional.jpg", false, 0, 0, true, 240.0f);
+    planets.emplace_back("Makemake", 0.24f, 39.0f, 18.0f, 10.0f, "Textures/4k_makemake_fictional.jpg", false, 0, 0, true, 60.0f);
+    planets.emplace_back("Eris", 0.28f, 44.0f, 15.0f, 8.0f, "Textures/4k_eris_fictional.jpg", false, 0, 0, true, 170.0f);
 
     moons.emplace_back("Moon", 0.15f, 1.4f, 200.0f, "Textures/moon.jpg", "Earth");
 
@@ -152,12 +152,16 @@ void Engine::initPlanetsAndMoons() {
     auto computeBodyPos = [this](const std::string& name, float t) -> glm::vec3 {
         if (name == "Sun") return sunWorldPosition;
         if (name == "Moon") {
-            glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, 90.0f, solarUI.orbitSpeedScale, 10.0f);
-            return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
+            for (const auto& p : planets) {
+                if (p.name == "Earth") {
+                    glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
+                    return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
+                }
+            }
         }
         for (const auto& p : planets) {
             if (p.name == name) {
-                return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius);
+                return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
             }
         }
         return glm::vec3(0.0f);
@@ -757,12 +761,16 @@ void Engine::updateSimulation(float deltaTime) {
             auto computeBodyPos = [this](const std::string& name, float t) -> glm::vec3 {
                 if (name == "Sun") return sunWorldPosition;
                 if (name == "Moon") {
-                    glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, 100.0f, solarUI.orbitSpeedScale, 10.0f);
-                    return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
+                    for (const auto& p : planets) {
+                        if (p.name == "Earth") {
+                            glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
+                            return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
+                        }
+                    }
                 }
                 for (const auto& p : planets) {
                     if (p.name == name) {
-                        return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius);
+                        return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
                     }
                 }
                 return glm::vec3(0.0f);
@@ -782,7 +790,7 @@ void Engine::updateSimulation(float deltaTime) {
         if (nbodySim.getPhysicsMode() == PHYSICS_NBODY) {
             planet.currentPosition = nbodySim.getBodyPosition(planet.name);
         } else {
-            planet.currentPosition = OrbitalPhysics::computePlanetPosition(simTime, planet.orbitSpeed, solarUI.orbitSpeedScale, planet.orbitRadius);
+            planet.currentPosition = OrbitalPhysics::computePlanetPosition(simTime, planet.orbitSpeed, solarUI.orbitSpeedScale, planet.orbitRadius, planet.initialAngle);
         }
     }
     for (auto &moon : moons) {
@@ -1038,7 +1046,7 @@ void Engine::renderFrame(float deltaTime) {
 
     lod::LODManager::instance().beginFrame();
 
-    renderer.renderStarfield(viewMat, projMat);
+    renderer.renderStarfield(viewMat, projMat, cameraCtrl.currentEye);
 
     if (solarUI.showOrbits) {
         for (const auto &planet : planets) {
@@ -1048,7 +1056,7 @@ void Engine::renderFrame(float deltaTime) {
         }
     }
 
-    renderer.renderSun(viewMat, projMat, (float)simTime, 1.0f, sunWorldPosition);
+    renderer.renderSun(viewMat, projMat, (float)simTime, solarUI.sunIntensity, sunWorldPosition, cameraCtrl, solarUI);
     renderParticles(viewMat, projMat);
 
     glm::vec3 sunEyePos = glm::vec3(viewMat * glm::vec4(sunWorldPosition, 1.0f));

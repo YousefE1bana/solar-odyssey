@@ -4,9 +4,9 @@
 
 namespace OrbitalPhysics {
     // Calculates the heliocentric orbital position for a planet given simulation time and orbital parameters
-    inline glm::vec3 computePlanetPosition(float simTime, float orbitSpeed, float orbitSpeedScale, float orbitRadius) {
+    inline glm::vec3 computePlanetPosition(float simTime, float orbitSpeed, float orbitSpeedScale, float orbitRadius, float initialAngleDeg = 0.0f) {
         float effectiveOrbitSpeed = orbitSpeed * orbitSpeedScale;
-        float radAngle = glm::radians(simTime * effectiveOrbitSpeed * 0.02f);
+        float radAngle = glm::radians(initialAngleDeg + simTime * effectiveOrbitSpeed * 0.02f);
         return glm::vec3(std::cos(radAngle) * orbitRadius, 0.0f, -std::sin(radAngle) * orbitRadius);
     }
 

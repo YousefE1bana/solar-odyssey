@@ -23,6 +23,7 @@ struct Planet {
     float orbitRadius;
     float spinSpeed;
     float orbitSpeed;
+    float initialAngle = 0.0f;
     GLuint texture = 0;
     GLuint secondaryTexture = 0;
     GLuint cloudsTexture = 0;
@@ -34,7 +35,7 @@ struct Planet {
 
     Planet(const std::string& n, float s, float r, float ss, float os,
            const std::string& tex = "", bool rings = false, float rIn = 0.0f,
-           float rOut = 0.0f, bool dwarf = false);
+           float rOut = 0.0f, bool dwarf = false, float initAngle = 0.0f);
 };
 
 // Moon runtime structure
@@ -43,12 +44,13 @@ struct Moon {
     float size;
     float orbitRadius;
     float orbitSpeed;
+    float initialAngle = 0.0f;
     GLuint texture = 0;
     std::string parentPlanet;
     glm::vec3 currentPosition = glm::vec3(0.0f);
 
     Moon(const std::string& n, float s, float r, float os,
-         const std::string& tex, const std::string& parent);
+         const std::string& tex, const std::string& parent, float initAngle = 0.0f);
 };
 
 class SceneRenderer {
@@ -58,6 +60,7 @@ public:
     GLuint planetProgram = 0;
     GLuint blackHoleProgram = 0;
     GLuint wormholeProgram = 0;
+    GLuint starfieldProgram = 0;
 
     // Textures
     GLuint sunTexture = 0;
@@ -69,24 +72,24 @@ public:
     GLuint venusAtmosphereTexture = 0;
 
     // VAOs & VBOs
-    GLuint starfieldVAO = 0;
-    GLuint starfieldVBO = 0;
     GLuint ringVAO = 0;
     GLuint ringVBO = 0;
 
     // Uniform locations for Sun
-    GLint uSunTimeLoc = -1, uSunIntensityLoc = -1, uSunModelViewLoc = -1, uSunProjectionLoc = -1;
+    GLint uSunTexLoc = -1, uSunTimeLoc = -1, uSunBrightnessLoc = -1;
+    GLint uSunModelViewLoc = -1, uSunProjectionLoc = -1, uSunNormalMatrixLoc = -1;
 
     // Uniform locations for Planets & Moons
     GLint uModelViewLoc = -1, uProjectionLoc = -1, uNormalMatrixLoc = -1;
-    GLint uDayTexLoc = -1, uNightTexLoc = -1, uCloudsTexLoc = -1, uRingTexLoc = -1;
-    GLint uHasNightTexLoc = -1, uHasCloudsLoc = -1, uHasRingsLoc = -1, uIsRingLoc = -1;
-    GLint uSpecularStrengthLoc = -1, uAtmosphereColorLoc = -1, uAtmosphereGlowLoc = -1;
-    GLint uEmissiveLoc = -1, uSunEyePosLoc = -1, uPlanetSunIntensityLoc = -1;
-    GLint uCloudRotationLoc = -1, uTimeLoc = -1;
-    GLint uSunLocalPosLoc = -1, uRingInnerRadiusLoc = -1, uRingOuterRadiusLoc = -1;
-    GLint uHasEclipseLoc = -1, uEclipseLocalPosLoc = -1, uEclipseRadiusLoc = -1;
-    GLint uRingOpacityLoc = -1;
+    GLint uDayTexLoc = -1, uNightTexLoc = -1, uCloudsTexLoc = -1;
+    GLint uHasNightTexLoc = -1, uHasCloudsLoc = -1, uCloudOffsetLoc = -1;
+    GLint uEmissiveLoc = -1, uSunIntensityLoc = -1, uAtmosphereColorLoc = -1, uAtmosphereGlowLoc = -1;
+    GLint uSpecularStrengthLoc = -1, uTimeLoc = -1, uSunEyePosLoc = -1;
+    GLint uSunLocalPosLoc = -1, uHasRingsLoc = -1, uRingInnerRadiusLoc = -1, uRingOuterRadiusLoc = -1;
+    GLint uIsRingLoc = -1, uPlanetRadiusLoc = -1, uHasEclipseLoc = -1, uEclipseLocalPosLoc = -1, uEclipseRadiusLoc = -1;
+
+    // Uniform locations for Starfield
+    GLint uStarTexLoc = -1, uStarModelViewLoc = -1, uStarProjectionLoc = -1;
 
     // Geometry batch for vector overlays (orbits, flares, grids)
     ImmediateBatch batch;
@@ -97,8 +100,8 @@ public:
     bool init();
     void cleanup();
 
-    void renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat);
-    void renderSun(const glm::mat4& viewMat, const glm::mat4& projMat, float time, float intensity, const glm::vec3& sunWorldPos);
+    void renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& cameraEye);
+    void renderSun(const glm::mat4& viewMat, const glm::mat4& projMat, float time, float intensity, const glm::vec3& sunWorldPos, const CameraController& cameraCtrl, const SolarOdysseyUI& solarUI);
     void renderOrbit(float radius, bool isSelected, const CameraController& cameraCtrl, const glm::mat4& viewMat, const glm::mat4& projMat);
     void renderSaturnRings(float innerRadius, float outerRadius, float planetRadius, const glm::mat4& ringModel, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos, float opacity);
     void renderPlanets(std::vector<Planet>& planets, const std::vector<Moon>& moons, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, float time, float cloudRotation, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl, const CelestialDatabase& db, AtmosphereEffects* atmo);
@@ -107,7 +110,5 @@ public:
     void renderWormhole(Wormhole& wh, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& eyePos, float time);
 
 private:
-    GLuint loadTexture(const char* path, bool generateMipmaps = true);
-    void initStarfield();
     void initRings();
 };

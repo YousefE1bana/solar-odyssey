@@ -21,100 +21,6 @@ SceneRenderer::~SceneRenderer() {
     cleanup();
 }
 
-GLuint SceneRenderer::loadTexture(const char* path, bool generateMipmaps) {
-    GLuint textureID = 0;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    int width = 0, height = 0, nrChannels = 0;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
-
-    if (data) {
-        GLenum format = GL_RGB;
-        GLenum internalFormat = GL_RGB8;
-        if (nrChannels == 1) {
-            format = GL_RED;
-            internalFormat = GL_R8;
-        } else if (nrChannels == 3) {
-            format = GL_RGB;
-            internalFormat = GL_RGB8;
-        } else if (nrChannels == 4) {
-            format = GL_RGBA;
-            internalFormat = GL_RGBA8;
-        }
-
-        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-
-        if (generateMipmaps) {
-            glGenerateMipmap(GL_TEXTURE_2D);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        } else {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        }
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-        stbi_image_free(data);
-    } else {
-        std::cerr << "[SceneRenderer] Failed to load texture: " << path << std::endl;
-        stbi_image_free(data);
-    }
-    return textureID;
-}
-
-void SceneRenderer::initStarfield() {
-    struct StarVertex {
-        float x, y, z;
-        float r, g, b, a;
-        float size;
-    };
-
-    const int kNumStars = 4000;
-    std::vector<StarVertex> stars;
-    stars.reserve(kNumStars);
-
-    for (int i = 0; i < kNumStars; ++i) {
-        float theta = (float)(rand()) / RAND_MAX * 2.0f * 3.14159265f;
-        float phi = acos(2.0f * (float)(rand()) / RAND_MAX - 1.0f);
-        float dist = 450.0f + (float)(rand()) / RAND_MAX * 50.0f;
-
-        float x = dist * sin(phi) * cos(theta);
-        float y = dist * sin(phi) * sin(theta);
-        float z = dist * cos(phi);
-
-        float brightness = 0.4f + (float)(rand()) / RAND_MAX * 0.6f;
-        float colorTint = (float)(rand()) / RAND_MAX;
-        glm::vec3 col(brightness);
-        if (colorTint < 0.2f) col = glm::vec3(brightness * 0.8f, brightness * 0.85f, brightness * 1.1f); // bluish
-        else if (colorTint < 0.35f) col = glm::vec3(brightness * 1.1f, brightness * 0.95f, brightness * 0.8f); // warm
-
-        float starSize = 1.0f + (float)(rand()) / RAND_MAX * 1.8f;
-        stars.push_back({x, y, z, col.r, col.g, col.b, 0.85f, starSize});
-    }
-
-    glGenVertexArrays(1, &starfieldVAO);
-    glGenBuffers(1, &starfieldVBO);
-
-    glBindVertexArray(starfieldVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, starfieldVBO);
-    glBufferData(GL_ARRAY_BUFFER, stars.size() * sizeof(StarVertex), stars.data(), GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, x));
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, r));
-
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(StarVertex), (void*)offsetof(StarVertex, size));
-
-    glBindVertexArray(0);
-}
-
 void SceneRenderer::initRings() {
     const int segments = 180;
     std::vector<float> ringVertices;
@@ -197,18 +103,18 @@ GLuint loadTextureOrFallback(const char* primary, const char* fallback) {
 
 Planet::Planet(const std::string& name, float size, float orbitRadius,
                float spinSpeed, float orbitSpeed, const std::string& texturePath,
-               bool hasRings, float ringInner, float ringOuter, bool isDwarf)
+               bool hasRings, float ringInner, float ringOuter, bool isDwarf, float initAngle)
     : name(name), size(size), orbitRadius(orbitRadius),
-      spinSpeed(spinSpeed), orbitSpeed(orbitSpeed),
+      spinSpeed(spinSpeed), orbitSpeed(orbitSpeed), initialAngle(initAngle),
       hasRings(hasRings), ringInnerRadius(ringInner), ringOuterRadius(ringOuter),
       isDwarf(isDwarf) {
     texture = loadTexture(texturePath.c_str());
 }
 
 Moon::Moon(const std::string& name, float size, float orbitRadius, float orbitSpeed,
-           const std::string& texturePath, const std::string& parentPlanet)
+           const std::string& texturePath, const std::string& parentPlanet, float initAngle)
     : name(name), size(size), orbitRadius(orbitRadius), orbitSpeed(orbitSpeed),
-      parentPlanet(parentPlanet) {
+      initialAngle(initAngle), parentPlanet(parentPlanet) {
     texture = loadTexture(texturePath.c_str());
 }
 
@@ -217,6 +123,40 @@ bool SceneRenderer::init() {
     planetProgram = loadProgramFromFiles("shaders/planet.vert", "shaders/planet.frag");
     blackHoleProgram = loadProgramFromFiles("shaders/black_hole.vert", "shaders/black_hole.frag");
     wormholeProgram = loadProgramFromFiles("shaders/wormhole.vert", "shaders/wormhole.frag");
+
+    // Starfield Shader
+    {
+        const char* vs = R"(
+            #version 450 core
+            layout(location = 0) in vec3 aPos;
+            layout(location = 2) in vec2 aTexCoord;
+            out vec2 vTexCoord;
+            uniform mat4 uModelView;
+            uniform mat4 uProjection;
+            void main() {
+                vTexCoord = aTexCoord;
+                gl_Position = uProjection * uModelView * vec4(aPos, 1.0);
+            }
+        )";
+        const char* fs = R"(
+            #version 450 core
+            in vec2 vTexCoord;
+            out vec4 FragColor;
+            uniform sampler2D uStarTex;
+            void main() {
+                vec3 col = texture(uStarTex, vTexCoord).rgb;
+                FragColor = vec4(col, 1.0);
+            }
+        )";
+        GLuint v = compileShader(GL_VERTEX_SHADER, vs);
+        GLuint f = compileShader(GL_FRAGMENT_SHADER, fs);
+        starfieldProgram = linkProgram(v, f);
+        if (starfieldProgram) {
+            uStarTexLoc = glGetUniformLocation(starfieldProgram, "uStarTex");
+            uStarModelViewLoc = glGetUniformLocation(starfieldProgram, "uModelView");
+            uStarProjectionLoc = glGetUniformLocation(starfieldProgram, "uProjection");
+        }
+    }
 
     // Textures with fallbacks
     sunTexture = loadTextureOrFallback("Textures/sun.jpg", "Textures/earth_daymap.jpg");
@@ -229,45 +169,44 @@ bool SceneRenderer::init() {
 
     // Cache Sun Uniforms
     if (sunProgram) {
-        uSunModelViewLoc = glGetUniformLocation(sunProgram, "modelView");
-        uSunProjectionLoc = glGetUniformLocation(sunProgram, "projection");
-        uSunTimeLoc = glGetUniformLocation(sunProgram, "time");
-        uSunIntensityLoc = glGetUniformLocation(sunProgram, "sunIntensity");
+        uSunTexLoc = glGetUniformLocation(sunProgram, "uSunTex");
+        uSunTimeLoc = glGetUniformLocation(sunProgram, "uTime");
+        uSunBrightnessLoc = glGetUniformLocation(sunProgram, "uSunBrightness");
+        uSunModelViewLoc = glGetUniformLocation(sunProgram, "uModelView");
+        uSunProjectionLoc = glGetUniformLocation(sunProgram, "uProjection");
+        uSunNormalMatrixLoc = glGetUniformLocation(sunProgram, "uNormalMatrix");
     }
 
     // Cache Planet Uniforms
     if (planetProgram) {
-        uModelViewLoc = glGetUniformLocation(planetProgram, "modelView");
-        uProjectionLoc = glGetUniformLocation(planetProgram, "projection");
-        uNormalMatrixLoc = glGetUniformLocation(planetProgram, "normalMatrix");
-        uDayTexLoc = glGetUniformLocation(planetProgram, "dayTexture");
-        uNightTexLoc = glGetUniformLocation(planetProgram, "nightTexture");
-        uCloudsTexLoc = glGetUniformLocation(planetProgram, "cloudsTexture");
-        uRingTexLoc = glGetUniformLocation(planetProgram, "ringTexture");
-        uHasNightTexLoc = glGetUniformLocation(planetProgram, "hasNightTexture");
-        uHasCloudsLoc = glGetUniformLocation(planetProgram, "hasClouds");
-        uHasRingsLoc = glGetUniformLocation(planetProgram, "hasRings");
-        uIsRingLoc = glGetUniformLocation(planetProgram, "isRing");
-        uSpecularStrengthLoc = glGetUniformLocation(planetProgram, "specularStrength");
-        uAtmosphereColorLoc = glGetUniformLocation(planetProgram, "atmosphereColor");
-        uAtmosphereGlowLoc = glGetUniformLocation(planetProgram, "atmosphereGlow");
-        uEmissiveLoc = glGetUniformLocation(planetProgram, "emissive");
-        uSunEyePosLoc = glGetUniformLocation(planetProgram, "sunEyePos");
-        uPlanetSunIntensityLoc = glGetUniformLocation(planetProgram, "sunIntensity");
-        uCloudRotationLoc = glGetUniformLocation(planetProgram, "cloudRotation");
-        uTimeLoc = glGetUniformLocation(planetProgram, "time");
-        uSunLocalPosLoc = glGetUniformLocation(planetProgram, "sunLocalPos");
-        uRingInnerRadiusLoc = glGetUniformLocation(planetProgram, "ringInnerRadius");
-        uRingOuterRadiusLoc = glGetUniformLocation(planetProgram, "ringOuterRadius");
-        uHasEclipseLoc = glGetUniformLocation(planetProgram, "hasEclipse");
-        uEclipseLocalPosLoc = glGetUniformLocation(planetProgram, "eclipseLocalPos");
-        uEclipseRadiusLoc = glGetUniformLocation(planetProgram, "eclipseRadius");
-        uRingOpacityLoc = glGetUniformLocation(planetProgram, "ringOpacity");
+        uModelViewLoc = glGetUniformLocation(planetProgram, "uModelView");
+        uProjectionLoc = glGetUniformLocation(planetProgram, "uProjection");
+        uNormalMatrixLoc = glGetUniformLocation(planetProgram, "uNormalMatrix");
+        uDayTexLoc = glGetUniformLocation(planetProgram, "uDayTex");
+        uNightTexLoc = glGetUniformLocation(planetProgram, "uNightTex");
+        uCloudsTexLoc = glGetUniformLocation(planetProgram, "uCloudsTex");
+        uHasNightTexLoc = glGetUniformLocation(planetProgram, "uHasNightTex");
+        uHasCloudsLoc = glGetUniformLocation(planetProgram, "uHasClouds");
+        uCloudOffsetLoc = glGetUniformLocation(planetProgram, "uCloudOffset");
+        uEmissiveLoc = glGetUniformLocation(planetProgram, "uEmissive");
+        uSunIntensityLoc = glGetUniformLocation(planetProgram, "uSunIntensity");
+        uAtmosphereColorLoc = glGetUniformLocation(planetProgram, "uAtmosphereColor");
+        uAtmosphereGlowLoc = glGetUniformLocation(planetProgram, "uAtmosphereGlow");
+        uSpecularStrengthLoc = glGetUniformLocation(planetProgram, "uSpecularStrength");
+        uTimeLoc = glGetUniformLocation(planetProgram, "uTime");
+        uSunEyePosLoc = glGetUniformLocation(planetProgram, "uSunEyePos");
+        uSunLocalPosLoc = glGetUniformLocation(planetProgram, "uSunLocalPos");
+        uHasRingsLoc = glGetUniformLocation(planetProgram, "uHasRings");
+        uRingInnerRadiusLoc = glGetUniformLocation(planetProgram, "uRingInnerRadius");
+        uRingOuterRadiusLoc = glGetUniformLocation(planetProgram, "uRingOuterRadius");
+        uIsRingLoc = glGetUniformLocation(planetProgram, "uIsRing");
+        uPlanetRadiusLoc = glGetUniformLocation(planetProgram, "uPlanetRadius");
+        uHasEclipseLoc = glGetUniformLocation(planetProgram, "uHasEclipse");
+        uEclipseLocalPosLoc = glGetUniformLocation(planetProgram, "uEclipseLocalPos");
+        uEclipseRadiusLoc = glGetUniformLocation(planetProgram, "uEclipseRadius");
     }
 
-    initStarfield();
     initRings();
-
     return true;
 }
 
@@ -283,8 +222,6 @@ void SceneRenderer::cleanup() {
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
 
-    if (starfieldVAO) { glDeleteVertexArrays(1, &starfieldVAO); starfieldVAO = 0; }
-    if (starfieldVBO) { glDeleteBuffers(1, &starfieldVBO); starfieldVBO = 0; }
     if (ringVAO) { glDeleteVertexArrays(1, &ringVAO); ringVAO = 0; }
     if (ringVBO) { glDeleteBuffers(1, &ringVBO); ringVBO = 0; }
 
@@ -292,48 +229,35 @@ void SceneRenderer::cleanup() {
     if (planetProgram) { glDeleteProgram(planetProgram); planetProgram = 0; }
     if (blackHoleProgram) { glDeleteProgram(blackHoleProgram); blackHoleProgram = 0; }
     if (wormholeProgram) { glDeleteProgram(wormholeProgram); wormholeProgram = 0; }
+    if (starfieldProgram) { glDeleteProgram(starfieldProgram); starfieldProgram = 0; }
 }
 
-void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat) {
-    if (!starfieldVAO) return;
-
-    glDepthMask(GL_FALSE);
+void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& cameraEye) {
     glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-
-    // Render static starfield background
-    if (!batch.isReady()) batch.init(kFlatVS, kFlatFS);
-    batch.begin(GL_POINTS, projMat, viewMat, 1.0f);
-    glBindVertexArray(starfieldVAO);
-    glDrawArrays(GL_POINTS, 0, 4000);
-    glBindVertexArray(0);
-    batch.end();
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
-}
-
-void SceneRenderer::renderSun(const glm::mat4& viewMat, const glm::mat4& projMat, float time, float intensity, const glm::vec3& sunWorldPos) {
     glDepthMask(GL_FALSE);
-    GLboolean cullWasOn = glIsEnabled(GL_CULL_FACE);
+
+    GLboolean cullWasOn = GL_FALSE;
+    glGetBooleanv(GL_CULL_FACE, &cullWasOn);
     glDisable(GL_CULL_FACE);
 
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), sunWorldPos);
-    model = glm::scale(model, glm::vec3(2.0f));
-    glm::mat4 mv = viewMat * model;
-
-    if (sunProgram) {
-        glUseProgram(sunProgram);
+    if (starfieldProgram) {
+        glUseProgram(starfieldProgram);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, sunTexture);
-        glUniform1i(glGetUniformLocation(sunProgram, "sunTexture"), 0);
-        if (uSunTimeLoc >= 0) glUniform1f(uSunTimeLoc, time);
-        if (uSunIntensityLoc >= 0) glUniform1f(uSunIntensityLoc, intensity);
-        uploadCoreMatrices(uSunModelViewLoc, uSunProjectionLoc, -1, mv, projMat);
+        glBindTexture(GL_TEXTURE_2D, starfieldTexture);
+        glUniform1i(uStarTexLoc, 0);
 
-        lod::LODManager::instance().drawSphere(lod::SPHERE_LOD_HIGH);
+        glm::mat4 modelMat = glm::translate(glm::mat4(1.0f), cameraEye);
+        modelMat = glm::scale(modelMat, glm::vec3(450.0f));
+        glm::mat4 mv = viewMat * modelMat;
+
+        if (uStarModelViewLoc != -1) glUniformMatrix4fv(uStarModelViewLoc, 1, GL_FALSE, glm::value_ptr(mv));
+        if (uStarProjectionLoc != -1) glUniformMatrix4fv(uStarProjectionLoc, 1, GL_FALSE, glm::value_ptr(projMat));
+
+        glFrontFace(GL_CW);
+        glprims::sharedModernSphere().drawUnit();
+        glFrontFace(GL_CCW);
+
         glUseProgram(0);
     } else {
         glprims::sharedModernSphere().drawUnit();
@@ -341,6 +265,34 @@ void SceneRenderer::renderSun(const glm::mat4& viewMat, const glm::mat4& projMat
 
     if (cullWasOn) glEnable(GL_CULL_FACE);
     glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+}
+
+void SceneRenderer::renderSun(const glm::mat4& viewMat, const glm::mat4& projMat, float time, float intensity, const glm::vec3& sunWorldPos, const CameraController& cameraCtrl, const SolarOdysseyUI& solarUI) {
+    float sunDist = glm::distance(cameraCtrl.currentEye, sunWorldPos);
+    float sunRadius = 2.0f * solarUI.planetScale;
+    lod::SphereTier tier = lod::LODManager::instance().computeSphereTier(sunDist, sunRadius, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
+
+    if (sunProgram) {
+        glUseProgram(sunProgram);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, sunTexture);
+        glUniform1i(uSunTexLoc, 0);
+        if (uSunTimeLoc >= 0) glUniform1f(uSunTimeLoc, time);
+        if (uSunBrightnessLoc >= 0) glUniform1f(uSunBrightnessLoc, solarUI.sunIntensity * 1.5f);
+
+        glm::mat4 sunMV = viewMat * glm::translate(glm::mat4(1.0f), sunWorldPos);
+        sunMV = glm::rotate(sunMV, glm::radians(time * 5.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        sunMV = glm::scale(sunMV, glm::vec3(sunRadius));
+        uploadCoreMatrices(uSunModelViewLoc, uSunProjectionLoc, uSunNormalMatrixLoc, sunMV, projMat);
+
+        lod::LODManager::instance().drawSphere(tier);
+        lod::LODManager::instance().recordBodyRender("Sun", sunDist, sunRadius, tier);
+        glUseProgram(0);
+    } else {
+        lod::LODManager::instance().drawSphere(tier);
+        lod::LODManager::instance().recordBodyRender("Sun", sunDist, sunRadius, tier);
+    }
 }
 
 void SceneRenderer::renderOrbit(float radius, bool isSelected, const CameraController& cameraCtrl, const glm::mat4& viewMat, const glm::mat4& projMat) {
@@ -396,13 +348,22 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
     glDisable(GL_CULL_FACE);
 
     glUseProgram(planetProgram);
-    glActiveTexture(GL_TEXTURE3);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, saturnRingTexture);
-    glUniform1i(uRingTexLoc, 3);
+    glUniform1i(uDayTexLoc, 0);
+
+    glUniform1i(uHasNightTexLoc, 0);
+    glUniform1i(uHasCloudsLoc, 0);
+    glUniform1i(uHasRingsLoc, 0);
     glUniform1i(uIsRingLoc, 1);
-    glUniform1f(uRingOpacityLoc, opacity);
     glUniform1f(uRingInnerRadiusLoc, innerRadius);
     glUniform1f(uRingOuterRadiusLoc, outerRadius);
+    glUniform1f(uPlanetRadiusLoc, planetRadius);
+    glUniform1f(uSpecularStrengthLoc, 0.0f);
+    glUniform1f(uAtmosphereGlowLoc, 0.0f);
+    glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
+    glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
+    glUniform1f(uSunIntensityLoc, 1.25f);
 
     uploadCoreMatrices(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, ringMV, projMat);
 
@@ -413,6 +374,7 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
     glUniform1i(uIsRingLoc, 0);
     glUseProgram(0);
     glEnable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
 }
 
 void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vector<Moon>& moons, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, float time, float cloudRotation, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl, const CelestialDatabase& db, AtmosphereEffects* atmo) {
@@ -424,11 +386,12 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         lod::SphereTier planetTier = lod::LODManager::instance().computeSphereTier(distToPlanet, effectiveSize, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
 
         glm::mat4 model = glm::translate(glm::mat4(1.0f), planet.currentPosition);
-        if (solarUI.enableAxialTilt) {
-            float tilt = (planet.name == "Earth") ? 23.44f : (planet.name == "Mars" ? 25.19f : (planet.name == "Saturn" ? 26.73f : (planet.name == "Uranus" ? 97.77f : 3.0f)));
-            model = glm::rotate(model, glm::radians(tilt), glm::vec3(1.0f, 0.0f, 0.2f));
+        const CelestialBodyData* data = db.getBody(planet.name);
+        if (solarUI.enableAxialTilt && data && data->axialTiltDeg != 0.0f) {
+            model = glm::rotate(model, glm::radians(data->axialTiltDeg), glm::vec3(1.0f, 0.0f, 0.2f));
         }
-        model = glm::rotate(model, glm::radians(time * planet.spinSpeed * solarUI.spinSpeedScale * 25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        float effectiveSpinSpeed = planet.spinSpeed * solarUI.spinSpeedScale;
+        model = glm::rotate(model, glm::radians(time * effectiveSpinSpeed * 0.1f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 planetMV = viewMat * glm::scale(model, glm::vec3(effectiveSize));
 
         if (planetProgram) {
@@ -452,7 +415,7 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
                 glBindTexture(GL_TEXTURE_2D, planet.cloudsTexture);
                 glUniform1i(uCloudsTexLoc, 2);
                 glUniform1i(uHasCloudsLoc, 1);
-                glUniform1f(uCloudRotationLoc, cloudRotation);
+                glUniform2f(uCloudOffsetLoc, cloudRotation * 0.05f, 0.0f);
             } else {
                 glUniform1i(uHasCloudsLoc, 0);
             }
@@ -471,7 +434,6 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
                 glUniform1f(uAtmosphereGlowLoc, 0.30f * solarUI.atmosphereGlowScale);
             } else {
                 glUniform1f(uSpecularStrengthLoc, 0.0f);
-                const CelestialBodyData* data = db.getBody(planet.name);
                 if (data) {
                     glUniform3f(uAtmosphereColorLoc, data->themeColor.r, data->themeColor.g, data->themeColor.b);
                     glUniform1f(uAtmosphereGlowLoc, ((planet.name == "Mercury" || planet.isDwarf) ? 0.15f : 0.40f) * solarUI.atmosphereGlowScale);
@@ -480,7 +442,7 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
             glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
-            glUniform1f(uPlanetSunIntensityLoc, (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f);
+            glUniform1f(uSunIntensityLoc, (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f);
             glUniform1f(uTimeLoc, time);
 
             // Analytical Shadows
@@ -525,7 +487,7 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
         // Atmosphere Glow rendering
         if (atmo && solarUI.showAtmospheres) {
-            glm::mat4 atmoMV = viewMat * model;
+            glm::mat4 atmoMV = viewMat * glm::translate(glm::mat4(1.0f), planet.currentPosition);
             atmo->renderAtmosphere(planet.name, effectiveSize, time, sunEyePos, atmoMV, projMat);
         }
 
@@ -560,7 +522,7 @@ void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Plan
             glUniform1f(uSpecularStrengthLoc, 0.0f);
             glUniform1f(uAtmosphereGlowLoc, 0.0f);
             glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
-            glUniform1f(uPlanetSunIntensityLoc, 1.25f);
+            glUniform1f(uSunIntensityLoc, 1.25f);
 
             glUniform1i(uIsRingLoc, 0);
             glUniform1i(uHasRingsLoc, 0);
@@ -586,3 +548,4 @@ void SceneRenderer::renderBlackHole(BlackHole& bh, const glm::mat4& viewMat, con
 void SceneRenderer::renderWormhole(Wormhole& wh, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& eyePos, float time) {
     wh.render(wormholeProgram, viewMat, projMat, eyePos, time);
 }
+
