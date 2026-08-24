@@ -42,6 +42,7 @@ C:\msys64\mingw64\bin\g++.exe -o build\SolarOdyssey.exe src\main.cpp src\stb_ima
     src\camera_controller.cpp src\planet_pov.cpp ^
     src\warp_system.cpp src\spaceship.cpp src\mission_system.cpp ^
     src\solar_ui.cpp src\nbody_simulation.cpp src\audio_loader.cpp src\lod_manager.cpp src\save_state.cpp ^
+    src\scene_renderer.cpp src\engine.cpp ^
     build\app_icon.o ^
     imgui\imgui.cpp imgui\imgui_demo.cpp imgui\imgui_draw.cpp imgui\imgui_tables.cpp imgui\imgui_widgets.cpp ^
     imgui\backends\imgui_impl_glfw.cpp imgui\backends\imgui_impl_opengl3.cpp ^

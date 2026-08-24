@@ -31,6 +31,8 @@ add_executable(SolarOdyssey
   src/audio_loader.cpp
   src/lod_manager.cpp
   src/save_state.cpp
+  src/scene_renderer.cpp
+  src/engine.cpp
   app_icon.rc
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
