@@ -14,6 +14,10 @@ public:
     GLuint pingPongFBO[2] = {0, 0};
     GLuint pingPongColorTex[2] = {0, 0};
 
+    // Clean Output Buffer for final 3D scene (Option A: post-processed before ImGui HUD)
+    GLuint outputFBO = 0;
+    GLuint outputColorTex = 0;
+
     // Shader program
     GLuint program = 0;
     GLint uSceneTexLoc = -1;

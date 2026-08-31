@@ -1,6 +1,8 @@
 #include "engine.h"
 #include "gl_primitives.h"
 #include "picking.h"
+#include "render_profiler.h"
+#include "canonical_inventory.h"
 #include <stb_image.h>
 #include <iostream>
 #include <fstream>
@@ -107,24 +109,16 @@ void Engine::initPlanetsAndMoons() {
     planets.clear();
     moons.clear();
 
-    // Major Planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune
-    planets.emplace_back("Mercury", 0.3f, 5.0f, 100.0f, 150.0f, "Textures/mercury.jpg", false, 0.0f, 0.0f, false, 48.0f);
-    planets.emplace_back("Venus", 0.5f, 7.5f, 80.0f, 120.0f, "Textures/venus_surface.jpg", false, 0.0f, 0.0f, false, 135.0f);
-    planets.emplace_back("Earth", 0.6f, 10.0f, 90.0f, 100.0f, "Textures/earth_daymap.jpg", false, 0.0f, 0.0f, false, 210.0f);
-    planets.emplace_back("Mars", 0.4f, 12.5f, 70.0f, 80.0f, "Textures/mars.jpg", false, 0.0f, 0.0f, false, 330.0f);
-    planets.emplace_back("Jupiter", 1.0f, 21.0f, 40.0f, 50.0f, "Textures/jupiter.jpg", false, 0.0f, 0.0f, false, 75.0f);
-    planets.emplace_back("Saturn", 0.9f, 27.0f, 30.0f, 40.0f, "Textures/saturn.jpg",
-                         true, 0.9f * 1.25f, 0.9f * 2.2f, false, 190.0f);
-    planets.emplace_back("Uranus", 0.8f, 33.5f, 20.0f, 30.0f, "Textures/uranus.jpg", false, 0.0f, 0.0f, false, 290.0f);
-    planets.emplace_back("Neptune", 0.7f, 39.5f, 15.0f, 20.0f, "Textures/neptune.jpg", false, 0.0f, 0.0f, false, 15.0f);
+    for (const auto& def : CanonicalInventory::getCanonicalPlanets()) {
+        planets.emplace_back(def.name, def.size, def.orbitRadius, def.spinSpeed, def.orbitSpeed,
+                             def.texture, def.hasRings, def.ringInnerRadius, def.ringOuterRadius,
+                             def.isDwarf, def.initialAngle);
+    }
 
-    // Dwarf Planets (Asteroid Belt & Trans-Neptunian Worlds)
-    planets.emplace_back("Ceres", 0.22f, 16.2f, 22.0f, 16.0f, "Textures/4k_ceres_fictional.jpg", false, 0, 0, true, 110.0f);
-    planets.emplace_back("Haumea", 0.25f, 45.0f, 55.0f, 12.0f, "Textures/4k_haumea_fictional.jpg", false, 0, 0, true, 240.0f);
-    planets.emplace_back("Makemake", 0.24f, 49.5f, 18.0f, 10.0f, "Textures/4k_makemake_fictional.jpg", false, 0, 0, true, 60.0f);
-    planets.emplace_back("Eris", 0.28f, 55.0f, 15.0f, 8.0f, "Textures/4k_eris_fictional.jpg", false, 0, 0, true, 170.0f);
-
-    moons.emplace_back("Moon", 0.15f, 1.4f, 200.0f, "Textures/moon.jpg", "Earth");
+    for (const auto& def : CanonicalInventory::getCanonicalMoons()) {
+        moons.emplace_back(def.name, def.size, def.orbitRadius, def.orbitSpeed,
+                           def.texture, def.parentPlanet, def.initialAngle);
+    }
 
     // Special textures
     for (auto &planet : planets) {
@@ -136,385 +130,22 @@ void Engine::initPlanetsAndMoons() {
         }
     }
 
-    // Initialize N-Body subsystem
-    nbodySim.reset();
-    nbodySim.gravitationalConstant = 4000.0f;
-    nbodySim.softening = 0.15f;
-    nbodySim.fixedDeltaTime = 0.0025f;
+    // Initialize Simulation Controller
+    simCtrl.setOrbitSpeedScale(solarUI.orbitSpeedScale);
+    simCtrl.init();
 
-    nbodySim.addBody("Sun", 1.0f, 2.0f, true);
-    nbodySim.addBody("Mercury", 0.00000016f, 0.3f);
-    nbodySim.addBody("Venus", 0.00000245f, 0.5f);
-    nbodySim.addBody("Earth", 0.00000300f, 0.6f);
-    nbodySim.addBody("Moon", 0.000000037f, 0.15f, false, "Earth");
-    nbodySim.addBody("Mars", 0.00000032f, 0.4f);
-    nbodySim.addBody("Jupiter", 0.000954f, 1.0f);
-    nbodySim.addBody("Saturn", 0.000285f, 0.9f);
-    nbodySim.addBody("Uranus", 0.000043f, 0.8f);
-    nbodySim.addBody("Neptune", 0.000051f, 0.7f);
-    nbodySim.addBody("Ceres", 0.00000000047f, 0.22f);
-    nbodySim.addBody("Haumea", 0.000000002f, 0.25f);
-    nbodySim.addBody("Makemake", 0.0000000015f, 0.24f);
-    nbodySim.addBody("Eris", 0.000000008f, 0.28f);
-
-    auto computeBodyPos = [this](const std::string& name, float t) -> glm::vec3 {
-        if (name == "Sun") return sunWorldPosition;
-        if (name == "Moon") {
-            for (const auto& p : planets) {
-                if (p.name == "Earth") {
-                    glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
-                    return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
-                }
-            }
-        }
-        for (const auto& p : planets) {
-            if (p.name == name) {
-                return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
-            }
-        }
-        return glm::vec3(0.0f);
-    };
-    nbodySim.initializeFromKeplerian(computeBodyPos, 0.0f, solarUI.orbitSpeedScale);
-}
-
-void Engine::generateTone(ALuint buffer, float frequency, float duration) {
-    const int sampleRate = 44100;
-    const int samples = (int)(duration * sampleRate);
-    std::vector<short> data(samples);
-    for (int i = 0; i < samples; i++) {
-        float t = (float)i / sampleRate;
-        float envelope = 1.0f - (float)i / samples;
-        data[i] = (short)(sin(2.0f * 3.14159f * frequency * t) * 16383.0f * envelope);
+    for (auto &planet : planets) {
+        planet.currentPosition = simCtrl.getBodyPosition(planet.name);
     }
-    alBufferData(buffer, AL_FORMAT_MONO16, data.data(), samples * sizeof(short), sampleRate);
-}
-
-void Engine::initAudio() {
-    audioDevice = alcOpenDevice(nullptr);
-    if (!audioDevice) {
-        fprintf(stderr, "[Audio] Could not open audio device.\n");
-        return;
+    for (auto &moon : moons) {
+        moon.currentPosition = simCtrl.getBodyPosition(moon.name);
     }
-
-    audioContext = alcCreateContext(audioDevice, nullptr);
-    if (!audioContext) {
-        fprintf(stderr, "[Audio] Could not create audio context.\n");
-        alcCloseDevice(audioDevice);
-        return;
-    }
-
-    alcMakeContextCurrent(audioContext);
-    alListener3f(AL_POSITION, 0.0f, 0.0f, 0.0f);
-    alListener3f(AL_VELOCITY, 0.0f, 0.0f, 0.0f);
-    float orientation[] = {0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f};
-    alListenerfv(AL_ORIENTATION, orientation);
-
-    alGenSources(1, &backgroundSource);
-    alGenBuffers(1, &backgroundBuffer);
-
-    // Spaceship Engine Audio
-    alGenSources(1, &spaceshipSource);
-    alGenBuffers(1, &spaceshipBuffer);
-    generateTone(spaceshipBuffer, 85.0f, 1.2f);
-    alSourcei(spaceshipSource, AL_BUFFER, spaceshipBuffer);
-    alSourcei(spaceshipSource, AL_LOOPING, AL_TRUE);
-    alSourcef(spaceshipSource, AL_GAIN, 0.0f);
-
-    // Black Hole Audio
-    alGenSources(1, &blackHoleSource);
-    alGenBuffers(1, &blackHoleBuffer);
-    generateTone(blackHoleBuffer, 52.0f, 1.8f);
-    alSourcei(blackHoleSource, AL_BUFFER, blackHoleBuffer);
-    alSourcei(blackHoleSource, AL_LOOPING, AL_TRUE);
-    alSourcef(blackHoleSource, AL_GAIN, 0.0f);
-
-    // Wormhole Audio
-    alGenSources(1, &wormholeSource);
-    alGenBuffers(1, &wormholeBuffer);
-    generateTone(wormholeBuffer, 145.0f, 1.6f);
-    alSourcei(wormholeSource, AL_BUFFER, wormholeBuffer);
-    alSourcei(wormholeSource, AL_LOOPING, AL_TRUE);
-    alSourcef(wormholeSource, AL_GAIN, 0.0f);
-
-    // Mission Complete Audio
-    alGenSources(1, &missionCompleteSource);
-    alGenBuffers(1, &missionCompleteBuffer);
-    generateTone(missionCompleteBuffer, 659.25f, 1.2f);
-    alSourcei(missionCompleteSource, AL_BUFFER, missionCompleteBuffer);
-    alSourcei(missionCompleteSource, AL_LOOPING, AL_FALSE);
-
-    // Warp Audio Cues
-    alGenSources(1, &warpChargeSource);
-    alGenBuffers(1, &warpChargeBuffer);
-    generateTone(warpChargeBuffer, 440.0f, 1.2f);
-    alSourcei(warpChargeSource, AL_BUFFER, warpChargeBuffer);
-
-    alGenSources(1, &warpExitSource);
-    alGenBuffers(1, &warpExitBuffer);
-    generateTone(warpExitBuffer, 180.0f, 1.4f);
-    alSourcei(warpExitSource, AL_BUFFER, warpExitBuffer);
-
-    std::vector<std::string> planetNames = {"Sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"};
-    for (const std::string &planetName : planetNames) {
-        ALuint source = 0, buffer = 0;
-        alGenSources(1, &source);
-        alGenBuffers(1, &buffer);
-
-        std::string lowerName = planetName;
-        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-
-        std::vector<char> pcm;
-        ALenum format = 0;
-        ALsizei sampleRate = 0;
-        if (AudioLoader::loadAudioFile(lowerName + ".mp3", pcm, format, sampleRate)) {
-            alBufferData(buffer, format, pcm.data(), (ALsizei)pcm.size(), sampleRate);
-            std::cout << "[Audio] Loaded native space track for " << planetName << " (" << pcm.size() / 1024 << " KB, " << sampleRate << " Hz)" << std::endl;
-        } else {
-            float frequency = 110.0f;
-            for (char c : planetName) frequency += c * 1.5f;
-            frequency = fmod(frequency, 330.0f) + 90.0f;
-            generateTone(buffer, frequency, 2.0f);
-        }
-
-        planetSoundSources[planetName] = source;
-        planetSoundBuffers[planetName] = buffer;
-    }
-
-    musicLoad("Sound/earth.mp3");
-}
-
-void Engine::musicStop() {
-    if (!audioDevice || !backgroundSource) return;
-    alSourceStop(backgroundSource);
-    ALint queued = 0; alGetSourcei(backgroundSource, AL_BUFFERS_QUEUED, &queued);
-    while (queued-- > 0) {
-        ALuint b; alSourceUnqueueBuffers(backgroundSource, 1, &b);
-    }
-    gMusic.active = false; gMusic.offset = 0; gMusic.trackPath.clear();
-}
-
-void Engine::musicLoad(const std::string &path) {
-    if (!audioDevice || !backgroundSource) return;
-    musicStop();
-    if (!gMusic.buffers[0]) alGenBuffers(BackgroundMusic::kBuffers, gMusic.buffers);
-    if (!AudioLoader::loadAudioFile(path, gMusic.data, gMusic.format, gMusic.sampleRate)) {
-        return;
-    }
-    gMusic.trackPath = path;
-    size_t remaining = gMusic.data.size();
-    for (int i = 0; i < BackgroundMusic::kBuffers && remaining > 0; ++i) {
-        size_t n = std::min((size_t)BackgroundMusic::kChunk, remaining);
-        alBufferData(gMusic.buffers[i], gMusic.format, gMusic.data.data() + gMusic.offset, (ALsizei)n, gMusic.sampleRate);
-        alSourceQueueBuffers(backgroundSource, 1, &gMusic.buffers[i]);
-        gMusic.offset += n; remaining -= n;
-    }
-    alSourcei(backgroundSource, AL_LOOPING, AL_FALSE);
-    float vol = solarUI.audioMuted ? 0.0f : (solarUI.masterVolume * solarUI.musicVolume);
-    alSourcef(backgroundSource, AL_GAIN, vol);
-    alSourcePlay(backgroundSource);
-    gMusic.active = true;
-    std::cout << "[Audio] Background music streaming: " << path << " (" << gMusic.sampleRate << " Hz, " << gMusic.data.size() / 1024 << " KB)" << std::endl;
-}
-
-void Engine::musicUpdate() {
-    if (!gMusic.active || !audioDevice || !backgroundSource) return;
-    float vol = solarUI.audioMuted ? 0.0f : (solarUI.masterVolume * solarUI.musicVolume);
-    alSourcef(backgroundSource, AL_GAIN, vol);
-
-    ALint processed = 0;
-    alGetSourcei(backgroundSource, AL_BUFFERS_PROCESSED, &processed);
-    while (processed-- > 0) {
-        ALuint b; alSourceUnqueueBuffers(backgroundSource, 1, &b);
-        if (gMusic.offset >= gMusic.data.size()) {
-            gMusic.offset = 0;
-        }
-        size_t remaining = gMusic.data.size() - gMusic.offset;
-        size_t n = std::min((size_t)BackgroundMusic::kChunk, remaining);
-        if (n == 0) continue;
-        alBufferData(b, gMusic.format, gMusic.data.data() + gMusic.offset, (ALsizei)n, gMusic.sampleRate);
-        alSourceQueueBuffers(backgroundSource, 1, &b);
-        gMusic.offset += n;
-    }
-    ALint state; alGetSourcei(backgroundSource, AL_SOURCE_STATE, &state);
-    if (state != AL_PLAYING && !solarUI.audioMuted) alSourcePlay(backgroundSource);
-}
-
-void Engine::playPlanetSound(const std::string &planetName) {
-    if (solarUI.audioMuted || !audioDevice) return;
-    auto sourceIt = planetSoundSources.find(planetName);
-    auto bufferIt = planetSoundBuffers.find(planetName);
-    if (sourceIt != planetSoundSources.end() && bufferIt != planetSoundBuffers.end()) {
-        alSourceStop(sourceIt->second);
-        alSourcei(sourceIt->second, AL_BUFFER, bufferIt->second);
-        alSourcei(sourceIt->second, AL_LOOPING, AL_FALSE);
-        float vol = solarUI.masterVolume * solarUI.sfxVolume * 0.7f;
-        alSourcef(sourceIt->second, AL_GAIN, vol);
-        alSourcePlay(sourceIt->second);
-    }
-}
-
-void Engine::startPOVAmbientSound(const std::string &planetName) {
-    if (solarUI.audioMuted || !audioDevice) return;
-    stopPOVAmbientSound();
-    auto sourceIt = planetSoundSources.find(planetName);
-    auto bufferIt = planetSoundBuffers.find(planetName);
-    if (sourceIt != planetSoundSources.end() && bufferIt != planetSoundBuffers.end()) {
-        currentPOVPlanet = planetName;
-        currentPOVSource = sourceIt->second;
-        alSourcei(currentPOVSource, AL_BUFFER, bufferIt->second);
-        alSourcei(currentPOVSource, AL_LOOPING, AL_TRUE);
-        float vol = solarUI.masterVolume * solarUI.sfxVolume * 0.5f;
-        alSourcef(currentPOVSource, AL_GAIN, vol);
-        alSourcePlay(currentPOVSource);
-    }
-}
-
-void Engine::stopPOVAmbientSound() {
-    if (currentPOVSource != 0) {
-        alSourceStop(currentPOVSource);
-        alSourcei(currentPOVSource, AL_LOOPING, AL_FALSE);
-        currentPOVSource = 0;
-        currentPOVPlanet = "";
-    }
-}
-
-void Engine::cleanupAudio() {
-    musicStop();
-    auto stopAndDeleteSource = [](ALuint &src) {
-        if (src) { alSourceStop(src); alDeleteSources(1, &src); src = 0; }
-    };
-    auto deleteBuffer = [](ALuint &buf) {
-        if (buf) { alDeleteBuffers(1, &buf); buf = 0; }
-    };
-
-    stopAndDeleteSource(blackHoleSource);       deleteBuffer(blackHoleBuffer);
-    stopAndDeleteSource(spaceshipSource);       deleteBuffer(spaceshipBuffer);
-    stopAndDeleteSource(wormholeSource);        deleteBuffer(wormholeBuffer);
-    stopAndDeleteSource(missionCompleteSource); deleteBuffer(missionCompleteBuffer);
-    stopAndDeleteSource(warpChargeSource);      deleteBuffer(warpChargeBuffer);
-    stopAndDeleteSource(warpExitSource);        deleteBuffer(warpExitBuffer);
-    stopAndDeleteSource(backgroundSource);      deleteBuffer(backgroundBuffer);
-
-    if (gMusic.buffers[0]) {
-        alDeleteBuffers(BackgroundMusic::kBuffers, gMusic.buffers);
-        gMusic.buffers[0] = 0;
-    }
-
-    for (auto &pair : planetSoundSources) stopAndDeleteSource(pair.second);
-    for (auto &pair : planetSoundBuffers) deleteBuffer(pair.second);
-    planetSoundSources.clear();
-    planetSoundBuffers.clear();
-    currentPOVSource = 0;
-    currentPOVPlanet.clear();
-
-    if (audioContext) {
-        alcMakeContextCurrent(nullptr);
-        alcDestroyContext(audioContext);
-        audioContext = nullptr;
-    }
-    if (audioDevice) {
-        alcCloseDevice(audioDevice);
-        audioDevice = nullptr;
-    }
-}
-
-void Engine::initParticles() {
-    // Solar Flares
-    solarFlares.clear();
-    for (int i = 0; i < 350; ++i) {
-        Particle flare;
-        float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * 3.14159f;
-        float distance = 2.0f + static_cast<float>(rand()) / RAND_MAX * 0.4f;
-        flare.position = glm::vec3(cos(angle) * distance, (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 1.8f, sin(angle) * distance);
-        flare.velocity = glm::normalize(flare.position) * (0.015f + static_cast<float>(rand()) / RAND_MAX * 0.025f);
-        flare.color = glm::vec3(1.0f, 0.65f + static_cast<float>(rand()) / RAND_MAX * 0.35f, 0.1f);
-        flare.size = 0.06f + static_cast<float>(rand()) / RAND_MAX * 0.08f;
-        flare.life = static_cast<float>(rand()) / RAND_MAX * 2.0f;
-        flare.maxLife = flare.life;
-        solarFlares.push_back(flare);
-    }
-
-    // Comets
-    cometParticles.clear();
-    for (int i = 0; i < 240; ++i) {
-        Particle particle;
-        float t = static_cast<float>(rand()) / RAND_MAX;
-        float angle = t * 2.0f * 3.14159f;
-        float distance = 36.0f;
-        particle.position = glm::vec3(cos(angle) * distance, (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 1.0f, sin(angle) * distance);
-        particle.velocity = glm::vec3(-sin(angle), 0, cos(angle)) * 0.12f;
-        particle.color = glm::vec3(0.75f, 0.85f, 1.0f);
-        particle.size = 0.04f + static_cast<float>(rand()) / RAND_MAX * 0.06f;
-        particle.life = t * 10.0f;
-        particle.maxLife = 10.0f;
-        cometParticles.push_back(particle);
-    }
-}
-
-void Engine::updateParticles(float deltaTime) {
-    for (auto &flare : solarFlares) {
-        flare.position += flare.velocity * deltaTime * 12.0f;
-        flare.life -= deltaTime;
-        if (flare.life <= 0.0f) {
-            float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * 3.14159f;
-            float distance = 2.0f + static_cast<float>(rand()) / RAND_MAX * 0.4f;
-            flare.position = glm::vec3(cos(angle) * distance, (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 1.8f, sin(angle) * distance);
-            flare.velocity = glm::normalize(flare.position) * (0.015f + static_cast<float>(rand()) / RAND_MAX * 0.025f);
-            flare.life = static_cast<float>(rand()) / RAND_MAX * 2.0f;
-            flare.maxLife = flare.life;
-        }
-    }
-
-    for (auto &particle : cometParticles) {
-        particle.position += particle.velocity * deltaTime * 6.0f;
-        particle.life -= deltaTime;
-        if (particle.life <= 0.0f) {
-            float angle = atan2(particle.position.z, particle.position.x) + 0.08f;
-            float distance = 36.0f;
-            particle.position = glm::vec3(cos(angle) * distance, (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 1.0f, sin(angle) * distance);
-            particle.velocity = glm::vec3(-sin(angle), 0, cos(angle)) * 0.12f;
-            particle.life = particle.maxLife;
-        }
-    }
-}
-
-void Engine::renderParticles(const glm::mat4& viewMat, const glm::mat4& projMat) {
-    if (!solarUI.showParticles) return;
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glDepthMask(GL_FALSE);
-
-    if (!renderer.batch.isReady()) renderer.batch.init(kFlatVS, kFlatFS);
-
-    // Solar Flares
-    if (!solarFlares.empty()) {
-        renderer.batch.begin(GL_POINTS, projMat, viewMat, 1.0f);
-        for (const auto &p : solarFlares) {
-            float alpha = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 1.0f;
-            renderer.batch.vertex(p.position, glm::vec4(p.color, alpha * 0.8f), 1.5f);
-        }
-        renderer.batch.end();
-    }
-
-    // Comets
-    if (!cometParticles.empty()) {
-        renderer.batch.begin(GL_POINTS, projMat, viewMat, 1.0f);
-        for (const auto &p : cometParticles) {
-            float alpha = (p.maxLife > 0.0f) ? (p.life / p.maxLife) : 1.0f;
-            renderer.batch.vertex(p.position, glm::vec4(p.color, alpha * 0.7f), 1.0f);
-        }
-        renderer.batch.end();
-    }
-
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
 }
 
 void Engine::focusPlanetByName(const std::string& name) {
     solarUI.selectedPlanetName = name;
     solarUI.showPlanetCard = true;
-    playPlanetSound(name);
+    if (audioMgr) audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
 
     if (name == "Sun") {
         cameraCtrl.focusOnBody(-1, "Sun", 2.0f, glm::vec3(0.0f));
@@ -535,7 +166,7 @@ void Engine::focusPlanetByName(const std::string& name) {
 void Engine::focusPlanetTourByName(const std::string& name) {
     solarUI.selectedPlanetName = name;
     solarUI.showPlanetCard = true;
-    playPlanetSound(name);
+    if (audioMgr) audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
 
     if (name == "Sun") {
         cameraCtrl.focusOnBodyTour(-1, "Sun", 2.0f, glm::vec3(0.0f));
@@ -554,8 +185,10 @@ void Engine::focusPlanetTourByName(const std::string& name) {
 
 void Engine::explorePlanetPOVByName(const std::string& name) {
     solarUI.selectedPlanetName = name;
-    playPlanetSound(name);
-    startPOVAmbientSound(name);
+    if (audioMgr) {
+        audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+        audioMgr->startPOVAmbientSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+    }
 
     if (name == "Sun") {
         cameraCtrl.mode = CAM_POV;
@@ -686,8 +319,12 @@ bool Engine::init(int width, int height, const char* title) {
     solarUI.applySpaceTheme();
     applyLoadedSettings();
 
-    initAudio();
-    initParticles();
+    audioMgr = std::make_unique<AudioManager>();
+    audioMgr->init();
+    particleSys = std::make_unique<ParticleSystem>();
+    particleSys->init();
+    inputMgr = std::make_unique<InputManager>();
+    inputMgr->init(window);
     renderer.init();
     blackHole.initShader(renderer.blackHoleProgram);
     initPlanetsAndMoons();
@@ -706,10 +343,50 @@ bool Engine::init(int width, int height, const char* title) {
 void Engine::cleanup() {
     if (!window) return;
 
-    if (asteroidBelt) { delete asteroidBelt; asteroidBelt = nullptr; }
-    if (planetPov) { delete planetPov; planetPov = nullptr; }
-    if (atmosphereEffects) { delete atmosphereEffects; atmosphereEffects = nullptr; }
+    // Step 0: Save settings and persistent simulation state before tearing down systems
+    captureCurrentSettings();
+    saveSettings(kSettingsPath, appSettings);
+
+    if (solarUI.autoSaveOnExit) {
+        SimulationSaveState exitState;
+        SaveStateManager::instance().captureState(exitState, simTime, solarUI.timeMultiplier,
+                                                  solarUI.isPaused, solarUI.physicsMode,
+                                                  cameraCtrl, missionSystem, spaceship,
+                                                  solarUI.autoSaveOnExit);
+        SaveStateManager::instance().saveToFile("save_state.json", exitState);
+        std::cout << "[SaveState] Auto-saved simulation state to save_state.json on exit (Day " << simTime << ")" << std::endl;
+    }
+
+    // Step 1: Stop Audio streams & background threads
+    if (audioMgr) {
+        audioMgr->shutdown();
+        audioMgr.reset();
+    }
+
+    // Step 2: Drain & unmap ring buffers (Asteroid belt)
+    if (asteroidBelt) {
+        delete asteroidBelt;
+        asteroidBelt = nullptr;
+    }
+
+    // Step 3: Delete Particle buffers
+    if (particleSys) {
+        particleSys->cleanup();
+        particleSys.reset();
+    }
+
+    // Step 4: Teardown Post-Processing FBOs & pipelines
     postPipeline.cleanup();
+
+    // Step 5: Teardown SceneRenderer VAOs, textures, shaders, and celestial resources
+    if (planetPov) {
+        delete planetPov;
+        planetPov = nullptr;
+    }
+    if (atmosphereEffects) {
+        delete atmosphereEffects;
+        atmosphereEffects = nullptr;
+    }
     renderer.cleanup();
 
     auto safeDeleteTex = [](GLuint &tex) {
@@ -720,132 +397,116 @@ void Engine::cleanup() {
         safeDeleteTex(p.secondaryTexture);
         safeDeleteTex(p.cloudsTexture);
     }
-    for (auto &m : moons) safeDeleteTex(m.texture);
-
-    cleanupAudio();
-
-    captureCurrentSettings();
-    saveSettings(kSettingsPath, appSettings);
-
-    if (solarUI.autoSaveOnExit) {
-        SimulationSaveState exitState;
-        SaveStateManager::instance().captureState(exitState, (float)simTime, solarUI.timeMultiplier,
-                                                  solarUI.isPaused, solarUI.physicsMode,
-                                                  cameraCtrl, missionSystem, spaceship,
-                                                  solarUI.autoSaveOnExit);
-        SaveStateManager::instance().saveToFile("save_state.json", exitState);
-        std::cout << "[SaveState] Auto-saved simulation state to save_state.json on exit (Day " << (float)simTime << ")" << std::endl;
+    for (auto &m : moons) {
+        safeDeleteTex(m.texture);
     }
 
+    // Step 6: Reset LODManager geometries
+    lod::LODManager::instance().destroy();
+
+    // Step 7: Teardown InputManager
+    if (inputMgr) {
+        inputMgr->shutdown();
+        inputMgr.reset();
+    }
+
+    // Step 8: Teardown ImGui context & backend bindings while GL context is still alive
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
+    // Step 9: Destroy GLFW window
     glfwDestroyWindow(window);
     window = nullptr;
+
+    // Step 10: Terminate GLFW
     glfwTerminate();
 }
 
 void Engine::processInput(float deltaTime) {
     if (spaceship.active || cameraCtrl.mode == CAM_SPACESHIP) {
+        if (inputMgr) inputMgr->setContext(InputContext::Spaceship);
         bool leftAltDown = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
         if (leftAltDown != uiReleaseCursorHeld) {
             uiReleaseCursorHeld = leftAltDown;
+            if (inputMgr) inputMgr->setCursorReleaseHeld(leftAltDown);
             updateCursorCapture();
         }
 
         if (!ImGui::GetIO().WantCaptureKeyboard) {
-            bool fwd = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
-            bool back = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
-            bool yawL = (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS);
-            bool yawR = (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
-            bool rollL = (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS);
-            bool rollR = (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS);
-            bool pitchUp = (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS);
-            bool pitchDown = (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS);
-            bool boost = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+            SpaceshipFlightInput input = inputMgr ? inputMgr->pollSpaceshipFlight(window) : SpaceshipFlightInput{};
+            if (!inputMgr) {
+                input.fwd = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
+                input.back = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
+                input.yawL = (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS);
+                input.yawR = (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
+                input.rollL = (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS);
+                input.rollR = (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS);
+                input.pitchUp = (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS);
+                input.pitchDown = (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS);
+                input.boost = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+            }
 
-            spaceship.processInput(fwd, back, yawL, yawR, rollL, rollR, pitchUp, pitchDown, boost, deltaTime);
+            spaceship.processInput(input.fwd, input.back, input.yawL, input.yawR, input.rollL, input.rollR, input.pitchUp, input.pitchDown, input.boost, deltaTime);
         }
     } else {
         if (cameraCtrl.mode == CAM_FREE) {
+            if (inputMgr) inputMgr->setContext(InputContext::FreeCamera);
             bool leftAltDown = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
             if (leftAltDown != uiReleaseCursorHeld) {
                 uiReleaseCursorHeld = leftAltDown;
+                if (inputMgr) inputMgr->setCursorReleaseHeld(leftAltDown);
                 updateCursorCapture();
             }
         } else {
+            if (inputMgr) inputMgr->setContext(InputContext::Explorer);
             if (uiReleaseCursorHeld) {
                 uiReleaseCursorHeld = false;
+                if (inputMgr) inputMgr->setCursorReleaseHeld(false);
             }
         }
         updateCursorCapture();
-        if (spaceshipSource) alSourceStop(spaceshipSource);
+        if (audioMgr) audioMgr->stopSpaceshipSound();
         cameraCtrl.processKeyboard(window, deltaTime);
     }
 }
 
 void Engine::updateSimulation(float deltaTime) {
-    if (!solarUI.isPaused) {
-        simTime += deltaTime * solarUI.timeMultiplier;
-        cloudRotationAngle += deltaTime * 0.4f * solarUI.timeMultiplier;
-        solarUI.elapsedSimDays = simTime * 5.0f;
-    }
+    simCtrl.setPaused(solarUI.isPaused);
+    simCtrl.setTimeMultiplier(solarUI.timeMultiplier);
+    simCtrl.setOrbitSpeedScale(solarUI.orbitSpeedScale);
 
     // Dynamic physics mode toggle
     if (solarUI.pendingPhysicsModeChange) {
         solarUI.pendingPhysicsModeChange = false;
-        if (solarUI.physicsMode == 1) {
-            auto computeBodyPos = [this](const std::string& name, float t) -> glm::vec3 {
-                if (name == "Sun") return sunWorldPosition;
-                if (name == "Moon") {
-                    for (const auto& p : planets) {
-                        if (p.name == "Earth") {
-                            glm::vec3 earthPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
-                            return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0f, solarUI.orbitSpeedScale, 1.4f);
-                        }
-                    }
-                }
-                for (const auto& p : planets) {
-                    if (p.name == name) {
-                        return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, solarUI.orbitSpeedScale, p.orbitRadius, p.initialAngle);
-                    }
-                }
-                return glm::vec3(0.0f);
-            };
-            nbodySim.initializeFromKeplerian(computeBodyPos, (float)simTime, solarUI.orbitSpeedScale);
-            nbodySim.setPhysicsMode(PHYSICS_NBODY);
-        } else {
-            nbodySim.setPhysicsMode(PHYSICS_KEPLERIAN);
+        simCtrl.setPhysicsMode(solarUI.physicsMode == 1 ? PHYSICS_NBODY : PHYSICS_KEPLERIAN);
+    }
+
+    simCtrl.update(deltaTime);
+
+    simTime = simCtrl.getSimTime();
+    cloudRotationAngle = simCtrl.getCloudRotationAngle();
+    solarUI.elapsedSimDays = simCtrl.getElapsedSimDays();
+
+    const auto& states = simCtrl.getAllBodies();
+    if (states.size() >= planets.size() + moons.size() + 1) {
+        for (size_t i = 0; i < planets.size(); ++i) {
+            planets[i].currentPosition = glm::vec3(states[1 + i].position);
+        }
+        for (size_t i = 0; i < moons.size(); ++i) {
+            moons[i].currentPosition = glm::vec3(states[1 + planets.size() + i].position);
+        }
+    } else {
+        for (auto &planet : planets) {
+            planet.currentPosition = simCtrl.getBodyPosition(planet.name);
+        }
+        for (auto &moon : moons) {
+            moon.currentPosition = simCtrl.getBodyPosition(moon.name);
         }
     }
 
-    if (nbodySim.getPhysicsMode() == PHYSICS_NBODY && !solarUI.isPaused) {
-        nbodySim.update(deltaTime, solarUI.timeMultiplier);
-    }
-
-    for (auto &planet : planets) {
-        if (nbodySim.getPhysicsMode() == PHYSICS_NBODY) {
-            planet.currentPosition = nbodySim.getBodyPosition(planet.name);
-        } else {
-            planet.currentPosition = OrbitalPhysics::computePlanetPosition(simTime, planet.orbitSpeed, solarUI.orbitSpeedScale, planet.orbitRadius, planet.initialAngle);
-        }
-    }
-    for (auto &moon : moons) {
-        if (nbodySim.getPhysicsMode() == PHYSICS_NBODY) {
-            moon.currentPosition = nbodySim.getBodyPosition(moon.name);
-        } else {
-            for (const auto &p : planets) {
-                if (p.name == moon.parentPlanet) {
-                    moon.currentPosition = OrbitalPhysics::computeMoonPosition(p.currentPosition, simTime, moon.orbitSpeed, solarUI.orbitSpeedScale, moon.orbitRadius);
-                    break;
-                }
-            }
-        }
-    }
-
-    if (nbodySim.getPhysicsMode() == PHYSICS_NBODY && spaceship.active) {
-        glm::vec3 gravAccel = nbodySim.computeAccelerationForPoint(spaceship.position);
+    if (spaceship.active) {
+        glm::vec3 gravAccel = simCtrl.getGravityAt(spaceship.position);
         spaceship.applyGravityAcceleration(gravAccel);
     } else {
         spaceship.applyGravityAcceleration(glm::vec3(0.0f));
@@ -954,36 +615,36 @@ void Engine::updateSimulation(float deltaTime) {
             cameraCtrl.currentUp = spaceship.smoothCameraUp;
         }
 
-        if (spaceshipSource && audioDevice && !solarUI.audioMuted) {
-            alSourcef(spaceshipSource, AL_PITCH, spaceship.soundPitch);
-            alSourcef(spaceshipSource, AL_GAIN, spaceship.soundVolume * solarUI.masterVolume * solarUI.sfxVolume * 0.65f);
-            ALint sState;
-            alGetSourcei(spaceshipSource, AL_SOURCE_STATE, &sState);
-            if (sState != AL_PLAYING) alSourcePlay(spaceshipSource);
+        if (audioMgr) {
+            audioMgr->updateSpaceshipSound(spaceship.soundPitch, spaceship.soundVolume, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
         }
     }
 
     cameraCtrl.update(deltaTime, focusedPos, focusedRadius);
     postPipeline.updateStartup(deltaTime);
 
-    updateParticles(deltaTime);
+    if (particleSys) {
+        particleSys->update(deltaTime);
+    }
     if (asteroidBelt && solarUI.showAsteroids) {
         asteroidBelt->update(deltaTime, solarUI.timeMultiplier);
     }
     blackHole.update(deltaTime, cameraCtrl.currentEye);
     wormhole.update(deltaTime);
 
+    frameEvents.clear();
+
     bool wormholeTraversed = false;
     if (spaceship.active && wormhole.checkTraversal(spaceship.position)) {
         spaceship.position = wormhole.exitDestination;
         wormholeTraversed = true;
+        frameEvents.wormholeTraversed = true;
         missionSystem.showToast("WORMHOLE TRAVERSED!", "Emerged across spacetime gateway");
-        if (missionCompleteSource && audioDevice && !solarUI.audioMuted) {
-            alSourcePlay(missionCompleteSource);
-        }
+        if (audioMgr) audioMgr->playMissionComplete(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
     }
 
     bool photoCaptured = postPipeline.requestCleanCapture;
+    frameEvents.photoCaptured = photoCaptured;
     missionSystem.update(deltaTime, spaceship.position, glm::length(spaceship.velocity),
                          (int)spaceship.flightMode, spaceship.nearestPlanetName, spaceship.nearestPlanetDist,
                          spaceship.targetPlanetName, spaceship.targetDistance,
@@ -992,50 +653,44 @@ void Engine::updateSimulation(float deltaTime) {
 
     if (missionSystem.hasTriggeredCompletionAudio) {
         missionSystem.hasTriggeredCompletionAudio = false;
-        if (missionCompleteSource && audioDevice && !solarUI.audioMuted) {
-            alSourcePlay(missionCompleteSource);
-        }
+        frameEvents.missionCompleted = true;
+        if (audioMgr) audioMgr->playMissionComplete(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
     }
 
-    if (spaceship.active && audioDevice && !solarUI.audioMuted) {
+    if (spaceship.active && audioMgr) {
         if (spaceship.warpSystem.triggerChargeSound) {
             spaceship.warpSystem.triggerChargeSound = false;
-            if (warpChargeSource) alSourcePlay(warpChargeSource);
+            frameEvents.warpChargeTriggered = true;
+            audioMgr->playWarpCharge(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
         }
         if (spaceship.warpSystem.triggerExitSound) {
             spaceship.warpSystem.triggerExitSound = false;
-            if (warpExitSource) alSourcePlay(warpExitSource);
+            frameEvents.warpExitTriggered = true;
+            audioMgr->playWarpExit(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
         }
     }
 
-    if (audioDevice && !solarUI.audioMuted) {
-        float distToBH = glm::length(cameraCtrl.currentEye - blackHole.position);
-        if (distToBH < 120.0f) {
-            float bhGain = (1.0f - distToBH / 120.0f) * 0.7f * solarUI.masterVolume * solarUI.sfxVolume;
-            alSourcef(blackHoleSource, AL_GAIN, bhGain);
-            ALint bState; alGetSourcei(blackHoleSource, AL_SOURCE_STATE, &bState);
-            if (bState != AL_PLAYING) alSourcePlay(blackHoleSource);
-        } else {
-            alSourceStop(blackHoleSource);
-        }
+    // Populate GameContext snapshot
+    gameContext.simTime = simTime;
+    gameContext.deltaTime = deltaTime;
+    gameContext.cloudRotationAngle = cloudRotationAngle;
+    gameContext.elapsedSimDays = solarUI.elapsedSimDays;
+    gameContext.paused = solarUI.isPaused;
+    gameContext.timeMultiplier = solarUI.timeMultiplier;
+    gameContext.physicsMode = simCtrl.getPhysicsMode();
+    gameContext.cameraEye = cameraCtrl.currentEye;
+    gameContext.cameraTarget = cameraCtrl.currentTarget;
+    gameContext.cameraUp = cameraCtrl.currentUp;
+    gameContext.isSpaceshipActive = spaceship.active;
+    gameContext.flightMode = spaceship.flightMode;
+    gameContext.spaceshipPos = spaceship.position;
+    gameContext.spaceshipVel = spaceship.velocity;
 
-        float distToWH = glm::length(cameraCtrl.currentEye - wormhole.position);
-        if (distToWH < 80.0f) {
-            float whNorm = glm::clamp(1.0f - distToWH / 80.0f, 0.0f, 1.0f);
-            alSourcef(wormholeSource, AL_GAIN, whNorm * 0.6f * solarUI.masterVolume * solarUI.sfxVolume);
-            ALint whState; alGetSourcei(wormholeSource, AL_SOURCE_STATE, &whState);
-            if (whState != AL_PLAYING) alSourcePlay(wormholeSource);
-        } else {
-            alSourceStop(wormholeSource);
-        }
+    if (audioMgr) {
+        audioMgr->updateSpatialAudio(cameraCtrl.currentEye, blackHole.position, wormhole.position, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+        audioMgr->updatePOVVolume(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+        audioMgr->musicUpdate(solarUI.audioMuted, solarUI.masterVolume, solarUI.musicVolume);
     }
-
-    if (currentPOVSource != 0 && audioDevice) {
-        float povVol = solarUI.audioMuted ? 0.0f : solarUI.masterVolume * solarUI.sfxVolume * 0.4f;
-        alSourcef(currentPOVSource, AL_GAIN, povVol);
-    }
-
-    musicUpdate();
 
     if (solarUI.requestStateSave) {
         solarUI.requestStateSave = false;
@@ -1071,6 +726,7 @@ void Engine::updateSimulation(float deltaTime) {
 }
 
 void Engine::renderFrame(float deltaTime) {
+    RenderProfiler::instance().beginFrame();
     postPipeline.beginScene();
 
     float currentFOV = cameraCtrl.fieldOfView + (spaceship.active ? spaceship.warpSystem.fovOffset : 0.0f);
@@ -1095,7 +751,9 @@ void Engine::renderFrame(float deltaTime) {
     }
 
     renderer.renderSun(viewMat, projMat, (float)simTime, solarUI.sunIntensity, sunWorldPosition, cameraCtrl, solarUI);
-    renderParticles(viewMat, projMat);
+    if (particleSys) {
+        particleSys->render(renderer, viewMat, projMat, solarUI.showParticles);
+    }
 
     glm::vec3 sunEyePos = glm::vec3(viewMat * glm::vec4(sunWorldPosition, 1.0f));
     renderer.renderPlanets(planets, moons, viewMat, projMat, sunWorldPosition, sunEyePos, (float)simTime, cloudRotationAngle, solarUI, cameraCtrl, celestialDb, atmosphereEffects);
@@ -1114,7 +772,8 @@ void Engine::renderFrame(float deltaTime) {
         if (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || (cameraCtrl.tourActive && cameraCtrl.focusedPlanetIndex >= 0)) {
             focusFade = 0.20f;
         }
-        asteroidBelt->render(focusFade, renderer.planetProgram, viewMat, projMat, sunEyePos, cameraCtrl.currentEye, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
+        asteroidBelt->render(focusFade, renderer.asteroidProgram != 0 ? renderer.asteroidProgram : renderer.planetProgram,
+                             viewMat, projMat, sunEyePos, cameraCtrl.currentEye, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
     }
 
     postPipeline.endSceneAndPostProcess();
@@ -1343,8 +1002,8 @@ void Engine::runQACaptureSequence(int qaCount) {
         solarUI.physicsMode = 1;
         solarUI.pendingPhysicsModeChange = true;
     } else if (qaCount == 512) {
-        bool nbodyActive = (nbodySim.getPhysicsMode() == PHYSICS_NBODY);
-        glm::vec3 earthPos = nbodySim.getBodyPosition("Earth");
+        bool nbodyActive = (simCtrl.getPhysicsMode() == PHYSICS_NBODY);
+        glm::vec3 earthPos = simCtrl.getBodyPosition("Earth");
         bool earthValid = (glm::length(earthPos) > 5.0f && glm::length(earthPos) < 20.0f);
         std::cout << "[QA TEST 15] N-Body Mode Toggle -> active=" << (nbodyActive ? "true" : "false")
                   << ", earthRadius=" << glm::length(earthPos)
@@ -1352,12 +1011,10 @@ void Engine::runQACaptureSequence(int qaCount) {
         solarUI.physicsMode = 0;
         solarUI.pendingPhysicsModeChange = true;
     } else if (qaCount == 515) {
-        bool musicLoaded = gMusic.active && (!gMusic.data.empty());
-        bool soundBuffersReady = (planetSoundBuffers["Earth"] != 0);
-        std::cout << "[QA TEST 16] Native MP3 Audio Decoding -> musicActive=" << (musicLoaded ? "true" : "false")
-                  << ", musicRate=" << gMusic.sampleRate
-                  << ", pcmSizeKB=" << gMusic.data.size() / 1024
-                  << " -> " << (musicLoaded && soundBuffersReady ? "PASS" : "FAIL") << std::endl;
+        bool audioOk = audioMgr && audioMgr->isAvailable() && audioMgr->isMusicActive();
+        std::cout << "[QA TEST 16] Native MP3 Audio Decoding -> audioAvailable=" << (audioMgr && audioMgr->isAvailable() ? "true" : "false")
+                  << ", musicActive=" << (audioMgr && audioMgr->isMusicActive() ? "true" : "false")
+                  << " -> " << (audioOk ? "PASS" : "FAIL") << std::endl;
     } else if (qaCount == 518) {
         lod::LODManager& lodMgr = lod::LODManager::instance();
         int renderedTris = lodMgr.getRenderedTrianglesThisFrame();
@@ -1382,14 +1039,20 @@ void Engine::runQACaptureSequence(int qaCount) {
                   << " -> " << (saveOk && loadOk && stateMatches ? "PASS" : "FAIL") << std::endl;
         std::remove("qa_save_test.json");
     } else if (qaCount == 526) {
-        bool computeOk = false;
+        bool instancedPipelineOk = false;
         if (asteroidBelt) {
             const auto& telem = asteroidBelt->getTelemetry();
-            computeOk = (telem.activeAsteroids > 0 && !telem.backendName.empty());
-            std::cout << "[QA TEST 19] Asteroid Belt Compute -> backend=" << telem.backendName
-                      << ", updateTimeMs=" << telem.lastUpdateTimeMs
-                      << ", workgroups=" << telem.dispatchedWorkgroups
-                      << " -> " << (computeOk ? "PASS" : "FAIL") << std::endl;
+            bool backendMatches = (telem.backendName.find("Persistent-Mapped") != std::string::npos);
+            bool noComputeOverhead = (telem.computeDispatchMs == 0.0f && telem.gpuSyncReadbackMs == 0.0f);
+            bool drawCallsBounded = (telem.asteroidDrawCalls <= 3);
+            bool asteroidsActive = (telem.activeAsteroids > 0);
+            instancedPipelineOk = backendMatches && noComputeOverhead && drawCallsBounded && asteroidsActive;
+
+            std::cout << "[QA TEST 19] Asteroid Belt Instanced Pipeline -> backend=" << telem.backendName
+                      << ", activeAsteroids=" << telem.activeAsteroids
+                      << ", drawCalls=" << telem.asteroidDrawCalls
+                      << ", fenceWaitMs=" << telem.instanceFenceWaitMs
+                      << " -> " << (instancedPipelineOk ? "PASS" : "FAIL") << std::endl;
         }
     } else if (qaCount == 530) {
         glm::vec3 sunDir = glm::normalize(glm::vec3(0.0f, 0.5f, 1.0f));
@@ -1408,12 +1071,13 @@ void Engine::runQACaptureSequence(int qaCount) {
                   << ", moonEclipse=" << eclipseShadow
                   << " -> " << (shadowOk ? "PASS" : "FAIL") << std::endl;
     } else if (qaCount >= 540) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, Save State, Compute Shader, and Analytical Shadow tests completed successfully!" << std::endl;
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, Save State, Instanced Asteroid Pipeline, and Analytical Shadow tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
 
 void Engine::onKey(int key, int scancode, int action, int mods) {
+    if (inputMgr) inputMgr->onKey(key, scancode, action, mods);
     if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
     if (ImGui::GetIO().WantCaptureKeyboard) return;
 
@@ -1498,7 +1162,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
             } else if (key == GLFW_KEY_R) {
                 cameraCtrl.resetToDefault();
                 solarUI.selectedPlanetName = "";
-                stopPOVAmbientSound();
+                if (audioMgr) audioMgr->stopPOVAmbientSound();
                 updateCursorCapture();
             } else if (key == GLFW_KEY_F) {
                 cameraCtrl.toggleFreeCam();
@@ -1548,7 +1212,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                 } else if (cameraCtrl.mode == CAM_FREE || cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || cameraCtrl.mode == CAM_BLACK_HOLE || cameraCtrl.mode == CAM_WORMHOLE) {
                     cameraCtrl.resetToDefault();
                     solarUI.selectedPlanetName = "";
-                    stopPOVAmbientSound();
+                    if (audioMgr) audioMgr->stopPOVAmbientSound();
                     updateCursorCapture();
                 }
             }
@@ -1561,6 +1225,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
 }
 
 void Engine::onMouseButton(int button, int action, int mods) {
+    if (inputMgr) inputMgr->onMouseButton(button, action, mods);
     if (ImGui::GetIO().WantCaptureMouse) return;
 
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -1602,6 +1267,7 @@ void Engine::onMouseButton(int button, int action, int mods) {
 }
 
 void Engine::onCursorPos(double xpos, double ypos) {
+    if (inputMgr) inputMgr->onCursorPos(xpos, ypos);
     if (isFirstMouseMove) {
         lastMouseX = xpos;
         lastMouseY = ypos;
@@ -1624,6 +1290,7 @@ void Engine::onCursorPos(double xpos, double ypos) {
 }
 
 void Engine::onScroll(double xoffset, double yoffset) {
+    if (inputMgr) inputMgr->onScroll(xoffset, yoffset);
     if (ImGui::GetIO().WantCaptureMouse) return;
     cameraCtrl.processScroll((float)yoffset);
 }
@@ -1662,8 +1329,9 @@ void Engine::framebufferSizeCallback(GLFWwindow* window, int width, int height) 
 }
 
 int Engine::run(int argc, char** argv) {
+    bool hasBenchmark = benchmarkRunner.initFromArgs(argc, argv);
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--qa-capture") == 0) {
+        if (strcmp(argv[i], "--qa-capture") == 0 || strcmp(argv[i], "--qa") == 0 || strcmp(argv[i], "-qa") == 0) {
             runQACapture = true;
         }
     }
@@ -1672,17 +1340,34 @@ int Engine::run(int argc, char** argv) {
         return -1;
     }
 
+    if (hasBenchmark) {
+        benchmarkRunner.onSetup(this);
+    }
+
     lastFrameTime = glfwGetTime();
 
     while (!glfwWindowShouldClose(window)) {
         double now = glfwGetTime();
-        float deltaTime = (lastFrameTime > 0.0) ? (float)(now - lastFrameTime) : 0.016f;
+        float deltaTime = (hasBenchmark && benchmarkRunner.isGoldenCaptureActive()) ? (1.0f / 60.0f) : ((lastFrameTime > 0.0) ? (float)(now - lastFrameTime) : 0.016f);
         deltaTime = std::min(deltaTime, 0.05f);
         lastFrameTime = now;
+
+        if (hasBenchmark) {
+            benchmarkRunner.onFrameBegin();
+        }
 
         processInput(deltaTime);
         updateSimulation(deltaTime);
         renderFrame(deltaTime);
+
+        if (hasBenchmark) {
+            int drawCalls = RenderProfiler::instance().getDrawCallCount();
+            int triangles = lod::LODManager::instance().getRenderedTrianglesThisFrame();
+            benchmarkRunner.onFrameEnd(drawCalls, triangles, 0.0, this);
+            if (benchmarkRunner.shouldExit()) {
+                break;
+            }
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();

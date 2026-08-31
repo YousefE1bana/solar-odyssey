@@ -4,122 +4,92 @@
 **Position:** Cybersecurity Engineer  
 **University:** Egyptian Chinese University
 
-## Documentation Files
-- **README.md** - Main project documentation and features overview
-- **requirements.txt** - Comprehensive installation guide and system requirements
-- **QUICK_SETUP.md** - Fast setup guide with essential commands only
-- **dependencies.txt** - Simple list of MSYS2 packages for automated installation
+---
 
-## Source Code Files
-- **main.cpp** - Main application source code with all game logic, rendering, and UI
-- **planet_pov.h** - Planet Point-of-View camera system header
-- **atmosphere_effects.h** - Atmospheric rendering effects header  
-- **asteroid_belt.h** - Asteroid belt rendering system header
-- **stb_image.h** - Single-file image loading library
-
-## Build and Installation Scripts
-- **build.bat** - Main build script for Windows (compiles and packages the project)
-- **install.bat** - Dependency installation script (if available)
-- **run.bat** - Quick run script (if available)
-- **install_dependencies.sh** - Automated MSYS2 package installer (Linux-style script)
-- **convert_audio.bat** - MP3 to WAV audio file conversion script
-
-## Asset Directories
-
-### Textures/ (Planet and Environment Textures)
-- **earth_daymap.jpg** - Earth daytime surface texture
-- **earth_nightmap.jpg** - Earth nighttime surface texture with city lights
-- **earth_clouds.jpg** - Earth cloud layer texture (transparent overlay)
-- **venus_surface.jpg** - Venus rocky surface texture
-- **venus_atmosphere.jpg** - Venus thick atmosphere texture overlay
-- **mars.jpg** - Mars surface texture with red rocky terrain
-- **mercury.jpg** - Mercury cratered surface texture
-- **moon.jpg** - Moon surface texture with craters
-- **saturn.jpg** - Saturn gas giant texture with bands
-- **saturn_ring_alpha.png** - Saturn ring system texture with transparency
-- **uranus.jpg** - Uranus ice giant texture
-- **neptune.jpg** - Neptune ice giant texture
-- **sun.jpg** - Sun surface texture with solar activity
-- **stars_milky_way.jpg** - Starfield background texture
-
-### Sound/ (Planet Ambient Audio)
-- **earth.mp3** - Earth ambient sound (atmospheric)
-- **venus.mp3** - Venus ambient sound (volcanic/windy)
-- **mars.mp3** - Mars ambient sound (dusty/windy)
-- **mercury.mp3** - Mercury ambient sound (space-like)
-- **jupiter.mp3** - Jupiter ambient sound (storm-like)
-- **saturn.mp3** - Saturn ambient sound (gaseous)
-- **uranus.mp3** - Uranus ambient sound (icy)
-- **neptune.mp3** - Neptune ambient sound (stormy)
-- *Native MP3/WAV playback via `dr_mp3` and `dr_wav`*
-
-### imgui/ (Dear ImGui UI Library)
-- **imgui.cpp, imgui.h** - Core ImGui library files
-- **imgui_demo.cpp** - ImGui demonstration and examples
-- **imgui_draw.cpp** - ImGui drawing and rendering functions
-- **imgui_tables.cpp** - ImGui table widget implementation
-- **imgui_widgets.cpp** - ImGui UI widget implementations
-- **backends/** - Platform-specific backend implementations
-  - **imgui_impl_glfw.cpp** - GLFW windowing backend
-  - **imgui_impl_opengl3.cpp** - OpenGL 3 rendering backend
-
-## Generated Directories
-
-### build/ (Compilation Output)
-Created by build.bat, contains:
-- **SolarOdyssey.exe** - Main executable
-- ***.dll** - Required runtime libraries (automatically copied)
-- **Textures/** - Copied texture files
-- **Sound/** - Copied audio files
-- **imgui.ini** - ImGui UI layout settings
-
-### .vscode/ (Visual Studio Code Configuration)
-- IDE-specific configuration files (optional)
-
-## File Dependencies
-
-### Core Dependencies
-- main.cpp requires all header files and imgui library
-- Build scripts require MSYS2/MinGW-w64 toolchain
-- Runtime requires all DLL files in build directory
-
-### Asset Dependencies
-- Application requires all Textures/ files for proper rendering
-- Audio system requires Sound/ files for planet ambient sounds
-- Missing textures will cause "Failed to load" messages but won't crash
-
-### Optional Files
-- Audio conversion requires FFmpeg installation
-- .vscode/ directory is optional (IDE configuration)
-- WAV files are optional (procedural tones work without them)
-
-## File Sizes (Approximate)
-- **Source Code**: ~150KB (main.cpp + headers)
-- **Textures**: ~15MB (all planet and environment textures)
-- **Audio**: ~25MB (all MP3 files)
-- **ImGui Library**: ~2MB (source code)
-- **Built Executable**: ~5MB
-- **Required DLLs**: ~15MB
-- **Total Project**: ~60MB
-
-## Modification Guidelines
-
-### Safe to Modify
-- README.md, requirements.txt (documentation)
-- Audio files in Sound/ (replace with your own)
-- Some texture files (ensure same dimensions for best results)
-- Build scripts (for different toolchains)
-
-### Modify with Caution
-- main.cpp (requires C++ knowledge)
-- Header files (requires understanding of dependencies)
-- imgui/ files (may break UI functionality)
-
-### Do Not Modify
-- stb_image.h (external library)
-- DLL files in build/ (system dependencies)
-- Core texture files without replacements (will break rendering)
+## 1. Documentation Files
+- **`README.md`** - Main project documentation, key features, keybind reference, and build guide.
+- **`THIRD_PARTY_NOTICES.md`** - Complete open-source licenses, attributions, and asset provenance records.
+- **`SOLAR_ODYSSEY_ROADMAP_V2.md`** - Master architectural roadmap spanning Cycles 0 through 4.
+- **`Documentation/COMPLETE_GUIDE.md`** - Detailed developer guide and subsystem breakdowns.
+- **`Documentation/FILE_OVERVIEW.md`** - Structural mapping of all headers, sources, and assets.
+- **`Documentation/QUICK_SETUP.md`** - Quick build and execution cheat sheet.
+- **`Documentation/requirements.md`** - Hardware, compiler, and graphics profile prerequisites.
+- **`docs/verification/CYCLE_0_BASELINE_REPORT.md`** - Cycle 0 baseline report covering benchmarks and regressions.
 
 ---
 
-*This overview helps developers and users understand the purpose and importance of each file in the Solar Odyssey project.*
+## 2. Core Architecture Interfaces (`include/`)
+- **`engine.h`** - Main simulation orchestrator coordinating render loops, audio, input, and subsystems.
+- **`benchmark_runner.h`** - Decoupled deterministic benchmark and golden frame capture runner.
+- **`modern_mesh.h`** - OpenGL 4.5 Direct State Access (DSA) VAO/VBO geometric mesh abstraction.
+- **`gl_primitives.h`** - Procedural UV sphere, cube, quad, ring, and disc geometry generators.
+- **`camera_controller.h`** - Multi-mode 6-DOF, orbital, surface POV, and relativistic camera controller.
+- **`planet_data.h`** - `CelestialDatabase` containing physical and orbital data for all 13 canonical bodies.
+- **`nbody_simulation.h`** - High-precision symplectic 4th-order Yoshida / Velocity-Verlet N-body integrator.
+- **`lod_manager.h`** - Discrete 4-tier Level of Detail mesh selector and triangle tracker.
+- **`asteroid_belt.h`** - Compute-shader and CPU-fallback asteroid belt with Kirkwood gap simulation.
+- **`atmosphere_effects.h`** - Atmospheric limb scattering and Rayleigh/Mie shader uniforms.
+- **`post_processing.h`** - HDR 16-bit float framebuffer, ping-pong bloom blur, and ACES tone mapping.
+- **`spaceship.h`** - 6-DOF flight physics, inertial damping, autopilot, and warp drive.
+- **`black_hole.h`** - Kerr relativistic metric raymarched lensing and accretion disk shader coordinator.
+- **`wormhole.h`** - Ellis-Bronnikov traversable spacetime bridge renderer.
+- **`mission_system.h`** - Multi-stage exploration objectives, proximity triggers, and telemetry.
+- **`picking.h`** - Screen-space raycasting and bounding sphere celestial body selection.
+- **`settings_persistence.h`** - INI configuration loader and serializer (`solar_odyssey_settings.ini`).
+- **`save_state_manager.h`** - JSON simulation clock, camera, and spaceship state persistence (`save_state.json`).
+- **`solar_ui.h`** - Dear ImGui HUD, diagnostic overlays, planetary dossier, and control panels.
+- **`stb_image.h`** - Image loader for PNG, JPG, BMP textures and window icons.
+
+---
+
+## 3. Implementation Files (`src/`)
+- **`main.cpp`** - Application entry point initializing `Engine` and executing simulation lifecycle.
+- **`engine.cpp`** - Complete OpenGL initialization, rendering pipeline, scene graph, and event loop.
+- **`benchmark_runner.cpp`** - CLI argument parser, warmup discard, stats aggregation, and JSON reporter.
+- **`planet_data.cpp`** - Hardcoded astronomical metrics and database initialization.
+- **`nbody_simulation.cpp`** - Gravitational physics integration and orbit trajectory prediction.
+- **`lod_manager.cpp`** - Distance-based sphere LOD tessellation management.
+- **`asteroid_belt.cpp`** - GPU compute dispatch, buffer mapping, and segmented telemetry timings.
+- **`post_processing.cpp`** - Framebuffer attachments, ping-pong blur passes, and screenshot capture.
+- **`spaceship.cpp`** - Thrust, aerodynamic damping, boost drain, and warp transition logic.
+- **`black_hole.cpp`** - Accretion disk rotation, shadow metrics, and shader bindings.
+- **`wormhole.cpp`** - Dual-mouth geometry and camera-aligned throat rendering.
+- **`mission_system.cpp`** - Objective conditions, reward unlocks, and waypoint math.
+- **`picking.cpp`** - View-projection inverse ray casting.
+- **`camera_controller.cpp`** - Smooth camera transitions and matrix calculations.
+- **`settings_persistence.cpp`** - Key-value INI file parsing and saving.
+- **`save_state_manager.cpp`** - Full game state serialization to JSON.
+- **`solar_ui.cpp`** - ImGui custom theme styling, floating labels, navigation bar, and settings modal.
+- **`stb_image_impl.cpp`** - stb_image implementation translation unit.
+
+---
+
+## 4. Test & Verification Suites (`tests/` and `tools/`)
+- **`tests/test_planet_data.cpp`** - Canonical body inventory, classification, Moon satellite, and Pluto absence unit tests.
+- **`tests/test_asteroid_belt.cpp`** - Asteroid belt telemetry, Kirkwood gaps, and compute shader tests.
+- **`tests/test_orbital_physics.cpp`** - Keplerian math and orbital mechanics tests.
+- **`tests/test_nbody_simulation.cpp`** - N-body integration and energy conservation tests.
+- **`tests/test_spaceship_physics.cpp`** - 6-DOF velocity integration and boost mechanics tests.
+- **`tests/test_warp_system.cpp`** - Warp state machine and relativistic cruise tests.
+- **`tests/test_settings_persistence.cpp`** - INI configuration validation tests.
+- **`tests/test_mission_system.cpp`** - Objective completion logic tests.
+- **`tests/test_camera_math.cpp`** - Camera projection and unprojection tests.
+- **`tests/test_picking.cpp`** - Ray-sphere intersection tests.
+- **`tools/visual_regression/run_regression.py`** - Automated visual regression test harness for 4 golden scenes.
+- **`tools/visual_regression/compare_images.py`** - Pixel-level RMSE, MAE, PSNR, and SSIM image comparator.
+- **`tools/run_benchmarks.py`** - 8-scene official 1000-frame deterministic benchmark runner.
+
+---
+
+## 5. Shaders (`shaders/`)
+- **`core_planet.vert` / `core_planet.frag`** - Celestial surface shading with dynamic day/night terminator.
+- **`sun_corona.vert` / `sun_corona.frag`** - Solar corona and prominence emissive radiation.
+- **`atmosphere_limb.vert` / `atmosphere_limb.frag`** - Rayleigh/Mie atmospheric scattering shells.
+- **`saturn_ring.vert` / `saturn_ring.frag`** - Ring optical depth, shadowing, and alpha transparency.
+- **`black_hole.vert` / `black_hole.frag`** - Kerr metric relativistic raymarched lensing and accretion disk.
+- **`wormhole.vert` / `wormhole.frag`** - Traversable Ellis-Bronnikov spacetime bridge.
+- **`asteroid_compute.comp`** - OpenGL compute shader for GPU asteroid orbital dynamics.
+- **`asteroid_instanced.vert` / `asteroid_instanced.frag`** - Instanced asteroid rendering shader.
+- **`bloom_downsample.vert` / `bloom_downsample.frag`** - Post-process bloom downsampling.
+- **`bloom_upsample.vert` / `bloom_upsample.frag`** - Post-process bloom upsampling with tent filter.
+- **`tone_mapping.vert` / `tone_mapping.frag`** - ACES filmic tone mapping and color grading.

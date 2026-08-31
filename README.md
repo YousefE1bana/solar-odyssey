@@ -19,7 +19,7 @@ Navigate through 13 accurately-scaled celestial bodies, pilot a 6-DOF spacecraft
 ## Key Features
 
 ### 🪐 1. Celestial & Orbital Physics Simulation
-- **13 Accurately Simulated Bodies**: The Sun, 8 major planets (Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune), and 4 dwarf planets (Pluto, Ceres, Haumea, Makemake, Eris).
+- **13 Database Bodies & 14 N-Body Registry Objects**: The Sun, 8 major planets (Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune), Earth's Moon (natural satellite), and 4 dwarf planets (Ceres, Haumea, Makemake, Eris). *Pluto is strictly excluded from runtime simulation.*
 - **Physical Keplerian Orbits**: Real orbital eccentricities, semi-major axes, revolution rates, and rotational periods.
 - **Physical Axial Tilts**: True obliquities to orbit (Earth 23.4°, Mars 25.2°, Saturn 26.7°, Uranus 97.8° retrograde).
 - **Planetary Atmospheres**: Multi-spectral Rayleigh and Mie atmospheric limb scattering with custom day/night dynamic terminator blending.
@@ -143,22 +143,33 @@ ctest --test-dir build-cmake --output-on-failure
 
 Solar Odyssey includes a decoupled **Catch2 unit testing suite** covering 9 isolated logic domains:
 ```bash
-ctest --test-dir build-cmake --verbose
+ctest --test-dir build --verbose
 ```
 Test suites include:
 - `OrbitalPhysicsTests`: Keplerian position solving, circular velocity, and orbital period math.
 - `SpaceshipPhysicsTests`: 6-DOF velocity damping, acceleration, boost drain, and yaw/pitch/roll integration.
 - `WarpSystemTests`: Warp trajectory, distance attenuation, and state machine transitions.
-- `AsteroidBeltTests`: Spatial distribution, Keplerian velocities, and Kirkwood resonance boundaries.
+- `AsteroidBeltTests`: Spatial distribution, Keplerian velocities, Kirkwood resonance boundaries, and segmented compute telemetry.
 - `SettingsPersistenceTests`: INI serialization, float/bool parsing, and clamp bounds.
 - `MissionSystemTests`: Objective tracking, proximity evaluation, and campaign completion logic.
 - `CameraMathTests`: Raycast unprojection, viewport aspect ratio calculations, and orbit clamping.
 - `PickingTests`: Bounding sphere raycast hit detection.
-- `PlanetDataTests`: Celestial database validation and metric integrity.
+- `PlanetDataTests`: Celestial database validation, N-body canonical registry, Moon satellite verification, and Pluto absence assertion.
 
-For automated rendering and input regression verification, launch with the automated capture flag:
+### Automated Visual Regression Suite
+Runs deterministic golden captures and computes RMSE/SSIM perceptual stability metrics across 4 canonical scenes (`overview`, `earth`, `saturn`, `black_hole`):
 ```bash
-.\build-cmake\SolarOdyssey.exe --qa-capture
+python tools/visual_regression/run_regression.py
+```
+
+### Deterministic Performance Benchmarks
+Executes 1000-frame deterministic profiling (300 warmup frames discarded, VSync disabled, fixed 1920x1080 resolution):
+```bash
+# Run full benchmark suite across all 8 canonical scenes:
+python tools/run_benchmarks.py
+
+# Or run individual scene benchmark:
+build/SolarOdyssey.exe --benchmark-scene overview --benchmark-frames 1000 --warmup-frames 300 --benchmark-out build/benchmark_overview.json
 ```
 
 ---

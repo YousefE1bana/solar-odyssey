@@ -72,6 +72,8 @@ void ImmediateBatch::vertex(const glm::vec3& p, const glm::vec4& c, float pointS
     verts.push_back(pointSize);
 }
 
+#include "render_profiler.h"
+
 void ImmediateBatch::end() {
     if (!ready || verts.empty()) { verts.clear(); return; }
     glUseProgram(program);
@@ -81,6 +83,7 @@ void ImmediateBatch::end() {
     glNamedBufferSubData(vbo, 0, verts.size() * sizeof(float), verts.data());
     glBindVertexArray(vao);
     if (prim == GL_POINTS) glEnable(GL_PROGRAM_POINT_SIZE);
+    RenderProfiler::instance().recordDrawCall();
     glDrawArrays(prim, 0, (GLsizei)(verts.size() / kStrideFloats));
     if (prim == GL_POINTS) glDisable(GL_PROGRAM_POINT_SIZE);
     glBindVertexArray(0);

@@ -26,26 +26,28 @@
 A comprehensive 3D visualization of the solar system with realistic planet textures, orbits, audio effects, and interactive controls built with C++/OpenGL.
 
 **Key Technologies:**
-- C++17 with OpenGL 3.3+
-- Dear ImGui for user interface
-- OpenAL for 3D audio
-- GLFW for windowing
-- GLEW for OpenGL extensions
+- C++17 with OpenGL 4.5 Core Profile (Direct State Access)
+- Dear ImGui (v1.91.8) for interactive telemetry and HUD interface
+- OpenAL Soft for 3D positional and harmonic celestial audio
+- GLFW & GLEW for window management and DSA bindings
+- GLM for high-precision 3D vector and matrix mathematics
+- HDR Post-Processing Pipeline (16-bit float FBO, Ping-Pong Gaussian Bloom, ACES Tone Mapping)
 
 ---
 
 ## Features
 
 ### Visual Features
-- ✨ Realistic 3D solar system with textured planets
-- 🪐 Rotating and orbiting planets with accurate relative speeds
-- 🌍 Earth with day/night texture modes and toggleable cloud overlay
-- 🌋 Venus with atmosphere texture overlay
-- 🪐 Detailed rings for Saturn with transparency
-- ⭐ Starfield background using Milky Way texture
-- ☀️ Light-emitting sun with realistic glow
-- 🌙 Moon orbiting Earth
-- ☄️ Asteroid belt between Mars and Jupiter
+- ✨ Realistic 3D solar system with textured celestial bodies (Sun, 8 major planets, Earth's Moon, 4 dwarf planets: Ceres, Haumea, Makemake, Eris; Pluto strictly excluded)
+- 🪐 Rotating and orbiting planets with accurate physical Keplerian and N-body gravitational physics
+- 🌍 Earth with dynamic day/night texture blending and dual-pass cloud rotation overlay
+- 🌋 Venus with thick atmospheric limb scattering and runaway greenhouse profile
+- 🪐 Detailed rings for Saturn with optical depth and alpha transparency
+- ⭐ High-resolution celestial starfield panorama
+- ☀️ Luminous solar corona with dynamic particle flares and tone-mapped HDR emissive radiance
+- 🌙 Moon accurately parented in tidally-locked Earth orbit
+- ☄️ GPU compute-instanced asteroid belt with Kirkwood resonance gaps
+- 🕳️ Relativistic Kerr black hole (Gargantua) and Einstein-Rosen traversable wormhole shaders
 
 ### Audio Features
 - 🎵 **OpenAL Audio System** with procedural planet tones

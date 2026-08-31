@@ -9,11 +9,11 @@ NBodySimulation::NBodySimulation() {
 void NBodySimulation::reset() {
     bodies.clear();
     nameToIndex.clear();
-    timeAccumulator = 0.0f;
+    timeAccumulator = 0.0;
     mode = PHYSICS_KEPLERIAN;
 }
 
-void NBodySimulation::addBody(const std::string& name, float mass, float radius, bool isStatic, const std::string& parent) {
+void NBodySimulation::addBody(const std::string& name, double mass, double radius, bool isStatic, const std::string& parent) {
     if (nameToIndex.find(name) != nameToIndex.end()) {
         size_t idx = nameToIndex[name];
         bodies[idx].mass = mass;
@@ -50,46 +50,63 @@ const NBodyObject* NBodySimulation::getBody(const std::string& name) const {
     return nullptr;
 }
 
+glm::dvec3 NBodySimulation::getBodyPositionDouble(const std::string& name) const {
+    const NBodyObject* obj = getBody(name);
+    return obj ? obj->position : glm::dvec3(0.0);
+}
+
 glm::vec3 NBodySimulation::getBodyPosition(const std::string& name) const {
     const NBodyObject* obj = getBody(name);
-    return obj ? obj->position : glm::vec3(0.0f);
+    return obj ? glm::vec3(obj->position) : glm::vec3(0.0f);
+}
+
+glm::dvec3 NBodySimulation::getBodyVelocityDouble(const std::string& name) const {
+    const NBodyObject* obj = getBody(name);
+    return obj ? obj->velocity : glm::dvec3(0.0);
 }
 
 glm::vec3 NBodySimulation::getBodyVelocity(const std::string& name) const {
     const NBodyObject* obj = getBody(name);
-    return obj ? obj->velocity : glm::vec3(0.0f);
+    return obj ? glm::vec3(obj->velocity) : glm::vec3(0.0f);
 }
 
-glm::vec3 NBodySimulation::computeAccelerationForPoint(const glm::vec3& point, float pointMass) const {
-    glm::vec3 totalAccel(0.0f);
-    float epsSq = softening * softening;
+glm::dvec3 NBodySimulation::computeAccelerationForPoint(const glm::dvec3& point, double pointMass) const {
+    (void)pointMass;
+    glm::dvec3 totalAccel(0.0);
+    double epsSq = softening * softening;
 
     for (const auto& body : bodies) {
-        glm::vec3 r = body.position - point;
-        float distSq = glm::dot(r, r) + epsSq;
-        float invDist = 1.0f / std::sqrt(distSq);
-        float invDist3 = invDist * invDist * invDist;
+        glm::dvec3 r = body.position - point;
+        double distSq = glm::dot(r, r) + epsSq;
+        double invDist = 1.0 / std::sqrt(distSq);
+        double invDist3 = invDist * invDist * invDist;
         totalAccel += (gravitationalConstant * body.mass * invDist3) * r;
     }
     return totalAccel;
 }
 
+glm::vec3 NBodySimulation::computeAccelerationForPoint(const glm::vec3& point, float pointMass) const {
+    glm::dvec3 dPoint(point);
+    glm::dvec3 dAccel = computeAccelerationForPoint(dPoint, static_cast<double>(pointMass));
+    return glm::vec3(dAccel);
+}
+
 void NBodySimulation::computeAllAccelerations() {
     size_t n = bodies.size();
-    float epsSq = softening * softening;
+    double epsSq = softening * softening;
 
     for (size_t i = 0; i < n; ++i) {
-        bodies[i].acceleration = glm::vec3(0.0f);
+        bodies[i].acceleration = glm::dvec3(0.0);
     }
 
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = i + 1; j < n; ++j) {
-            glm::vec3 r = bodies[j].position - bodies[i].position;
-            float distSq = glm::dot(r, r) + epsSq;
-            float invDist = 1.0f / std::sqrt(distSq);
-            float invDist3 = invDist * invDist * invDist;
+            glm::dvec3 r = bodies[j].position - bodies[i].position;
+            double distSq = glm::dot(r, r) + epsSq;
+            double invDist = 1.0 / std::sqrt(distSq);
+            double invDist3 = invDist * invDist * invDist;
 
-            glm::vec3 forceFactor = r * (gravitationalConstant * invDist3);
+            glm::dvec3 forceFactor = r * (gravitationalConstant * invDist3);
 
             if (!bodies[i].isStatic) {
                 bodies[i].acceleration += forceFactor * bodies[j].mass;
@@ -101,13 +118,13 @@ void NBodySimulation::computeAllAccelerations() {
     }
 }
 
-void NBodySimulation::stepVerlet(float dt) {
+void NBodySimulation::stepVerlet(double dt) {
     size_t n = bodies.size();
 
     // 1. Half-step velocity update & full position update
     for (size_t i = 0; i < n; ++i) {
         if (!bodies[i].isStatic) {
-            bodies[i].velocity += 0.5f * dt * bodies[i].acceleration;
+            bodies[i].velocity += 0.5 * dt * bodies[i].acceleration;
             bodies[i].position += dt * bodies[i].velocity;
         }
     }
@@ -118,15 +135,15 @@ void NBodySimulation::stepVerlet(float dt) {
     // 3. Complete velocity step
     for (size_t i = 0; i < n; ++i) {
         if (!bodies[i].isStatic) {
-            bodies[i].velocity += 0.5f * dt * bodies[i].acceleration;
+            bodies[i].velocity += 0.5 * dt * bodies[i].acceleration;
         }
     }
 }
 
-void NBodySimulation::update(float deltaTime, float timeMultiplier) {
-    if (mode != PHYSICS_NBODY || deltaTime <= 0.0f) return;
+void NBodySimulation::update(double deltaTime, double timeMultiplier) {
+    if (mode != PHYSICS_NBODY || deltaTime <= 0.0) return;
 
-    float simDt = deltaTime * timeMultiplier;
+    double simDt = deltaTime * timeMultiplier;
     timeAccumulator += simDt;
 
     // Prevent spiral-of-death on extreme lag/debugger pauses
@@ -141,31 +158,32 @@ void NBodySimulation::update(float deltaTime, float timeMultiplier) {
 }
 
 void NBodySimulation::initializeFromKeplerian(
-    const std::function<glm::vec3(const std::string&, float)>& positionFunc,
-    float currentSimTime,
-    float speedScale
+    const std::function<glm::dvec3(const std::string&, double)>& positionFunc,
+    double currentSimTime,
+    double speedScale
 ) {
-    const float deltaT = 0.001f; // Balanced finite difference step for float precision
+    (void)speedScale;
+    const double deltaT = 0.0001; // High precision finite difference step for double precision
 
     for (auto& body : bodies) {
-        glm::vec3 pos0 = positionFunc(body.name, currentSimTime);
-        glm::vec3 posPlus = positionFunc(body.name, currentSimTime + deltaT);
-        glm::vec3 posMinus = positionFunc(body.name, currentSimTime - deltaT);
+        glm::dvec3 pos0 = positionFunc(body.name, currentSimTime);
+        glm::dvec3 posPlus = positionFunc(body.name, currentSimTime + deltaT);
+        glm::dvec3 posMinus = positionFunc(body.name, currentSimTime - deltaT);
 
         body.position = pos0;
         if (!body.isStatic) {
-            // Exact numerical velocity d(pos)/dt matching the instantaneous Keplerian motion
-            body.velocity = (posPlus - posMinus) / (2.0f * deltaT);
+            // Exact numerical velocity d(pos)/dt matching instantaneous Keplerian motion
+            body.velocity = (posPlus - posMinus) / (2.0 * deltaT);
         } else {
-            body.velocity = glm::vec3(0.0f);
+            body.velocity = glm::dvec3(0.0);
         }
     }
 
-    timeAccumulator = 0.0f;
+    timeAccumulator = 0.0;
     computeAllAccelerations();
 }
 
 void NBodySimulation::setPhysicsMode(PhysicsMode newMode) {
     mode = newMode;
-    timeAccumulator = 0.0f;
+    timeAccumulator = 0.0;
 }

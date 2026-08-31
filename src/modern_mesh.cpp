@@ -1,4 +1,5 @@
 #include "modern_mesh.h"
+#include "render_profiler.h"
 #include <cmath>
 
 namespace mesh {
@@ -56,6 +57,7 @@ void GPUMesh::buildFromStrip(const std::vector<Vertex>& stripVerts) {
 void GPUMesh::draw() const {
     if (!built) return;
     glBindVertexArray(vao);
+    RenderProfiler::instance().recordDrawCall();
     if (indexCount > 0) {
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
     } else {

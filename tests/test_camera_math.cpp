@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "camera_controller.h"
+#include <glm/gtc/matrix_transform.hpp>
 
 TEST_CASE("CameraController Coordinate Transforms and Math", "[camera]") {
     CameraController cam;
@@ -31,5 +32,30 @@ TEST_CASE("CameraController Coordinate Transforms and Math", "[camera]") {
         // angY = 0 deg -> top-down view along +Y axis (clamped to 1 deg for gimbal stability)
         glm::vec3 eyeY = cam.calculateOrbitalEye(dist, 0.0f, 0.0f, center);
         REQUIRE(eyeY.y == Approx(10.0f).margin(0.05f));
+    }
+
+    SECTION("Camera-Relative View Rotation Matrix Equivalence") {
+        cam.currentEye = glm::vec3(1250.0f, 350.0f, -4200.0f);
+        cam.currentTarget = glm::vec3(1200.0f, 340.0f, -4000.0f);
+        cam.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+        glm::mat4 vStd = cam.getViewMatrix();
+        glm::mat4 vRot = cam.getViewRotationMatrix();
+
+        glm::vec3 worldObjectPos(1210.0f, 345.0f, -4050.0f);
+        glm::vec3 relObjectPos = worldObjectPos - cam.currentEye;
+
+        glm::mat4 mvStd = vStd * glm::translate(glm::mat4(1.0f), worldObjectPos);
+        glm::mat4 mvRel = vRot * glm::translate(glm::mat4(1.0f), relObjectPos);
+
+        glm::vec4 testPoint(2.5f, -1.2f, 0.8f, 1.0f);
+        glm::vec4 eyeStd = mvStd * testPoint;
+        glm::vec4 eyeRel = mvRel * testPoint;
+
+        // Camera-relative eliminates float cancellation jitter; they match within single-precision float tolerance
+        REQUIRE(eyeRel.x == Approx(eyeStd.x).margin(0.005f));
+        REQUIRE(eyeRel.y == Approx(eyeStd.y).margin(0.005f));
+        REQUIRE(eyeRel.z == Approx(eyeStd.z).margin(0.005f));
+        REQUIRE(eyeRel.w == Approx(eyeStd.w).margin(0.005f));
     }
 }

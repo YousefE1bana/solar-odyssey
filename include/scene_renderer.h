@@ -58,6 +58,7 @@ public:
     // Core Shader Programs
     GLuint sunProgram = 0;
     GLuint planetProgram = 0;
+    GLuint asteroidProgram = 0;
     GLuint blackHoleProgram = 0;
     GLuint wormholeProgram = 0;
     GLuint starfieldProgram = 0;

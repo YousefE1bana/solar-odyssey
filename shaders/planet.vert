@@ -18,21 +18,35 @@ uniform mat3 uNormalMatrix;   // inverse-transpose of upper-left 3x3 of uModelVi
 uniform vec3 uSunEyePos;      // Sun position in eye space
 uniform vec3 uSunLocalPos;    // Sun position in object/local space
 
+uniform int uIsRing;
+uniform float uRingInnerRadius;
+uniform float uRingOuterRadius;
+
 void main() {
     vTexCoord = aTexCoord;
-    vLocalPos = aPos;
+
+    vec3 localPos = aPos;
+    vec3 localNormal = aNormal;
+
+    if (uIsRing > 0) {
+        float r = mix(uRingInnerRadius, uRingOuterRadius, aTexCoord.x);
+        localPos = vec3(aPos.x * r, 0.0, aPos.z * r);
+        localNormal = vec3(0.0, 1.0, 0.0);
+    }
+
+    vLocalPos = localPos;
 
     // Normal in eye space
-    vNormal = normalize(uNormalMatrix * aNormal);
+    vNormal = normalize(uNormalMatrix * localNormal);
 
     // Vertex position in eye space
-    vec4 eyePos = uModelView * vec4(aPos, 1.0);
+    vec4 eyePos = uModelView * vec4(localPos, 1.0);
     vViewDir = normalize(-eyePos.xyz);
     vWorldPos = eyePos.xyz;
 
     // Exact vector from vertex to sun in eye space & local space
     vSunDir = normalize(uSunEyePos - eyePos.xyz);
-    vLocalSunDir = normalize(uSunLocalPos - aPos);
+    vLocalSunDir = normalize(uSunLocalPos - localPos);
 
     gl_Position = uProjection * eyePos;
 }

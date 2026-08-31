@@ -131,12 +131,17 @@ void main() {
     // Sample daytime surface color
     vec4 dayColor = texture(uDayTex, vTexCoord);
     vec3 surfaceColor = dayColor.rgb;
+    float alpha = 1.0;
 
-    // For rings, alpha is in texture or alpha channel
-    float alpha = (uIsRing > 0) ? dayColor.a : 1.0;
-
-    // Handle Night Texture (City Lights on Earth)
-    if (uHasNightTex > 0) {
+    if (uIsRing > 0) {
+        // Double-sided translucent ring particle scattering
+        float ringDiff = max(abs(dot(N, L)), 0.25);
+        vec3 litRing = dayColor.rgb * (ringDiff * vec3(1.15, 1.10, 1.02) * uSunIntensity * totalShadow);
+        vec3 ambientRing = dayColor.rgb * vec3(0.18, 0.18, 0.22);
+        surfaceColor = litRing + ambientRing;
+        alpha = dayColor.a;
+    } else if (uHasNightTex > 0) {
+        // Handle Night Texture (City Lights on Earth)
         vec4 nightColor = texture(uNightTex, vTexCoord);
         float nightFactor = (1.0 - dayFactor);
         vec3 cityLights = nightColor.rgb * vec3(1.15, 1.05, 0.85) * nightFactor * 1.5;

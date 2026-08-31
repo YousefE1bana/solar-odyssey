@@ -352,3 +352,42 @@ void CameraController::update(float deltaTime, const glm::vec3& currentFocusedPo
 glm::mat4 CameraController::getViewMatrix() const {
     return glm::lookAt(currentEye, currentTarget, currentUp);
 }
+
+glm::mat4 CameraController::getViewRotationMatrix() const {
+    glm::dvec3 eyeD(currentEye);
+    glm::dvec3 targetD(currentTarget);
+    glm::dvec3 upD(currentUp);
+
+    glm::dvec3 forwardD = targetD - eyeD;
+    double lenF = glm::length(forwardD);
+    if (lenF < 1e-9) {
+        forwardD = glm::dvec3(0.0, 0.0, -1.0);
+    } else {
+        forwardD /= lenF;
+    }
+
+    glm::dvec3 rightD = glm::cross(forwardD, upD);
+    double lenR = glm::length(rightD);
+    if (lenR < 1e-9) {
+        rightD = glm::dvec3(1.0, 0.0, 0.0);
+    } else {
+        rightD /= lenR;
+    }
+
+    glm::dvec3 upNormD = glm::cross(rightD, forwardD);
+
+    glm::mat4 vRot(1.0f);
+    vRot[0][0] = static_cast<float>(rightD.x);
+    vRot[1][0] = static_cast<float>(rightD.y);
+    vRot[2][0] = static_cast<float>(rightD.z);
+
+    vRot[0][1] = static_cast<float>(upNormD.x);
+    vRot[1][1] = static_cast<float>(upNormD.y);
+    vRot[2][1] = static_cast<float>(upNormD.z);
+
+    vRot[0][2] = static_cast<float>(-forwardD.x);
+    vRot[1][2] = static_cast<float>(-forwardD.y);
+    vRot[2][2] = static_cast<float>(-forwardD.z);
+
+    return vRot;
+}

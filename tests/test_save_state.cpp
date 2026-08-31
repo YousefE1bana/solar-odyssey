@@ -6,30 +6,30 @@
 #include "solar_ui.h"
 #include <cstdio>
 
-TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization", "[save_state]") {
+TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization (v2)", "[save_state]") {
     SimulationSaveState original;
-    original.version = 1;
+    original.version = 2;
     original.timestamp = "2026-08-23 18:00:00";
-    original.elapsedSimDays = 145.75f;
-    original.timeMultiplier = 5.0f;
+    original.elapsedSimDays = 145.75123456;
+    original.timeMultiplier = 5.0;
     original.isPaused = true;
     original.physicsMode = 1; // N-Body
 
     original.camera.mode = static_cast<int>(CAM_FOCUS);
-    original.camera.eye = glm::vec3(12.5f, 4.0f, -8.2f);
-    original.camera.target = glm::vec3(10.0f, 0.0f, -5.0f);
-    original.camera.up = glm::vec3(0.0f, 1.0f, 0.0f);
-    original.camera.orbitDistance = 75.0f;
-    original.camera.orbitAngleX = 120.0f;
-    original.camera.orbitAngleY = 45.0f;
+    original.camera.eye = glm::dvec3(12.50012345, 4.00012345, -8.20012345);
+    original.camera.target = glm::dvec3(10.0, 0.0, -5.0);
+    original.camera.up = glm::dvec3(0.0, 1.0, 0.0);
+    original.camera.orbitDistance = 75.0;
+    original.camera.orbitAngleX = 120.0;
+    original.camera.orbitAngleY = 45.0;
     original.camera.focusedBodyName = "Mars";
-    original.camera.focusDistance = 6.5f;
-    original.camera.focusAngleX = 30.0f;
-    original.camera.focusAngleY = 65.0f;
-    original.camera.freePos = glm::vec3(1.0f, 2.0f, 3.0f);
-    original.camera.freeYaw = -45.0f;
-    original.camera.freePitch = 10.0f;
-    original.camera.fov = 55.0f;
+    original.camera.focusDistance = 6.5;
+    original.camera.focusAngleX = 30.0;
+    original.camera.focusAngleY = 65.0;
+    original.camera.freePos = glm::dvec3(1.0, 2.0, 3.0);
+    original.camera.freeYaw = -45.0;
+    original.camera.freePitch = 10.0;
+    original.camera.fov = 55.0;
 
     original.activeMissionIndex = 2;
     original.missions.push_back({0, true, 1.0f, 0});
@@ -37,33 +37,33 @@ TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization", "[save
     original.missions.push_back({2, false, 0.65f, 1});
 
     original.shipActive = true;
-    original.shipPosition = glm::vec3(15.0f, 0.5f, 20.0f);
-    original.shipVelocity = glm::vec3(0.0f, 0.0f, 1.2f);
-    original.shipThrottle = 0.8f;
+    original.shipPosition = glm::dvec3(15.12345678, 0.51234567, 20.98765432);
+    original.shipVelocity = glm::dvec3(0.0, 0.0, 1.23456789);
+    original.shipThrottle = 0.8;
     original.shipTargetBody = "Jupiter";
     original.autoSaveOnExit = true;
 
     std::string jsonStr = original.toJSON();
     REQUIRE(!jsonStr.empty());
-    REQUIRE(jsonStr.find("\"version\": 1") != std::string::npos);
-    REQUIRE(jsonStr.find("\"elapsedSimDays\": 145.7500") != std::string::npos);
+    REQUIRE(jsonStr.find("\"version\": 2") != std::string::npos);
+    REQUIRE(jsonStr.find("\"elapsedSimDays\": 145.75123456") != std::string::npos);
     REQUIRE(jsonStr.find("\"focusedBodyName\": \"Mars\"") != std::string::npos);
 
     SimulationSaveState restored;
     bool parseSuccess = restored.fromJSON(jsonStr);
     REQUIRE(parseSuccess);
 
-    REQUIRE(restored.version == 1);
-    REQUIRE(restored.elapsedSimDays == Approx(145.75f));
-    REQUIRE(restored.timeMultiplier == Approx(5.0f));
+    REQUIRE(restored.version == 2);
+    REQUIRE(restored.elapsedSimDays == Approx(145.75123456));
+    REQUIRE(restored.timeMultiplier == Approx(5.0));
     REQUIRE(restored.isPaused == true);
     REQUIRE(restored.physicsMode == 1);
 
     REQUIRE(restored.camera.mode == static_cast<int>(CAM_FOCUS));
-    REQUIRE(restored.camera.eye.x == Approx(12.5f));
+    REQUIRE(restored.camera.eye.x == Approx(12.50012345));
     REQUIRE(restored.camera.focusedBodyName == "Mars");
-    REQUIRE(restored.camera.focusDistance == Approx(6.5f));
-    REQUIRE(restored.camera.fov == Approx(55.0f));
+    REQUIRE(restored.camera.focusDistance == Approx(6.5));
+    REQUIRE(restored.camera.fov == Approx(55.0));
 
     REQUIRE(restored.activeMissionIndex == 2);
     REQUIRE(restored.missions.size() == 3);
@@ -72,7 +72,8 @@ TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization", "[save
     REQUIRE(restored.missions[2].currentWaypointIndex == 1);
 
     REQUIRE(restored.shipActive == true);
-    REQUIRE(restored.shipThrottle == Approx(0.8f));
+    REQUIRE(restored.shipPosition.x == Approx(15.12345678));
+    REQUIRE(restored.shipThrottle == Approx(0.8));
     REQUIRE(restored.shipTargetBody == "Jupiter");
     REQUIRE(restored.autoSaveOnExit == true);
 }
@@ -82,8 +83,8 @@ TEST_CASE("SaveState - Disk File Save and Load", "[save_state]") {
     const std::string testPath = "test_save_state_temp.json";
 
     SimulationSaveState state;
-    state.elapsedSimDays = 42.0f;
-    state.timeMultiplier = 2.0f;
+    state.elapsedSimDays = 42.0;
+    state.timeMultiplier = 2.0;
     state.camera.focusedBodyName = "Saturn";
     state.camera.mode = static_cast<int>(CAM_FOCUS);
 
@@ -94,8 +95,8 @@ TEST_CASE("SaveState - Disk File Save and Load", "[save_state]") {
     SimulationSaveState loadedState;
     bool loadOk = mgr.loadFromFile(testPath, loadedState);
     REQUIRE(loadOk);
-    REQUIRE(loadedState.elapsedSimDays == Approx(42.0f));
-    REQUIRE(loadedState.timeMultiplier == Approx(2.0f));
+    REQUIRE(loadedState.elapsedSimDays == Approx(42.0));
+    REQUIRE(loadedState.timeMultiplier == Approx(2.0));
     REQUIRE(loadedState.camera.focusedBodyName == "Saturn");
 
     std::string summary = mgr.getSaveSummary(testPath);
@@ -106,16 +107,35 @@ TEST_CASE("SaveState - Disk File Save and Load", "[save_state]") {
     REQUIRE(!mgr.fileExists(testPath));
 }
 
-TEST_CASE("SaveState - Backward Compatibility with Legacy / Partial JSON", "[save_state]") {
-    // Older or minimal JSON format missing some fields
+TEST_CASE("SaveState - Backward Compatibility with Legacy v1 JSON", "[save_state]") {
+    // Legacy v1 JSON format with float representations
     std::string legacyJSON = R"({
-        "version": 0,
+        "version": 1,
+        "timestamp": "2026-08-23 12:00:00",
         "simulation": {
             "elapsedSimDays": 10.5,
-            "timeMultiplier": 1.5
+            "timeMultiplier": 1.5,
+            "isPaused": false,
+            "physicsMode": 0
         },
         "camera": {
-            "focusedBodyName": "Venus"
+            "mode": 1,
+            "eye": [0.0, 10.0, 20.0],
+            "target": [0.0, 0.0, 0.0],
+            "up": [0.0, 1.0, 0.0],
+            "focusedBodyName": "Venus",
+            "focusDistance": 8.0,
+            "fov": 60.0
+        },
+        "spaceship": {
+            "active": true,
+            "position": [1.0, 2.0, 3.0],
+            "velocity": [0.1, 0.0, 0.2],
+            "throttle": 0.5,
+            "targetBody": "Earth"
+        },
+        "settings": {
+            "autoSaveOnExit": true
         }
     })";
 
@@ -123,13 +143,15 @@ TEST_CASE("SaveState - Backward Compatibility with Legacy / Partial JSON", "[sav
     bool ok = state.fromJSON(legacyJSON);
     REQUIRE(ok);
 
-    REQUIRE(state.version == 0);
-    REQUIRE(state.elapsedSimDays == Approx(10.5f));
-    REQUIRE(state.timeMultiplier == Approx(1.5f));
-    REQUIRE(state.isPaused == false); // sensible default
-    REQUIRE(state.physicsMode == 0);  // default Keplerian
+    REQUIRE(state.version == 1);
+    REQUIRE(state.elapsedSimDays == Approx(10.5));
+    REQUIRE(state.timeMultiplier == Approx(1.5));
+    REQUIRE(state.isPaused == false);
+    REQUIRE(state.physicsMode == 0);
     REQUIRE(state.camera.focusedBodyName == "Venus");
-    REQUIRE(state.autoSaveOnExit == true); // default
+    REQUIRE(state.shipActive == true);
+    REQUIRE(state.shipPosition.z == Approx(3.0));
+    REQUIRE(state.autoSaveOnExit == true);
 }
 
 TEST_CASE("SaveState - Robust Error Handling on Corrupted JSON", "[save_state]") {
@@ -158,9 +180,10 @@ TEST_CASE("SaveState - Capture and Restore Integration", "[save_state]") {
     ship.throttle = 0.5f;
 
     SimulationSaveState captured;
-    mgr.captureState(captured, 88.5f, 3.0f, false, 0, cam, missions, ship, true);
+    mgr.captureState(captured, 88.5, 3.0, false, 0, cam, missions, ship, true);
 
-    REQUIRE(captured.elapsedSimDays == Approx(88.5f));
+    REQUIRE(captured.version == 2);
+    REQUIRE(captured.elapsedSimDays == Approx(88.5));
     REQUIRE(captured.camera.focusedBodyName == "Jupiter");
     REQUIRE(captured.activeMissionIndex == 1);
     REQUIRE(captured.missions[0].isCompleted == true);

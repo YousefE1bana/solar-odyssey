@@ -57,6 +57,7 @@ bool PostProcessingPipeline::init(int w, int h) {
 void PostProcessingPipeline::setupFramebuffers() {
     cleanupBuffers();
 
+    // 1. Scene HDR Framebuffer (RGBA16F)
     glCreateFramebuffers(1, &sceneFBO);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &sceneColorTex);
@@ -75,6 +76,7 @@ void PostProcessingPipeline::setupFramebuffers() {
         std::cerr << "[PostProcess] Scene Framebuffer incomplete!" << std::endl;
     }
 
+    // 2. Ping-Pong Bloom Framebuffers (RGBA16F half-resolution)
     glCreateFramebuffers(2, pingPongFBO);
     glCreateTextures(GL_TEXTURE_2D, 2, pingPongColorTex);
 
@@ -89,6 +91,20 @@ void PostProcessingPipeline::setupFramebuffers() {
         if (glCheckNamedFramebufferStatus(pingPongFBO[i], GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "[PostProcess] Bloom Ping-Pong Framebuffer " << i << " incomplete!" << std::endl;
         }
+    }
+
+    // 3. Clean Final Output Framebuffer (RGBA8 full-resolution, Option A capture target)
+    glCreateFramebuffers(1, &outputFBO);
+    glCreateTextures(GL_TEXTURE_2D, 1, &outputColorTex);
+    glTextureStorage2D(outputColorTex, 1, GL_RGBA8, width, height);
+    glTextureParameteri(outputColorTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(outputColorTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(outputColorTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(outputColorTex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glNamedFramebufferTexture(outputFBO, GL_COLOR_ATTACHMENT0, outputColorTex, 0);
+
+    if (glCheckNamedFramebufferStatus(outputFBO, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "[PostProcess] Output Framebuffer incomplete!" << std::endl;
     }
 }
 
@@ -109,6 +125,8 @@ void PostProcessingPipeline::cleanupBuffers() {
         if (pingPongFBO[i]) { glDeleteFramebuffers(1, &pingPongFBO[i]); pingPongFBO[i] = 0; }
         if (pingPongColorTex[i]) { glDeleteTextures(1, &pingPongColorTex[i]); pingPongColorTex[i] = 0; }
     }
+    if (outputFBO) { glDeleteFramebuffers(1, &outputFBO); outputFBO = 0; }
+    if (outputColorTex) { glDeleteTextures(1, &outputColorTex); outputColorTex = 0; }
 }
 
 void PostProcessingPipeline::cleanup() {
@@ -137,6 +155,7 @@ void PostProcessingPipeline::updateStartup(float deltaTime) {
 
 void PostProcessingPipeline::skipStartup() {
     startupActive = false;
+    startupTimer = startupDuration;
     currentFadeAlpha = 1.0f;
 }
 
@@ -167,6 +186,7 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
     glUseProgram(program);
 
     if (bloomEnabled) {
+        // Pass 0: Bright pass extraction into pingPongFBO[0]
         glBindFramebuffer(GL_FRAMEBUFFER, pingPongFBO[0]);
         glViewport(0, 0, bloomWidth, bloomHeight);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -179,6 +199,7 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
 
         renderFullscreenQuad();
 
+        // Pass 1 & 2: 9-tap Gaussian blur ping-pong
         bool horizontal = true;
         bool firstIteration = true;
         int blurPasses = 4;
@@ -199,7 +220,8 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
         }
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // Pass 3: Final Composite + ACES Tone Mapping into outputFBO (clean post-processed 3D scene)
+    glBindFramebuffer(GL_FRAMEBUFFER, outputFBO ? outputFBO : 0);
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -226,6 +248,15 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
+
+    // Blit clean output from outputFBO to default framebuffer 0 for screen display
+    if (outputFBO) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, outputFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
     glDisable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
@@ -257,11 +288,32 @@ bool PostProcessingPipeline::captureScreenshot(const char* customPath) {
     }
 
     std::vector<unsigned char> pixels(width * height * 3);
+    
+    // Save previous framebuffer bindings
+    GLint prevReadFBO = 0, prevDrawFBO = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+
+    // Explicitly select clean post-processed output FBO (Option A: 3D scene before ImGui HUD)
+    if (outputFBO) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, outputFBO);
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+    } else {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        glReadBuffer(GL_BACK);
+    }
+
     GLint prevAlignment = 4;
     glGetIntegerv(GL_PACK_ALIGNMENT, &prevAlignment);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
     glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, pixels.data());
+
     glPixelStorei(GL_PACK_ALIGNMENT, prevAlignment);
+
+    // Restore previous framebuffer bindings
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
 
     std::ofstream file(filename, std::ios::binary);
     if (!file.is_open()) return false;
@@ -317,6 +369,6 @@ bool PostProcessingPipeline::captureScreenshot(const char* customPath) {
     file.close();
     lastScreenshotPath = filename;
     screenshotToastTimer = 4.0f;
-    std::cout << "[PostProcess] Saved screenshot to: " << filename << std::endl;
+    std::cout << "[PostProcess] Saved clean 3D screenshot (Option A) to: " << filename << std::endl;
     return true;
 }

@@ -29,7 +29,9 @@ struct LODSphereMesh {
     int triangleCount = 0;
 
     void ensure(int slices, int stacks);
+    void setupInstancing(GLuint instVBO);
     void draw() const;
+    void drawInstancedOffset(GLuint instVBO, GLintptr offsetBytes, int instanceCount) const;
     void destroy();
 };
 
@@ -57,11 +59,14 @@ public:
     // Render helpers
     void drawSphere(SphereTier tier);
     void drawAsteroid(AsteroidTier tier);
+    void setupAsteroidInstancing(GLuint instVBO);
+    void drawAsteroidInstanced(AsteroidTier tier, GLuint instVBO, GLintptr offsetBytes, int instanceCount);
 
     // Frame telemetry tracking
     void beginFrame();
     void recordBodyRender(const std::string& name, float distanceToCam, float bodyRadius, SphereTier tier);
     void recordAsteroidRender(AsteroidTier tier);
+    void recordAsteroidInstancedRender(AsteroidTier tier, int instanceCount);
 
     // Telemetry getters
     int getRenderedTrianglesThisFrame() const { return renderedTrianglesThisFrame; }

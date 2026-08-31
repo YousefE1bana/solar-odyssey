@@ -1,4 +1,5 @@
 #include "gl_primitives.h"
+#include "render_profiler.h"
 #include <vector>
 #include <cmath>
 
@@ -62,6 +63,7 @@ void ModernSphere::ensure(int slices, int stacks) {
 void ModernSphere::drawUnit() {
     if (!vao) ensure();
     glBindVertexArray(vao);
+    RenderProfiler::instance().recordDrawCall();
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
     glBindVertexArray(0);
 }
@@ -101,6 +103,7 @@ void FullscreenQuad::ensure() {
 void FullscreenQuad::draw() {
     if (!vao) ensure();
     glBindVertexArray(vao);
+    RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 }

@@ -4,64 +4,28 @@
 **Position:** Cybersecurity Engineer  
 **University:** Egyptian Chinese University
 
+---
+
 ## 📚 Main Documentation
 
-| File | Purpose | Who Should Use |
-|------|---------|----------------|
-| **[COMPLETE_GUIDE.md](COMPLETE_GUIDE.md)** | 🌟 **Everything in one file** - Complete documentation with installation, usage, troubleshooting, and development | **Everyone** - This is the definitive guide |
-| **[README.md](README.md)** | Project overview, features, and quick navigation | First-time visitors |
-
-## ⚡ Quick References
-
-| File | Purpose | Who Should Use |
-|------|---------|----------------|
-| **[QUICK_SETUP.md](QUICK_SETUP.md)** | Fast setup with essential commands only | Experienced developers |
-| **[dependencies.txt](dependencies.txt)** | Simple package list for automated installation | CI/CD, scripts |
-
-## 📖 Detailed Guides
-
-| File | Purpose | Who Should Use |
-|------|---------|----------------|
-| **[requirements.txt](requirements.txt)** | Comprehensive installation and system requirements | New users, detailed setup |
-| **[FILE_OVERVIEW.md](FILE_OVERVIEW.md)** | Detailed explanation of every project file | Developers, contributors |
-
-## 🔧 Automation Scripts
-
-| File | Purpose | Platform |
-|------|---------|----------|
-| **[install_dependencies.sh](install_dependencies.sh)** | Automated MSYS2 package installer | Linux/MSYS2 |
-| **[build.bat](build.bat)** | Main build script | Windows |
-| **[convert_audio.bat](convert_audio.bat)** | MP3 to WAV converter | Windows |
+| File | Purpose | Target Audience |
+|:---|:---|:---|
+| **[`README.md`](../README.md)** | Primary project overview, features, keybind map, build guide | Everyone |
+| **[`SOLAR_ODYSSEY_ROADMAP_V2.md`](../SOLAR_ODYSSEY_ROADMAP_V2.md)** | Master architectural roadmap & cycle specifications | Developers & Architects |
+| **[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)** | Third-party licenses, attributions, and asset provenance | Legal / Compliance |
+| **[`Documentation/COMPLETE_GUIDE.md`](COMPLETE_GUIDE.md)** | Comprehensive architectural guide, audio, and controls | Developers |
+| **[`Documentation/FILE_OVERVIEW.md`](FILE_OVERVIEW.md)** | Detailed structural map of all headers, sources, and shaders | Developers & Reviewers |
+| **[`Documentation/QUICK_SETUP.md`](QUICK_SETUP.md)** | Rapid MSYS2/CMake installation instructions | Users & Developers |
+| **[`Documentation/requirements.md`](requirements.md)** | Minimum and recommended system prerequisites | Users |
+| **[`docs/verification/CYCLE_0_BASELINE_REPORT.md`](../docs/verification/CYCLE_0_BASELINE_REPORT.md)** | Cycle 0 verification, deterministic benchmarks, and visual regression report | QA & Maintainers |
 
 ---
 
-## 🎯 What Should I Read First?
+## ⚡ Build & Verification Scripts
 
-### 👤 I'm New to This Project
-**Start here**: [COMPLETE_GUIDE.md](COMPLETE_GUIDE.md) - It has everything you need!
-
-### ⚡ I Just Want to Build and Run
-**Start here**: [QUICK_SETUP.md](QUICK_SETUP.md) - Fast track for experienced users
-
-### 🔧 I Want to Understand the Code
-**Start here**: [FILE_OVERVIEW.md](FILE_OVERVIEW.md) - Explains every file in detail
-
-### 🐛 I'm Having Problems
-**Start here**: [COMPLETE_GUIDE.md](COMPLETE_GUIDE.md) - Section 10: Troubleshooting
-
-### 🚀 I Want to Contribute
-**Read these**: [FILE_OVERVIEW.md](FILE_OVERVIEW.md) + [COMPLETE_GUIDE.md](COMPLETE_GUIDE.md) Section 13: Development
-
----
-
-## 📋 Documentation Statistics
-
-- **Total Documentation Files**: 6
-- **Total Project Files**: 50+
-- **Total Documentation Size**: ~80KB
-- **Coverage**: Complete (installation, usage, troubleshooting, development)
-- **Last Updated**: August 19, 2025
-
----
-
-*🌟 **Recommended**: Start with [COMPLETE_GUIDE.md](COMPLETE_GUIDE.md) - it contains everything you need to know!*
+| Script | Purpose | Platform |
+|:---|:---|:---|
+| **[`build.bat`](../build.bat)** | Fast MinGW build script compiling main application & test suite | Windows (MinGW-w64) |
+| **[`CMakeLists.txt`](../CMakeLists.txt)** | Standard cross-platform CMake build configuration | Windows / Linux |
+| **[`tools/visual_regression/run_regression.py`](../tools/visual_regression/run_regression.py)** | 4-scene automated visual regression testing harness | Python 3 |
+| **[`tools/run_benchmarks.py`](../tools/run_benchmarks.py)** | 8-scene official 1000-frame deterministic benchmark suite | Python 3 |

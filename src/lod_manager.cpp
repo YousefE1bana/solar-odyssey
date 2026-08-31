@@ -1,4 +1,5 @@
 #include "lod_manager.h"
+#include "render_profiler.h"
 #include <cmath>
 #include <algorithm>
 #include <iostream>
@@ -86,10 +87,43 @@ void LODSphereMesh::ensure(int slices, int stacks) {
     glVertexArrayElementBuffer(vao, ibo);
 }
 
+void LODSphereMesh::setupInstancing(GLuint instVBO) {
+    if (!vao || !instVBO || !glVertexArrayVertexBuffer) return;
+    
+    // Binding 1 for AsteroidInstanceData (stride = 48 bytes, divisor = 1)
+    glVertexArrayVertexBuffer(vao, 1, instVBO, 0, 48);
+    glVertexArrayBindingDivisor(vao, 1, 1);
+
+    // Attrib 3: pos_scale (vec4, offset 0)
+    glEnableVertexArrayAttrib(vao, 3);
+    glVertexArrayAttribFormat(vao, 3, 4, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(vao, 3, 1);
+
+    // Attrib 4: rot_params (vec4, offset 16)
+    glEnableVertexArrayAttrib(vao, 4);
+    glVertexArrayAttribFormat(vao, 4, 4, GL_FLOAT, GL_FALSE, 16);
+    glVertexArrayAttribBinding(vao, 4, 1);
+
+    // Attrib 5: materialColor (vec4, offset 32)
+    glEnableVertexArrayAttrib(vao, 5);
+    glVertexArrayAttribFormat(vao, 5, 4, GL_FLOAT, GL_FALSE, 32);
+    glVertexArrayAttribBinding(vao, 5, 1);
+}
+
 void LODSphereMesh::draw() const {
     if (!vao) return;
     glBindVertexArray(vao);
+    RenderProfiler::instance().recordDrawCall();
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
+    glBindVertexArray(0);
+}
+
+void LODSphereMesh::drawInstancedOffset(GLuint instVBO, GLintptr offsetBytes, int instanceCount) const {
+    if (!vao || indexCount == 0 || instanceCount <= 0) return;
+    glBindVertexArray(vao);
+    glVertexArrayVertexBuffer(vao, 1, instVBO, offsetBytes, 48);
+    RenderProfiler::instance().recordDrawCall();
+    glDrawElementsInstanced(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr, instanceCount);
     glBindVertexArray(0);
 }
 
@@ -195,6 +229,20 @@ void LODManager::drawAsteroid(AsteroidTier tier) {
     asteroidMeshes[idx].draw();
 }
 
+void LODManager::setupAsteroidInstancing(GLuint instVBO) {
+    if (!initialized) init();
+    for (int i = 0; i < ASTEROID_TIER_COUNT; ++i) {
+        asteroidMeshes[i].setupInstancing(instVBO);
+    }
+}
+
+void LODManager::drawAsteroidInstanced(AsteroidTier tier, GLuint instVBO, GLintptr offsetBytes, int instanceCount) {
+    if (!initialized) init();
+    if (instanceCount <= 0) return;
+    int idx = std::max(0, std::min((int)ASTEROID_TIER_COUNT - 1, (int)tier));
+    asteroidMeshes[idx].drawInstancedOffset(instVBO, offsetBytes, instanceCount);
+}
+
 void LODManager::beginFrame() {
     renderedTrianglesThisFrame = 0;
     savedTrianglesThisFrame = 0;
@@ -229,6 +277,19 @@ void LODManager::recordAsteroidRender(AsteroidTier tier) {
 
     if (tier >= 0 && tier < ASTEROID_TIER_COUNT) {
         asteroidTierCounts[tier]++;
+    }
+}
+
+void LODManager::recordAsteroidInstancedRender(AsteroidTier tier, int instanceCount) {
+    if (instanceCount <= 0) return;
+    int activeTris = (tier >= 0 && tier < ASTEROID_TIER_COUNT) ? kAsteroidTriangles[tier] : 512;
+    int maxTris = 4608;
+
+    renderedTrianglesThisFrame += activeTris * instanceCount;
+    savedTrianglesThisFrame += (maxTris - activeTris) * instanceCount;
+
+    if (tier >= 0 && tier < ASTEROID_TIER_COUNT) {
+        asteroidTierCounts[tier] += instanceCount;
     }
 }
 

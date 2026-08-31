@@ -1,4 +1,5 @@
 #include "wormhole.h"
+#include "render_profiler.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cmath>
@@ -280,6 +281,7 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     glUniform1i(uMeshTypeLoc, 1);
 
     glBindVertexArray(diskVAO);
+    RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, diskVertexCount);
 
     glUniform1i(uMeshTypeLoc, 2);
@@ -288,12 +290,14 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     glm::mat4 modelArchUp = glm::translate(glm::mat4(1.0f), position);
     modelArchUp = glm::rotate(modelArchUp, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
     glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchUp));
+    RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
 
     glm::mat4 modelArchDown = glm::translate(glm::mat4(1.0f), position);
     modelArchDown = glm::rotate(modelArchDown, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
     modelArchDown = glm::rotate(modelArchDown, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchDown));
+    RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -302,6 +306,7 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelSphere));
 
     glBindVertexArray(sphereVAO);
+    RenderProfiler::instance().recordDrawCall();
     glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 

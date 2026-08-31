@@ -1,6 +1,7 @@
 #include "scene_renderer.h"
 #include "shader_utils.h"
 #include "gl_primitives.h"
+#include "render_profiler.h"
 #include <stb_image.h>
 #include <iostream>
 #include <vector>
@@ -172,6 +173,7 @@ void SceneRenderer::initStarfield() {
 bool SceneRenderer::init() {
     sunProgram = loadProgramFromFiles("shaders/sun.vert", "shaders/sun.frag");
     planetProgram = loadProgramFromFiles("shaders/planet.vert", "shaders/planet.frag");
+    asteroidProgram = loadProgramFromFiles("shaders/asteroid.vert", "shaders/asteroid.frag");
     blackHoleProgram = loadProgramFromFiles("shaders/black_hole.vert", "shaders/black_hole.frag");
     wormholeProgram = loadProgramFromFiles("shaders/wormhole.vert", "shaders/wormhole.frag");
 
@@ -281,6 +283,7 @@ void SceneRenderer::cleanup() {
 
     if (sunProgram) { glDeleteProgram(sunProgram); sunProgram = 0; }
     if (planetProgram) { glDeleteProgram(planetProgram); planetProgram = 0; }
+    if (asteroidProgram) { glDeleteProgram(asteroidProgram); asteroidProgram = 0; }
     if (blackHoleProgram) { glDeleteProgram(blackHoleProgram); blackHoleProgram = 0; }
     if (wormholeProgram) { glDeleteProgram(wormholeProgram); wormholeProgram = 0; }
     if (starfieldProgram) { glDeleteProgram(starfieldProgram); starfieldProgram = 0; }
@@ -324,6 +327,7 @@ void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& p
         glm::mat4 starMV = glm::translate(viewMat, cameraEye);
         batch.begin(GL_POINTS, projMat, starMV, 1.0f);
         glBindVertexArray(starfieldVAO);
+        RenderProfiler::instance().recordDrawCall();
         glDrawArrays(GL_POINTS, 0, 4000);
         glBindVertexArray(0);
         batch.end();
@@ -436,6 +440,7 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
     uploadCoreMatrices(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, ringMV, projMat);
 
     glBindVertexArray(ringVAO);
+    RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 181 * 2);
     glBindVertexArray(0);
 
@@ -446,6 +451,14 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
 }
 
 void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vector<Moon>& moons, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, float time, float cloudRotation, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl, const CelestialDatabase& db, AtmosphereEffects* atmo) {
+    if (planetProgram) {
+        glUseProgram(planetProgram);
+        glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
+        glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
+        glUniform1f(uTimeLoc, time);
+        glUniform1i(uIsRingLoc, 0);
+    }
+
     for (auto &planet : planets) {
         if (!solarUI.showDwarfPlanets && planet.isDwarf) continue;
 
@@ -463,8 +476,6 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         glm::mat4 planetMV = viewMat * glm::scale(model, glm::vec3(effectiveSize));
 
         if (planetProgram) {
-            glUseProgram(planetProgram);
-
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, planet.texture);
             glUniform1i(uDayTexLoc, 0);
@@ -508,15 +519,10 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
                 }
             }
 
-            glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
-            glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
             glUniform1f(uSunIntensityLoc, (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f);
-            glUniform1f(uTimeLoc, time);
 
-            // Analytical Shadows
-            glUniform1i(uIsRingLoc, 0);
-            glm::mat4 planetWorldMat = glm::translate(glm::mat4(1.0f), planet.currentPosition);
-            glm::vec3 planetSunLocalPos = glm::vec3(glm::inverse(planetWorldMat) * glm::vec4(sunWorldPos, 1.0f));
+            // Fast Analytical Shadow Sun Vector (direct vector subtraction, zero matrix inverse)
+            glm::vec3 planetSunLocalPos = sunWorldPos - planet.currentPosition;
             glUniform3f(uSunLocalPosLoc, planetSunLocalPos.x, planetSunLocalPos.y, planetSunLocalPos.z);
 
             if (planet.hasRings) {
@@ -527,11 +533,11 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
                 glUniform1i(uHasRingsLoc, 0);
             }
 
-            // Eclipse shadow check
+            // Eclipse shadow check (fast direct vector math)
             bool eclipseFound = false;
             for (const auto& m : moons) {
                 if (m.parentPlanet == planet.name) {
-                    glm::vec3 moonLocalPos = glm::vec3(glm::inverse(planetWorldMat) * glm::vec4(m.currentPosition, 1.0f));
+                    glm::vec3 moonLocalPos = (m.currentPosition - planet.currentPosition);
                     float moonLocalRadius = (m.size * solarUI.planetScale) / effectiveSize;
                     glUniform1i(uHasEclipseLoc, 1);
                     glUniform3f(uEclipseLocalPosLoc, moonLocalPos.x, moonLocalPos.y, moonLocalPos.z);
@@ -546,8 +552,6 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             lod::LODManager::instance().drawSphere(planetTier);
             lod::LODManager::instance().recordBodyRender(planet.name, distToPlanet, effectiveSize, planetTier);
-
-            glUseProgram(0);
         } else {
             lod::LODManager::instance().drawSphere(planetTier);
             lod::LODManager::instance().recordBodyRender(planet.name, distToPlanet, effectiveSize, planetTier);
@@ -557,6 +561,7 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         if (atmo && solarUI.showAtmospheres) {
             glm::mat4 atmoMV = viewMat * glm::translate(glm::mat4(1.0f), planet.currentPosition);
             atmo->renderAtmosphere(planet.name, effectiveSize, time, sunEyePos, atmoMV, projMat);
+            if (planetProgram) glUseProgram(planetProgram);
         }
 
         // Saturn Rings
@@ -566,11 +571,30 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
             ringModel = glm::rotate(ringModel, glm::radians(26.7f), glm::vec3(1.0f, 0.0f, 0.2f));
             glm::mat4 ringMV = viewMat * ringModel;
             renderSaturnRings(planet.ringInnerRadius * solarUI.planetScale, planet.ringOuterRadius * solarUI.planetScale, effectiveSize, ringModel, ringMV, projMat, sunEyePos, solarUI.ringOpacity);
+            if (planetProgram) glUseProgram(planetProgram);
         }
+    }
+
+    if (planetProgram) {
+        glUseProgram(0);
     }
 }
 
 void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Planet>& planets, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl) {
+    if (planetProgram) {
+        glUseProgram(planetProgram);
+        glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
+        glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
+        glUniform1f(uSunIntensityLoc, 1.25f);
+        glUniform1i(uHasNightTexLoc, 0);
+        glUniform1i(uHasCloudsLoc, 0);
+        glUniform1f(uSpecularStrengthLoc, 0.0f);
+        glUniform1f(uAtmosphereGlowLoc, 0.0f);
+        glUniform1i(uIsRingLoc, 0);
+        glUniform1i(uHasRingsLoc, 0);
+        glUniform1i(uHasEclipseLoc, 0);
+    }
+
     for (auto &moon : moons) {
         float effectiveMoonSize = moon.size * solarUI.planetScale;
         float distToMoon = glm::distance(cameraCtrl.currentEye, moon.currentPosition);
@@ -581,31 +605,24 @@ void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Plan
         glm::mat4 moonMV = viewMat * moonModel;
 
         if (planetProgram) {
-            glUseProgram(planetProgram);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, moon.texture);
             glUniform1i(uDayTexLoc, 0);
-            glUniform1i(uHasNightTexLoc, 0);
-            glUniform1i(uHasCloudsLoc, 0);
-            glUniform1f(uSpecularStrengthLoc, 0.0f);
-            glUniform1f(uAtmosphereGlowLoc, 0.0f);
-            glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
-            glUniform1f(uSunIntensityLoc, 1.25f);
 
-            glUniform1i(uIsRingLoc, 0);
-            glUniform1i(uHasRingsLoc, 0);
-            glUniform1i(uHasEclipseLoc, 0);
-            glm::vec3 moonSunLocalPos = glm::vec3(glm::inverse(moonModel) * glm::vec4(sunWorldPos, 1.0f));
+            glm::vec3 moonSunLocalPos = sunWorldPos - moon.currentPosition;
             glUniform3f(uSunLocalPosLoc, moonSunLocalPos.x, moonSunLocalPos.y, moonSunLocalPos.z);
 
             uploadCoreMatrices(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, moonMV, projMat);
             lod::LODManager::instance().drawSphere(moonTier);
             lod::LODManager::instance().recordBodyRender(moon.name, distToMoon, effectiveMoonSize, moonTier);
-            glUseProgram(0);
         } else {
             lod::LODManager::instance().drawSphere(moonTier);
             lod::LODManager::instance().recordBodyRender(moon.name, distToMoon, effectiveMoonSize, moonTier);
         }
+    }
+
+    if (planetProgram) {
+        glUseProgram(0);
     }
 }
 

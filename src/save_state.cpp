@@ -148,8 +148,8 @@ private:
                 return Value{};
             }
         }
-        if (i >= s.size()) ok = false;
-        return ok ? val : Value{};
+        ok = false;
+        return Value{};
     }
 
     static Value parseArray(const std::string& s, size_t& i, bool& ok) {
@@ -168,9 +168,9 @@ private:
                 return val;
             }
 
-            Value item = parseValue(s, i, ok);
+            Value itemVal = parseValue(s, i, ok);
             if (!ok) return Value{};
-            val.arrVal.push_back(item);
+            val.arrVal.push_back(itemVal);
 
             skipWhitespace(s, i);
             if (i < s.size() && s[i] == ',') {
@@ -183,52 +183,63 @@ private:
                 return Value{};
             }
         }
-        if (i >= s.size()) ok = false;
-        return ok ? val : Value{};
+        ok = false;
+        return Value{};
     }
 
     static Value parseString(const std::string& s, size_t& i, bool& ok) {
         Value val;
         val.type = J_STR;
-        if (i >= s.size() || s[i] != '"') { ok = false; return Value{}; }
-        i++; // skip opening quote '"'
+        i++; // skip opening '"'
+        std::string str;
 
-        std::string res;
-        while (i < s.size() && s[i] != '"') {
-            if (s[i] == '\\' && i + 1 < s.size()) {
-                i++;
-                switch (s[i]) {
-                    case 'n': res += '\n'; break;
-                    case 't': res += '\t'; break;
-                    case 'r': res += '\r'; break;
-                    case '"': res += '"'; break;
-                    case '\\': res += '\\'; break;
-                    default: res += s[i]; break;
-                }
-            } else {
-                res += s[i];
+        while (i < s.size()) {
+            char c = s[i++];
+            if (c == '"') {
+                val.strVal = str;
+                return val;
             }
-            i++;
+            if (c == '\\' && i < s.size()) {
+                char esc = s[i++];
+                if (esc == '"') str += '"';
+                else if (esc == '\\') str += '\\';
+                else if (esc == '/') str += '/';
+                else if (esc == 'b') str += '\b';
+                else if (esc == 'f') str += '\f';
+                else if (esc == 'n') str += '\n';
+                else if (esc == 'r') str += '\r';
+                else if (esc == 't') str += '\t';
+                else str += esc;
+            } else {
+                str += c;
+            }
         }
-        if (i >= s.size() || s[i] != '"') { ok = false; return Value{}; }
-        i++; // skip closing quote
-        val.strVal = res;
-        return val;
+        ok = false;
+        return Value{};
     }
 
     static Value parseNumber(const std::string& s, size_t& i, bool& ok) {
         Value val;
         val.type = J_NUM;
         size_t start = i;
-        if (i < s.size() && s[i] == '-') i++;
-        while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) || s[i] == '.' || s[i] == 'e' || s[i] == 'E' || s[i] == '+' || s[i] == '-')) {
+
+        if (s[i] == '-') i++;
+        while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i]))) i++;
+        if (i < s.size() && s[i] == '.') {
             i++;
+            while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i]))) i++;
         }
+        if (i < s.size() && (s[i] == 'e' || s[i] == 'E')) {
+            i++;
+            if (i < s.size() && (s[i] == '+' || s[i] == '-')) i++;
+            while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i]))) i++;
+        }
+
+        std::string sub = s.substr(start, i - start);
         try {
-            val.numVal = std::stod(s.substr(start, i - start));
+            val.numVal = std::stod(sub);
         } catch (...) {
             ok = false;
-            val.numVal = 0.0;
         }
         return val;
     }
@@ -264,7 +275,7 @@ private:
 
 std::string SimulationSaveState::toJSON() const {
     std::ostringstream ss;
-    ss << std::fixed << std::setprecision(4);
+    ss << std::fixed << std::setprecision(8);
 
     ss << "{\n";
     ss << "  \"version\": " << version << ",\n";
@@ -344,8 +355,8 @@ bool SimulationSaveState::fromJSON(const std::string& jsonStr) {
     // Simulation
     if (root.has("simulation")) {
         const auto& sim = root.get("simulation");
-        elapsedSimDays = sim.get("elapsedSimDays").getFloat(0.0f);
-        timeMultiplier = sim.get("timeMultiplier").getFloat(1.0f);
+        elapsedSimDays = sim.get("elapsedSimDays").getNum(0.0);
+        timeMultiplier = sim.get("timeMultiplier").getNum(1.0);
         isPaused = sim.get("isPaused").getBool(false);
         physicsMode = sim.get("physicsMode").getInt(0);
     }
@@ -356,37 +367,37 @@ bool SimulationSaveState::fromJSON(const std::string& jsonStr) {
         camera.mode = cam.get("mode").getInt(0);
 
         if (cam.has("eye") && cam.get("eye").arrVal.size() >= 3) {
-            camera.eye = glm::vec3(cam.get("eye").arrVal[0].getFloat(0.0f),
-                                   cam.get("eye").arrVal[1].getFloat(35.0f),
-                                   cam.get("eye").arrVal[2].getFloat(50.0f));
+            camera.eye = glm::dvec3(cam.get("eye").arrVal[0].getNum(0.0),
+                                    cam.get("eye").arrVal[1].getNum(35.0),
+                                    cam.get("eye").arrVal[2].getNum(50.0));
         }
         if (cam.has("target") && cam.get("target").arrVal.size() >= 3) {
-            camera.target = glm::vec3(cam.get("target").arrVal[0].getFloat(0.0f),
-                                      cam.get("target").arrVal[1].getFloat(0.0f),
-                                      cam.get("target").arrVal[2].getFloat(0.0f));
+            camera.target = glm::dvec3(cam.get("target").arrVal[0].getNum(0.0),
+                                       cam.get("target").arrVal[1].getNum(0.0),
+                                       cam.get("target").arrVal[2].getNum(0.0));
         }
         if (cam.has("up") && cam.get("up").arrVal.size() >= 3) {
-            camera.up = glm::vec3(cam.get("up").arrVal[0].getFloat(0.0f),
-                                  cam.get("up").arrVal[1].getFloat(1.0f),
-                                  cam.get("up").arrVal[2].getFloat(0.0f));
+            camera.up = glm::dvec3(cam.get("up").arrVal[0].getNum(0.0),
+                                   cam.get("up").arrVal[1].getNum(1.0),
+                                   cam.get("up").arrVal[2].getNum(0.0));
         }
 
-        camera.orbitDistance = cam.get("orbitDistance").getFloat(50.0f);
-        camera.orbitAngleX = cam.get("orbitAngleX").getFloat(0.0f);
-        camera.orbitAngleY = cam.get("orbitAngleY").getFloat(60.0f);
+        camera.orbitDistance = cam.get("orbitDistance").getNum(50.0);
+        camera.orbitAngleX = cam.get("orbitAngleX").getNum(0.0);
+        camera.orbitAngleY = cam.get("orbitAngleY").getNum(60.0);
         camera.focusedBodyName = cam.get("focusedBodyName").getStr("Sun");
-        camera.focusDistance = cam.get("focusDistance").getFloat(8.0f);
-        camera.focusAngleX = cam.get("focusAngleX").getFloat(45.0f);
-        camera.focusAngleY = cam.get("focusAngleY").getFloat(70.0f);
+        camera.focusDistance = cam.get("focusDistance").getNum(8.0);
+        camera.focusAngleX = cam.get("focusAngleX").getNum(45.0);
+        camera.focusAngleY = cam.get("focusAngleY").getNum(70.0);
 
         if (cam.has("freePos") && cam.get("freePos").arrVal.size() >= 3) {
-            camera.freePos = glm::vec3(cam.get("freePos").arrVal[0].getFloat(0.0f),
-                                       cam.get("freePos").arrVal[1].getFloat(15.0f),
-                                       cam.get("freePos").arrVal[2].getFloat(50.0f));
+            camera.freePos = glm::dvec3(cam.get("freePos").arrVal[0].getNum(0.0),
+                                        cam.get("freePos").arrVal[1].getNum(15.0),
+                                        cam.get("freePos").arrVal[2].getNum(50.0));
         }
-        camera.freeYaw = cam.get("freeYaw").getFloat(-90.0f);
-        camera.freePitch = cam.get("freePitch").getFloat(-15.0f);
-        camera.fov = cam.get("fov").getFloat(60.0f);
+        camera.freeYaw = cam.get("freeYaw").getNum(-90.0);
+        camera.freePitch = cam.get("freePitch").getNum(-15.0);
+        camera.fov = cam.get("fov").getNum(60.0);
     }
 
     // Missions
@@ -412,16 +423,16 @@ bool SimulationSaveState::fromJSON(const std::string& jsonStr) {
         const auto& sObj = root.get("spaceship");
         shipActive = sObj.get("active").getBool(false);
         if (sObj.has("position") && sObj.get("position").arrVal.size() >= 3) {
-            shipPosition = glm::vec3(sObj.get("position").arrVal[0].getFloat(0.0f),
-                                     sObj.get("position").arrVal[1].getFloat(0.0f),
-                                     sObj.get("position").arrVal[2].getFloat(0.0f));
+            shipPosition = glm::dvec3(sObj.get("position").arrVal[0].getNum(0.0),
+                                      sObj.get("position").arrVal[1].getNum(0.0),
+                                      sObj.get("position").arrVal[2].getNum(0.0));
         }
         if (sObj.has("velocity") && sObj.get("velocity").arrVal.size() >= 3) {
-            shipVelocity = glm::vec3(sObj.get("velocity").arrVal[0].getFloat(0.0f),
-                                     sObj.get("velocity").arrVal[1].getFloat(0.0f),
-                                     sObj.get("velocity").arrVal[2].getFloat(0.0f));
+            shipVelocity = glm::dvec3(sObj.get("velocity").arrVal[0].getNum(0.0),
+                                      sObj.get("velocity").arrVal[1].getNum(0.0),
+                                      sObj.get("velocity").arrVal[2].getNum(0.0));
         }
-        shipThrottle = sObj.get("throttle").getFloat(0.0f);
+        shipThrottle = sObj.get("throttle").getNum(0.0);
         shipTargetBody = sObj.get("targetBody").getStr("Earth");
     }
 
@@ -459,10 +470,10 @@ bool SaveStateManager::fileExists(const std::string& filepath) const {
 }
 
 void SaveStateManager::captureState(SimulationSaveState& outState,
-                                   float elapsedSimDays, float timeMultiplier, bool isPaused, int physicsMode,
+                                   double elapsedSimDays, double timeMultiplier, bool isPaused, int physicsMode,
                                    const CameraController& cam, const MissionSystem& missions,
                                    const Spaceship& ship, bool autoSaveOnExit) {
-    outState.version = 1;
+    outState.version = 2;
 
     // ISO timestamp
     auto now = std::chrono::system_clock::now();
@@ -478,20 +489,20 @@ void SaveStateManager::captureState(SimulationSaveState& outState,
 
     // Camera bookmark
     outState.camera.mode = static_cast<int>(cam.mode);
-    outState.camera.eye = cam.currentEye;
-    outState.camera.target = cam.currentTarget;
-    outState.camera.up = cam.currentUp;
-    outState.camera.orbitDistance = cam.orbitDistance;
-    outState.camera.orbitAngleX = cam.orbitAngleX;
-    outState.camera.orbitAngleY = cam.orbitAngleY;
+    outState.camera.eye = glm::dvec3(cam.currentEye);
+    outState.camera.target = glm::dvec3(cam.currentTarget);
+    outState.camera.up = glm::dvec3(cam.currentUp);
+    outState.camera.orbitDistance = static_cast<double>(cam.orbitDistance);
+    outState.camera.orbitAngleX = static_cast<double>(cam.orbitAngleX);
+    outState.camera.orbitAngleY = static_cast<double>(cam.orbitAngleY);
     outState.camera.focusedBodyName = cam.focusedBodyName;
-    outState.camera.focusDistance = cam.focusDistance;
-    outState.camera.focusAngleX = cam.focusAngleX;
-    outState.camera.focusAngleY = cam.focusAngleY;
-    outState.camera.freePos = cam.freePos;
-    outState.camera.freeYaw = cam.freeYaw;
-    outState.camera.freePitch = cam.freePitch;
-    outState.camera.fov = cam.fieldOfView;
+    outState.camera.focusDistance = static_cast<double>(cam.focusDistance);
+    outState.camera.focusAngleX = static_cast<double>(cam.focusAngleX);
+    outState.camera.focusAngleY = static_cast<double>(cam.focusAngleY);
+    outState.camera.freePos = glm::dvec3(cam.freePos);
+    outState.camera.freeYaw = static_cast<double>(cam.freeYaw);
+    outState.camera.freePitch = static_cast<double>(cam.freePitch);
+    outState.camera.fov = static_cast<double>(cam.fieldOfView);
 
     // Missions
     outState.activeMissionIndex = missions.activeMissionIndex;
@@ -507,9 +518,9 @@ void SaveStateManager::captureState(SimulationSaveState& outState,
 
     // Spaceship
     outState.shipActive = ship.active;
-    outState.shipPosition = ship.position;
-    outState.shipVelocity = ship.velocity;
-    outState.shipThrottle = ship.throttle;
+    outState.shipPosition = glm::dvec3(ship.position);
+    outState.shipVelocity = glm::dvec3(ship.velocity);
+    outState.shipThrottle = static_cast<double>(ship.throttle);
     outState.shipTargetBody = ship.targetPlanetName;
 
     outState.autoSaveOnExit = autoSaveOnExit;
@@ -519,28 +530,28 @@ void SaveStateManager::restoreState(const SimulationSaveState& state,
                                    float& outSimDays, float& outTimeMultiplier, bool& outPaused, int& outPhysicsMode,
                                    CameraController& cam, MissionSystem& missions,
                                    Spaceship& ship, SolarOdysseyUI& ui) {
-    outSimDays = state.elapsedSimDays;
-    outTimeMultiplier = state.timeMultiplier;
+    outSimDays = static_cast<float>(state.elapsedSimDays);
+    outTimeMultiplier = static_cast<float>(state.timeMultiplier);
     outPaused = state.isPaused;
     outPhysicsMode = state.physicsMode;
 
     // Camera restoration
     cam.mode = static_cast<CameraMode>(state.camera.mode);
-    cam.currentEye = state.camera.eye;
-    cam.currentTarget = state.camera.target;
-    cam.currentUp = state.camera.up;
-    cam.orbitDistance = state.camera.orbitDistance;
-    cam.orbitAngleX = state.camera.orbitAngleX;
-    cam.orbitAngleY = state.camera.orbitAngleY;
+    cam.currentEye = glm::vec3(state.camera.eye);
+    cam.currentTarget = glm::vec3(state.camera.target);
+    cam.currentUp = glm::vec3(state.camera.up);
+    cam.orbitDistance = static_cast<float>(state.camera.orbitDistance);
+    cam.orbitAngleX = static_cast<float>(state.camera.orbitAngleX);
+    cam.orbitAngleY = static_cast<float>(state.camera.orbitAngleY);
     cam.focusedBodyName = state.camera.focusedBodyName;
-    cam.focusDistance = state.camera.focusDistance;
-    cam.focusAngleX = state.camera.focusAngleX;
-    cam.focusAngleY = state.camera.focusAngleY;
-    cam.freePos = state.camera.freePos;
-    cam.freeYaw = state.camera.freeYaw;
-    cam.freePitch = state.camera.freePitch;
-    cam.fieldOfView = state.camera.fov;
-    cam.targetFieldOfView = state.camera.fov;
+    cam.focusDistance = static_cast<float>(state.camera.focusDistance);
+    cam.focusAngleX = static_cast<float>(state.camera.focusAngleX);
+    cam.focusAngleY = static_cast<float>(state.camera.focusAngleY);
+    cam.freePos = glm::vec3(state.camera.freePos);
+    cam.freeYaw = static_cast<float>(state.camera.freeYaw);
+    cam.freePitch = static_cast<float>(state.camera.freePitch);
+    cam.fieldOfView = static_cast<float>(state.camera.fov);
+    cam.targetFieldOfView = static_cast<float>(state.camera.fov);
 
     // Missions restoration
     missions.activeMissionIndex = std::min(state.activeMissionIndex, (int)missions.missions.size() - 1);
@@ -558,14 +569,14 @@ void SaveStateManager::restoreState(const SimulationSaveState& state,
     // Spaceship restoration
     ship.active = state.shipActive;
     if (ship.active) {
-        ship.position = state.shipPosition;
-        ship.velocity = state.shipVelocity;
-        ship.throttle = state.shipThrottle;
+        ship.position = glm::vec3(state.shipPosition);
+        ship.velocity = glm::vec3(state.shipVelocity);
+        ship.throttle = static_cast<float>(state.shipThrottle);
         ship.targetPlanetName = state.shipTargetBody;
     }
 
-    ui.elapsedSimDays = state.elapsedSimDays;
-    ui.timeMultiplier = state.timeMultiplier;
+    ui.elapsedSimDays = static_cast<float>(state.elapsedSimDays);
+    ui.timeMultiplier = static_cast<float>(state.timeMultiplier);
     ui.isPaused = state.isPaused;
     ui.physicsMode = state.physicsMode;
     ui.autoSaveOnExit = state.autoSaveOnExit;

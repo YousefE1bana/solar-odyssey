@@ -23,7 +23,7 @@
 #include "atmosphere_effects.h"
 #include "asteroid_belt.h"
 #include "planet_pov.h"
-#include "nbody_simulation.h"
+#include "simulation_controller.h"
 #include "spaceship.h"
 #include "black_hole.h"
 #include "wormhole.h"
@@ -34,31 +34,11 @@
 #include "scene_renderer.h"
 #include "orbital_physics.h"
 #include "audio_loader.h"
-
-// OpenAL Audio
-#include <AL/al.h>
-#include <AL/alc.h>
-
-struct BackgroundMusic {
-    std::vector<char> data;
-    ALenum format = AL_FORMAT_STEREO16;
-    ALsizei sampleRate = 44100;
-    size_t offset = 0;
-    static constexpr int kBuffers = 4;
-    static constexpr int kChunk = 64 * 1024;
-    ALuint buffers[kBuffers] = {};
-    bool active = false;
-    std::string trackPath;
-};
-
-struct Particle {
-    glm::vec3 position;
-    glm::vec3 velocity;
-    glm::vec3 color;
-    float size;
-    float life;
-    float maxLife;
-};
+#include "audio_manager.h"
+#include "particle_system.h"
+#include "input_manager.h"
+#include "game_context.h"
+#include "benchmark_runner.h"
 
 class Engine {
 public:
@@ -88,7 +68,7 @@ public:
     AtmosphereEffects* atmosphereEffects = nullptr;
     AsteroidBelt* asteroidBelt = nullptr;
     PlanetPOV* planetPov = nullptr;
-    NBodySimulation nbodySim;
+    SimulationController simCtrl;
     Spaceship spaceship;
     BlackHole blackHole;
     Wormhole wormhole;
@@ -103,32 +83,21 @@ public:
     float cloudRotationAngle = 0.0f;
     double lastFrameTime = 0.0;
 
-    // Particles
-    std::vector<Particle> solarFlares;
-    std::vector<Particle> cometParticles;
+    // Particle Subsystem
+    std::unique_ptr<ParticleSystem> particleSys;
 
     // Audio Subsystem
-    ALCdevice* audioDevice = nullptr;
-    ALCcontext* audioContext = nullptr;
-    ALuint backgroundSource = 0;
-    ALuint backgroundBuffer = 0;
-    ALuint spaceshipSource = 0;
-    ALuint spaceshipBuffer = 0;
-    ALuint blackHoleSource = 0;
-    ALuint blackHoleBuffer = 0;
-    ALuint wormholeSource = 0;
-    ALuint wormholeBuffer = 0;
-    ALuint missionCompleteSource = 0;
-    ALuint missionCompleteBuffer = 0;
-    ALuint warpChargeSource = 0;
-    ALuint warpChargeBuffer = 0;
-    ALuint warpExitSource = 0;
-    ALuint warpExitBuffer = 0;
-    std::map<std::string, ALuint> planetSoundBuffers;
-    std::map<std::string, ALuint> planetSoundSources;
-    std::string currentPOVPlanet = "";
-    ALuint currentPOVSource = 0;
-    BackgroundMusic gMusic;
+    std::unique_ptr<AudioManager> audioMgr;
+
+    // Input Subsystem
+    std::unique_ptr<InputManager> inputMgr;
+
+    // Per-frame GameContext Snapshot and FrameEvents
+    GameContext gameContext;
+    FrameEvents frameEvents;
+
+    // Benchmark and Profiling Subsystem
+    BenchmarkRunner benchmarkRunner;
 
     // QA Automation
     bool runQACapture = false;
@@ -143,19 +112,6 @@ public:
     void cleanup();
 
     void initPlanetsAndMoons();
-    void initAudio();
-    void cleanupAudio();
-    void musicLoad(const std::string& path);
-    void musicStop();
-    void musicUpdate();
-    void generateTone(ALuint buffer, float frequency, float duration);
-    void playPlanetSound(const std::string& planetName);
-    void startPOVAmbientSound(const std::string& planetName);
-    void stopPOVAmbientSound();
-
-    void initParticles();
-    void updateParticles(float deltaTime);
-    void renderParticles(const glm::mat4& viewMat, const glm::mat4& projMat);
 
     void applyLoadedSettings();
     void captureCurrentSettings();

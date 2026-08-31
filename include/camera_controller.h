@@ -123,4 +123,5 @@ public:
     static float smoothStep(float t);
     void update(float deltaTime, const glm::vec3& currentFocusedPos, float currentFocusedRadius);
     glm::mat4 getViewMatrix() const;
+    glm::mat4 getViewRotationMatrix() const;
 };

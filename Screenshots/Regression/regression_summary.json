@@ -1,0 +1,110 @@
+{
+  "overview": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 0.2409635498492813,
+    "rmse_normalized": 0.000944955097448162,
+    "mae": 0.0014157343106995885,
+    "max_delta": 92,
+    "psnr_db": 60.49177655772593,
+    "ssim": 0.9999832232152189,
+    "baseline_validity": {
+      "mean_luminance": 5.720850847735434,
+      "variance": 354.5903306401446,
+      "non_black_pct": 29.417486496913583,
+      "sha256": "7d705d8a2368d7d5ae2e7c686f3656dff494a49bbb7d31b9c7b512276bb58818",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 5.7221074095602775,
+      "variance": 354.63372190882353,
+      "non_black_pct": 29.417486496913583,
+      "sha256": "543c45be2238646b21cd81c408c626c3322c4ddd15a367a29f52594454f02ee5",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": true
+  },
+  "earth": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 1.1559374925252293,
+    "rmse_normalized": 0.004533088205981291,
+    "mae": 0.026678883744855966,
+    "max_delta": 97,
+    "psnr_db": 46.8721166049359,
+    "ssim": 0.9986067439083177,
+    "baseline_validity": {
+      "mean_luminance": 8.213547701850121,
+      "variance": 527.656398763102,
+      "non_black_pct": 36.41734182098765,
+      "sha256": "8eb822d21e43118d819f86e48d0cd066587622d496e6ff2d903e5032f4f3309d",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 8.239070431115584,
+      "variance": 529.0242964475519,
+      "non_black_pct": 36.426697530864196,
+      "sha256": "721590fa626e0676e5eb3187a77ea46c1a9de5ce3a5b9f949dc6e9e2ea3aa396",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": true
+  },
+  "saturn": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 1.0557848800598364,
+    "rmse_normalized": 0.00414033286297975,
+    "mae": 0.028377700617283952,
+    "max_delta": 102,
+    "psnr_db": 47.65929484548448,
+    "ssim": 0.9956949650934377,
+    "baseline_validity": {
+      "mean_luminance": 6.800873296828206,
+      "variance": 367.86541266364395,
+      "non_black_pct": 34.684558256172835,
+      "sha256": "95c2e8ac3e9f023d9ecfc43a7f9fd6a6a6a60d4bd31b9b9fe24b19a5923c6ef7",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 6.823302060331205,
+      "variance": 368.3541312569241,
+      "non_black_pct": 34.71031057098766,
+      "sha256": "47a8f8763d06c9f7464645729a7993dbe05c6039b49a943c4f3b28e16dd2eae1",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": true
+  },
+  "black_hole": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 0.08190814481626842,
+    "rmse_normalized": 0.00032120841104418986,
+    "mae": 5.8674125514403295e-05,
+    "max_delta": 158,
+    "psnr_db": 69.86426181940811,
+    "ssim": 0.9999999996481419,
+    "baseline_validity": {
+      "mean_luminance": 5.387411712400266,
+      "variance": 1017.5795528601845,
+      "non_black_pct": 3.83984375,
+      "sha256": "463ba680c61905406219c4ac5b67cdcd70535d51f933cb41dea4784a7339dfae",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 5.387466602350111,
+      "variance": 1017.5853518842428,
+      "non_black_pct": 3.8398919753086425,
+      "sha256": "6cec1ed341eda1ea4053fb8a82bc7d3ddc6490bb5f0638f40b95794912c6c026",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": true
+  }
+}

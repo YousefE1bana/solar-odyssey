@@ -11,20 +11,20 @@ class SolarOdysseyUI;
 
 struct CameraBookmark {
     int mode = 0; // CameraMode enum value
-    glm::vec3 eye = glm::vec3(0.0f, 35.0f, 50.0f);
-    glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-    float orbitDistance = 50.0f;
-    float orbitAngleX = 0.0f;
-    float orbitAngleY = 60.0f;
+    glm::dvec3 eye = glm::dvec3(0.0, 35.0, 50.0);
+    glm::dvec3 target = glm::dvec3(0.0, 0.0, 0.0);
+    glm::dvec3 up = glm::dvec3(0.0, 1.0, 0.0);
+    double orbitDistance = 50.0;
+    double orbitAngleX = 0.0;
+    double orbitAngleY = 60.0;
     std::string focusedBodyName = "Sun";
-    float focusDistance = 8.0f;
-    float focusAngleX = 45.0f;
-    float focusAngleY = 70.0f;
-    glm::vec3 freePos = glm::vec3(0.0f, 15.0f, 50.0f);
-    float freeYaw = -90.0f;
-    float freePitch = -15.0f;
-    float fov = 60.0f;
+    double focusDistance = 8.0;
+    double focusAngleX = 45.0;
+    double focusAngleY = 70.0;
+    glm::dvec3 freePos = glm::dvec3(0.0, 15.0, 50.0);
+    double freeYaw = -90.0;
+    double freePitch = -15.0;
+    double fov = 60.0;
 };
 
 struct MissionSaveData {
@@ -35,12 +35,12 @@ struct MissionSaveData {
 };
 
 struct SimulationSaveState {
-    int version = 1;
+    int version = 2;
     std::string timestamp;
 
     // Simulation
-    float elapsedSimDays = 0.0f;
-    float timeMultiplier = 1.0f;
+    double elapsedSimDays = 0.0;
+    double timeMultiplier = 1.0;
     bool isPaused = false;
     int physicsMode = 0;
 
@@ -53,9 +53,9 @@ struct SimulationSaveState {
 
     // Spaceship
     bool shipActive = false;
-    glm::vec3 shipPosition = glm::vec3(0.0f);
-    glm::vec3 shipVelocity = glm::vec3(0.0f);
-    float shipThrottle = 0.0f;
+    glm::dvec3 shipPosition = glm::dvec3(0.0);
+    glm::dvec3 shipVelocity = glm::dvec3(0.0);
+    double shipThrottle = 0.0;
     std::string shipTargetBody = "Earth";
 
     // Persistence Settings
@@ -74,7 +74,7 @@ public:
     bool fileExists(const std::string& filepath) const;
 
     void captureState(SimulationSaveState& outState,
-                      float elapsedSimDays, float timeMultiplier, bool isPaused, int physicsMode,
+                      double elapsedSimDays, double timeMultiplier, bool isPaused, int physicsMode,
                       const CameraController& cam, const MissionSystem& missions,
                       const Spaceship& ship, bool autoSaveOnExit);
 

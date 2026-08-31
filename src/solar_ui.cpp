@@ -928,10 +928,15 @@ void SolarOdysseyUI::renderDiagnostics(float screenWidth, AsteroidBelt* asteroid
                 ImGui::Spacing();
                 ImGui::Separator();
                 const auto& astTelem = asteroidBelt->getTelemetry();
-                ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Asteroid Belt Simulation:");
+                ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), "Asteroid Pipeline 2.0 (Instanced):");
                 ImGui::Text("Backend: %s", astTelem.backendName.c_str());
-                ImGui::Text("Asteroids: %d (Workgroups: %d)", astTelem.activeAsteroids, astTelem.dispatchedWorkgroups);
-                ImGui::Text("Compute Time: %.3f ms/frame", astTelem.lastUpdateTimeMs);
+                ImGui::Text("Active: %d (Draw Calls: %d)", astTelem.activeAsteroids, astTelem.asteroidDrawCalls);
+                ImGui::BulletText("CPU Orbit Math: %.3f ms", astTelem.cpuUpdateTimeMs);
+                ImGui::BulletText("Instance Upload: %.3f ms", astTelem.instanceUploadMs);
+                ImGui::BulletText("Fence Wait: %.3f ms", astTelem.instanceFenceWaitMs);
+                ImGui::BulletText("Render Submit: %.3f ms", astTelem.renderSubmitMs);
+                ImGui::BulletText("Total Subsystem: %.3f ms", astTelem.totalUpdateMs);
+                ImGui::BulletText("GPU Readback: %.3f ms (Zero-Readback)", astTelem.gpuSyncReadbackMs);
             }
 
             ImGui::Spacing();
