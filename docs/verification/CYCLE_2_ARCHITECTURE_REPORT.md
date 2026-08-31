@@ -152,5 +152,6 @@ graph TD
 - **QA Automated Test Suite (`--qa`)**: **20/20 PASSED**
 - **Visual Regression (Frozen Cycle 1A Baselines)**: **All 4 scenes PASS (SSIM $\ge 0.9957$)**
 - **Official 3-Run Benchmark Protocol**: **Executed across all 8 scenes (613.61 to 881.83 FPS)**
+- **Performance Report**: [CYCLE_2_PERFORMANCE_REPORT.md](file:///d:/Work/Projects/Computer%20Graphics%20Project/Graphics_Project_v2.0%20-%20Copy/docs/verification/CYCLE_2_PERFORMANCE_REPORT.md)
 
 **Cycle 2 Architecture is declared FINAL PASS.**
