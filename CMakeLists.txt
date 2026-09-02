@@ -146,6 +146,7 @@ add_executable(SolarOdysseyTests
   tests/test_lod_manager.cpp
   tests/test_save_state.cpp
   tests/test_shadow_math.cpp
+  tests/test_atmosphere_effects.cpp
   src/planet_data.cpp
   src/canonical_inventory.cpp
   src/picking.cpp
@@ -163,6 +164,7 @@ add_executable(SolarOdysseyTests
   src/simulation_controller.cpp
   src/lod_manager.cpp
   src/save_state.cpp
+  src/atmosphere_effects.cpp
   src/gl_primitives.cpp
   src/modern_mesh.cpp
   src/immediate_batch.cpp

@@ -4,9 +4,11 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aTexCoord;
 
+out vec3 vLocalPos;
 out vec3 vNormal;
 out vec3 vViewDir;
 out vec3 vSunDir;
+out vec3 vEyePos;
 
 uniform mat4 uModelView;
 uniform mat4 uProjection;
@@ -14,8 +16,10 @@ uniform mat3 uNormalMatrix;
 uniform vec3 uSunEyePos; // Sun position in eye space
 
 void main() {
+    vLocalPos = aPos;
     vNormal = normalize(uNormalMatrix * aNormal);
     vec4 eyePos = uModelView * vec4(aPos, 1.0);
+    vEyePos = eyePos.xyz;
     vViewDir = normalize(-eyePos.xyz);
 
     // Exact vector from vertex to sun in eye space

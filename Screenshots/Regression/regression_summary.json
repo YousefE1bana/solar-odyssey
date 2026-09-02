@@ -2,12 +2,12 @@
   "overview": {
     "width": 1920,
     "height": 1080,
-    "rmse": 1.007916596491763,
-    "rmse_normalized": 0.003952614103889266,
-    "mae": 0.01635593492798354,
-    "max_delta": 109,
-    "psnr_db": 48.062311680417565,
-    "ssim": 0.9967494998249303,
+    "rmse": 2.4468321408956855,
+    "rmse_normalized": 0.009595420160375238,
+    "mae": 0.05637570730452675,
+    "max_delta": 216,
+    "psnr_db": 40.35872007602222,
+    "ssim": 0.9950516539057052,
     "baseline_validity": {
       "mean_luminance": 5.735644725050101,
       "variance": 357.03724684352716,
@@ -17,10 +17,10 @@
       "validity_errors": []
     },
     "test_validity": {
-      "mean_luminance": 5.7221074095602775,
-      "variance": 354.63372190882353,
-      "non_black_pct": 29.417486496913583,
-      "sha256": "543c45be2238646b21cd81c408c626c3322c4ddd15a367a29f52594454f02ee5",
+      "mean_luminance": 5.761317027615833,
+      "variance": 359.63803785507133,
+      "non_black_pct": 29.451051311728392,
+      "sha256": "38af05c86c0bc89fcd07f33bf9aefbbb79353928f4d2642ba46420d2844b9acd",
       "is_valid": true,
       "validity_errors": []
     },
@@ -29,12 +29,12 @@
   "earth": {
     "width": 1920,
     "height": 1080,
-    "rmse": 1.542151241829055,
-    "rmse_normalized": 0.006047651928741392,
-    "mae": 0.07368537808641976,
-    "max_delta": 98,
-    "psnr_db": 44.368264250193164,
-    "ssim": 0.9946760351337139,
+    "rmse": 28.68260668277601,
+    "rmse_normalized": 0.11248081052069024,
+    "mae": 6.694542502572016,
+    "max_delta": 226,
+    "psnr_db": 18.97843125697667,
+    "ssim": 0.9188840084165788,
     "baseline_validity": {
       "mean_luminance": 8.25766924612476,
       "variance": 528.810810716702,
@@ -44,24 +44,24 @@
       "validity_errors": []
     },
     "test_validity": {
-      "mean_luminance": 8.239070431115584,
-      "variance": 529.0242964475519,
-      "non_black_pct": 36.426697530864196,
-      "sha256": "721590fa626e0676e5eb3187a77ea46c1a9de5ce3a5b9f949dc6e9e2ea3aa396",
+      "mean_luminance": 14.2484778442993,
+      "variance": 1189.4792956555143,
+      "non_black_pct": 39.2154224537037,
+      "sha256": "a348b702f1cc66b5c19a41982282e7174f4f83acb23485038ebf7535c5924dc2",
       "is_valid": true,
       "validity_errors": []
     },
-    "passed": true
+    "passed": false
   },
   "saturn": {
     "width": 1920,
     "height": 1080,
-    "rmse": 1.0557848800598364,
-    "rmse_normalized": 0.00414033286297975,
-    "mae": 0.028377700617283952,
-    "max_delta": 102,
-    "psnr_db": 47.65929484548448,
-    "ssim": 0.9956949650934377,
+    "rmse": 5.502959083450059,
+    "rmse_normalized": 0.021580231699804154,
+    "mae": 0.3934736689814815,
+    "max_delta": 153,
+    "psnr_db": 33.31887793503973,
+    "ssim": 0.9892160457757805,
     "baseline_validity": {
       "mean_luminance": 6.800873296828206,
       "variance": 367.86541266364395,
@@ -71,10 +71,10 @@
       "validity_errors": []
     },
     "test_validity": {
-      "mean_luminance": 6.823302060331205,
-      "variance": 368.3541312569241,
-      "non_black_pct": 34.71031057098766,
-      "sha256": "47a8f8763d06c9f7464645729a7993dbe05c6039b49a943c4f3b28e16dd2eae1",
+      "mean_luminance": 7.2054801833068405,
+      "variance": 401.7920085306331,
+      "non_black_pct": 35.136574074074076,
+      "sha256": "e74a909387737a67b940506d3420852550ea18dabbceee6a6f50b45fb8ed3d50",
       "is_valid": true,
       "validity_errors": []
     },
@@ -83,12 +83,12 @@
   "black_hole": {
     "width": 1920,
     "height": 1080,
-    "rmse": 4.395649168221039,
-    "rmse_normalized": 0.017237839875376623,
-    "mae": 0.29109696502057614,
-    "max_delta": 158,
-    "psnr_db": 35.27034315651572,
-    "ssim": 0.9783318149223273,
+    "rmse": 7.8197801367815245,
+    "rmse_normalized": 0.030665804457966763,
+    "mae": 0.587763470936214,
+    "max_delta": 236,
+    "psnr_db": 30.266912759054758,
+    "ssim": 0.9733551604343277,
     "baseline_validity": {
       "mean_luminance": 5.677015017473235,
       "variance": 1070.2345951407997,
@@ -98,10 +98,10 @@
       "validity_errors": []
     },
     "test_validity": {
-      "mean_luminance": 5.387466602350111,
-      "variance": 1017.5853518842428,
-      "non_black_pct": 3.8398919753086425,
-      "sha256": "6cec1ed341eda1ea4053fb8a82bc7d3ddc6490bb5f0638f40b95794912c6c026",
+      "mean_luminance": 5.682776950344148,
+      "variance": 1057.2089757195367,
+      "non_black_pct": 4.145061728395062,
+      "sha256": "367178338413d67186a09b44c952429f9cde10eb8e701f3e700c0c6df13fde40",
       "is_valid": true,
       "validity_errors": []
     },
