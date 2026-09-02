@@ -15,12 +15,13 @@ import math
 import itertools
 from compare_images import compare_images, load_bmp_flat, compute_image_validity
 
-SCENES = ["overview", "earth", "saturn", "black_hole"]
+SCENES = ["overview", "earth", "saturn", "black_hole", "venus", "mars"]
+DEFAULT_SCENES = ["overview", "earth", "saturn", "black_hole"]
 
 def run():
     parser = argparse.ArgumentParser(description="Solar Odyssey Visual Regression Test Runner")
     parser.add_argument("--update-baselines", action="store_true", help="Explicitly update/initialize frozen baselines")
-    parser.add_argument("--baseline-set", choices=["cycle1a", "cycle0"], default="cycle1a", help="Select baseline reference set (default: cycle1a)")
+    parser.add_argument("--baseline-set", choices=["cycle2", "cycle1a", "cycle0"], default="cycle2", help="Select baseline reference set (default: cycle2)")
     parser.add_argument("--scene", choices=SCENES, help="Run regression for a single scene")
     parser.add_argument("--test-negative-control", action="store_true", help="Run negative control test to prove harness detects regression")
     args = parser.parse_args()
@@ -47,7 +48,7 @@ def run():
     else:
         print(" [MODE] Immutable Verification: Comparing fresh captures to frozen baselines.")
 
-    scenes_to_run = [args.scene] if args.scene else SCENES
+    scenes_to_run = [args.scene] if args.scene else DEFAULT_SCENES
     results = {}
     baseline_validity_map = {}
     all_passed = True
@@ -58,7 +59,9 @@ def run():
     if args.test_negative_control:
         print("\n--- RUNNING CONTROLLED NEGATIVE-CONTROL TEST ---")
         ctrl_scene = "earth"
-        if args.baseline_set == "cycle1a":
+        if args.baseline_set == "cycle2":
+            baseline_path = os.path.join(root_dir, "Screenshots", "Baselines", "Cycle2", f"Regression_{ctrl_scene}_test.bmp")
+        elif args.baseline_set == "cycle1a":
             baseline_path = os.path.join(regression_dir, "Cycle1A", f"{ctrl_scene}_baseline.bmp")
         else:
             baseline_path = os.path.join(regression_dir, f"{ctrl_scene}_baseline.bmp")
@@ -112,7 +115,26 @@ def run():
     # MAIN REGRESSION LOOP
     # -------------------------------------------------------------------------
     for scene in scenes_to_run:
-        if args.baseline_set == "cycle1a":
+        if args.baseline_set == "cycle2":
+            if args.update_baselines:
+                print("[FATAL] --baseline-set cycle2 is strictly immutable and cannot be updated!", file=sys.stderr)
+                sys.exit(1)
+            cycle2_dir = os.path.join(root_dir, "Screenshots", "Baselines", "Cycle2")
+            candidate_names = [
+                f"Regression_{scene}_test.bmp",
+                f"Regression_{scene}_golden.bmp",
+                f"Regression_{scene}_baseline.bmp",
+                f"Polish_{scene}.bmp"
+            ]
+            baseline_path = None
+            for cname in candidate_names:
+                p = os.path.join(cycle2_dir, cname)
+                if os.path.exists(p):
+                    baseline_path = p
+                    break
+            if baseline_path is None:
+                baseline_path = os.path.join(cycle2_dir, f"{scene}.bmp")
+        elif args.baseline_set == "cycle1a":
             baseline_path = os.path.join(regression_dir, "Cycle1A", f"{scene}_baseline.bmp")
         else:
             baseline_path = os.path.join(regression_dir, f"{scene}_baseline.bmp")

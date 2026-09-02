@@ -172,6 +172,34 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
         engine->solarUI.selectedPlanetName = "Earth";
+    } else if (scene == "venus") {
+        float venusAngle = 135.0f;
+        float venusRad = 7.5f;
+        glm::vec3 venusPos(venusRad * cosf(glm::radians(venusAngle)), 0.0f, venusRad * sinf(glm::radians(venusAngle)));
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Venus";
+        engine->cameraCtrl.focusDistance = 3.0f;
+        engine->cameraCtrl.focusAngleX = 20.0f;
+        engine->cameraCtrl.focusAngleY = 50.0f;
+        engine->cameraCtrl.currentTarget = venusPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.0f, 20.0f, 50.0f, venusPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Venus";
+    } else if (scene == "mars") {
+        float marsAngle = 330.0f;
+        float marsRad = 12.5f;
+        glm::vec3 marsPos(marsRad * cosf(glm::radians(marsAngle)), 0.0f, marsRad * sinf(glm::radians(marsAngle)));
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Mars";
+        engine->cameraCtrl.focusDistance = 2.5f;
+        engine->cameraCtrl.focusAngleX = 20.0f;
+        engine->cameraCtrl.focusAngleY = 45.0f;
+        engine->cameraCtrl.currentTarget = marsPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.5f, 20.0f, 45.0f, marsPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Mars";
     } else if (scene == "asteroid_belt") {
         engine->cameraCtrl.mode = CAM_FREE;
         engine->cameraCtrl.freePos = glm::vec3(0.0f, 6.0f, 16.5f);
@@ -267,6 +295,12 @@ void BenchmarkRunner::onFrameEnd(int drawCalls, int triangles, double gpuTimeMs,
     if (config.captureGolden) {
         if (currentFrame >= 15) {
             if (engine) {
+                GLenum glErr = glGetError();
+                if (glErr != GL_NO_ERROR) {
+                    std::cerr << "[BenchmarkRunner] OpenGL runtime error audit: ERROR 0x" << std::hex << glErr << std::dec << std::endl;
+                } else {
+                    std::cout << "[BenchmarkRunner] OpenGL runtime error audit: GL_NO_ERROR (0)" << std::endl;
+                }
                 engine->postPipeline.captureScreenshot(config.goldenOutputPath.c_str());
                 std::cout << "[BenchmarkRunner] Captured golden frame: " << config.goldenOutputPath << std::endl;
             }
