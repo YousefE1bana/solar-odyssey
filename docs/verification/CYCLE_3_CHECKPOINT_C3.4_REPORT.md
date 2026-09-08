@@ -40,7 +40,7 @@ All technical, physical, visual, and performance requirements have been satisfie
    - Incremental GPU cost of the active deflection pass across 3 alternating runs on `black_hole` (300 frames, 60 warmup frames) is **+0.1362 ms** (Control Median: 0.7383 ms vs Active Median: 0.8745 ms).
    - Well within the strict **$\le 0.75\text{ ms}$** Black Hole 2.0 budget.
 9. **Catch2 Test Suite**:
-   - **77 test cases, 7,442 assertions passed** (100% pass rate).
+   - **78 test cases, 7,453 assertions passed** (100% pass rate).
 
 ---
 
@@ -263,7 +263,7 @@ Conducted using the official benchmark harness on `black_hole` ($1920 \times 108
 | **Bounded Region Preservation** | 0 changed pixels outside calculated screen bounds | 0 changed pixels outside $[39, 1881) \times [0, 1080)$ | **PASS** |
 | **Passthrough Fallback** | Escaped rays falling behind camera use original screen UV | Passthrough guard in fragment shader verified | **PASS** |
 | **GPU Performance Budget** | Incremental GPU cost $\le 0.75\text{ ms}$ | Measured +0.1362 ms in 3+3 A/B benchmark | **PASS** |
-| **Unit Test Coverage** | 100% test pass rate | 77 test cases, 7,442 assertions passed | **PASS** |
+| **Unit Test Coverage** | 100% test pass rate | 78 test cases, 7,453 assertions passed | **PASS** |
 
 ---
 

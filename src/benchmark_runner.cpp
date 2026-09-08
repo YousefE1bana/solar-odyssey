@@ -399,6 +399,66 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
         engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "earth_orbit_oblique" || scene == "Earth_Orbit_Oblique") {
+        float earthAngle = 210.0f;
+        float earthRad = 10.0f;
+        glm::vec3 earthPos(earthRad * cosf(glm::radians(earthAngle)), 0.0f, earthRad * sinf(glm::radians(earthAngle)));
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Earth";
+        engine->cameraCtrl.focusDistance = 4.5f;
+        engine->cameraCtrl.focusAngleX = 40.0f;
+        engine->cameraCtrl.focusAngleY = 30.0f;
+        engine->cameraCtrl.currentTarget = earthPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, earthPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Earth";
+        engine->solarUI.showOrbits = true;
+    } else if (scene == "earth_orbit_oblique_off") {
+        float earthAngle = 210.0f;
+        float earthRad = 10.0f;
+        glm::vec3 earthPos(earthRad * cosf(glm::radians(earthAngle)), 0.0f, earthRad * sinf(glm::radians(earthAngle)));
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Earth";
+        engine->cameraCtrl.focusDistance = 4.5f;
+        engine->cameraCtrl.focusAngleX = 40.0f;
+        engine->cameraCtrl.focusAngleY = 30.0f;
+        engine->cameraCtrl.currentTarget = earthPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, earthPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Earth";
+        engine->solarUI.showOrbits = false;
+    } else if (scene == "mars_orbit_oblique" || scene == "Mars_Orbit_Oblique") {
+        float marsAngle = 330.0f;
+        float marsRad = 12.5f;
+        glm::vec3 marsPos(marsRad * cosf(glm::radians(marsAngle)), 0.0f, marsRad * sinf(glm::radians(marsAngle)));
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Mars";
+        engine->cameraCtrl.focusDistance = 4.5f;
+        engine->cameraCtrl.focusAngleX = 40.0f;
+        engine->cameraCtrl.focusAngleY = 30.0f;
+        engine->cameraCtrl.currentTarget = marsPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, marsPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Mars";
+        engine->solarUI.showOrbits = true;
+    } else if (scene == "mars_orbit_oblique_off") {
+        float marsAngle = 330.0f;
+        float marsRad = 12.5f;
+        glm::vec3 marsPos(marsRad * cosf(glm::radians(marsAngle)), 0.0f, marsRad * sinf(glm::radians(marsAngle)));
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Mars";
+        engine->cameraCtrl.focusDistance = 4.5f;
+        engine->cameraCtrl.focusAngleX = 40.0f;
+        engine->cameraCtrl.focusAngleY = 30.0f;
+        engine->cameraCtrl.currentTarget = marsPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, marsPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Mars";
+        engine->solarUI.showOrbits = false;
     } else if (scene == "black_hole") {
         engine->cameraCtrl.mode = CAM_FREE;
         engine->cameraCtrl.freePos = glm::vec3(0.0f, 8.0f, 35.0f);

@@ -145,11 +145,17 @@ float calculateSphericalCloudShadow(vec3 localPos, vec3 localSunDir, float NdotL
     // v = acos(y) / pi
     float theta = atan(Q.z, Q.x);
     if (theta < 0.0) theta += 6.28318530718;
-    float shadowU = fract(theta * 0.15915494309 + uCloudOffset.x);
+    float shadowU = theta * 0.15915494309 + uCloudOffset.x;
     float shadowV = acos(clamp(Q.y, -1.0, 1.0)) * 0.31830988618;
 
-    float shadowAlpha = texture(uCloudsTex, vec2(shadowU, shadowV)).r;
-    return 1.0 - shadowAlpha * clamp(shadowIntensity, 0.0, 1.0);
+    vec2 shadowUV = vec2(shadowU, shadowV);
+    vec2 s_dx = dFdx(shadowUV);
+    vec2 s_dy = dFdy(shadowUV);
+    s_dx.x -= round(s_dx.x);
+    s_dy.x -= round(s_dy.x);
+
+    float shadowAlpha = textureGrad(uCloudsTex, shadowUV, s_dx, s_dy).r;
+    return 1.0 - shadowAlpha * clamp(shadowIntensity, 0.0, 0.65);
 }
 
 // 5. Trowbridge-Reitz GGX Specular BRDF (Water Dielectric)
@@ -226,8 +232,13 @@ void main() {
         surfaceColor = litRing + ambientRing;
         alpha = dayColor.a;
     } else {
-        // Direct solar irradiance applied with cloud and astronomical shadows
-        vec3 litDay = dayColor.rgb * (directSun * vec3(1.0, 0.98, 0.92) * uSunIntensity * totalShadow * cloudShadow);
+        // Direct solar irradiance with Atmosphere 2.0 physical wavelength extinction near terminator
+        float atmoAirMass = 1.0 / max(NdotL + 0.08, 0.04);
+        vec3 tauDirect = (vec3(5.8e-3, 13.5e-3, 33.1e-3) * 22.0 + vec3(21.0e-3) * 6.0) * max(atmoAirMass - 0.8, 0.0);
+        vec3 solarExtinction = (uHasClouds > 0 || uHasOceanMask > 0) ? exp(-tauDirect) : vec3(1.0);
+        vec3 directSunColor = vec3(1.0, 0.98, 0.92) * solarExtinction;
+
+        vec3 litDay = dayColor.rgb * (directSun * directSunColor * uSunIntensity * totalShadow * cloudShadow);
         vec3 ambient = dayColor.rgb * vec3(0.04, 0.04, 0.06);
 
         // Night city lights (finite-safe grazing attenuation, dark-side exclusive)
@@ -243,7 +254,7 @@ void main() {
         if (uHasOceanMask > 0 && NdotL > 0.0 && NdotV > 0.0 && totalShadow > 0.01) {
             oceanMask = texture(uOceanMaskTex, vTexCoord).r; // 1.0 = ocean, 0.0 = land
             if (oceanMask > 0.01) {
-                vec3 sunColor = vec3(1.0, 0.98, 0.92) * (uSunIntensity * totalShadow);
+                vec3 sunColor = directSunColor * (uSunIntensity * totalShadow);
                 ggxSpec = calculateGGXOceanSpecular(N, V, L, NdotL, NdotV, uSpecularRoughness, uSpecularF0, sunColor);
                 oceanSpecular = ggxSpec * (oceanMask * cloudShadow);
             }
@@ -254,11 +265,19 @@ void main() {
 
     // Visible Clouds Overlay
     if (uHasClouds > 0) {
-        vec2 cloudUV = vec2(fract(vTexCoord.x + uCloudOffset.x), vTexCoord.y);
-        vec4 cloudTex = texture(uCloudsTex, cloudUV);
+        vec2 cloudUV = vec2(vTexCoord.x + uCloudOffset.x, vTexCoord.y);
+        vec2 c_dx = dFdx(cloudUV);
+        vec2 c_dy = dFdy(cloudUV);
+        c_dx.x -= round(c_dx.x);
+        c_dy.x -= round(c_dy.x);
+        vec4 cloudTex = textureGrad(uCloudsTex, cloudUV, c_dx, c_dy);
         float cloudAlpha = cloudTex.r;
 
-        vec3 cloudColor = vec3(0.98, 0.98, 1.0) * (directSun * 1.1 * totalShadow + 0.05);
+        float atmoAirMassC = 1.0 / max(NdotL + 0.08, 0.04);
+        vec3 tauDirectC = (vec3(5.8e-3, 13.5e-3, 33.1e-3) * 22.0 + vec3(21.0e-3) * 6.0) * max(atmoAirMassC - 0.8, 0.0);
+        vec3 directCloudSun = vec3(1.0, 0.98, 0.92) * exp(-tauDirectC);
+
+        vec3 cloudColor = vec3(0.98, 0.98, 1.0) * (directSun * directCloudSun * 1.1 * totalShadow + 0.05);
         surfaceColor = mix(surfaceColor, cloudColor, cloudAlpha * twilightFactor * 0.92 * totalShadow);
     }
 

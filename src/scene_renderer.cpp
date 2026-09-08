@@ -70,12 +70,35 @@ void SceneRenderer::initRings() {
     glBindVertexArray(0);
 }
 
+static void makeTextureSeamlessHorizontal(unsigned char* data, int width, int height, int channels, int blendWidth = 32) {
+    if (!data || width <= blendWidth * 2) return;
+    for (int y = 0; y < height; ++y) {
+        unsigned char* row = data + y * width * channels;
+        for (int x = 0; x < blendWidth; ++x) {
+            float t = 0.5f * (1.0f - cosf(3.14159265f * (float)(x + 0.5f) / (float)blendWidth));
+            int leftIdx = x * channels;
+            int rightIdx = (width - 1 - x) * channels;
+            for (int c = 0; c < channels; ++c) {
+                float leftVal = (float)row[leftIdx + c];
+                float rightVal = (float)row[rightIdx + c];
+                float avg = 0.5f * ((float)row[0 * channels + c] + (float)row[(width - 1) * channels + c]);
+                row[leftIdx + c] = (unsigned char)std::clamp((int)std::round(avg * (1.0f - t) + leftVal * t), 0, 255);
+                row[rightIdx + c] = (unsigned char)std::clamp((int)std::round(avg * (1.0f - t) + rightVal * t), 0, 255);
+            }
+        }
+    }
+}
+
 GLuint loadTexture(const char* filename) {
     int width, height, channels;
     unsigned char* image = stbi_load(filename, &width, &height, &channels, 0);
     if (!image) {
         fprintf(stderr, "[Texture] Failed to load: %s\n", filename);
         return 0;
+    }
+
+    if (filename && strstr(filename, "earth_clouds") != nullptr) {
+        makeTextureSeamlessHorizontal(image, width, height, channels, 32);
     }
 
     GLenum format = (channels == 4) ? GL_RGBA : (channels == 1 ? GL_RED : GL_RGB);
@@ -380,6 +403,9 @@ void SceneRenderer::renderSun(const glm::mat4& viewMat, const glm::mat4& projMat
 void SceneRenderer::renderOrbit(float radius, bool isSelected, const CameraController& cameraCtrl, const glm::mat4& viewMat, const glm::mat4& projMat) {
     if (cameraCtrl.photoModeActive) return;
 
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -388,6 +414,7 @@ void SceneRenderer::renderOrbit(float radius, bool isSelected, const CameraContr
         if (isSelected) {
             orbitColor = glm::vec4(0.35f, 0.70f, 1.0f, 0.65f);
         } else if (cameraCtrl.mode == CAM_POV) {
+            glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
             return;
         } else {
@@ -419,6 +446,7 @@ void SceneRenderer::renderOrbit(float radius, bool isSelected, const CameraContr
     }
     batch.end();
 
+    glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
 }
 
@@ -490,13 +518,14 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         float distToPlanet = glm::distance(cameraCtrl.currentEye, planet.currentPosition);
         lod::SphereTier planetTier = lod::LODManager::instance().computeSphereTier(distToPlanet, effectiveSize, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
 
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), planet.currentPosition);
+        glm::mat4 rotModel = glm::mat4(1.0f);
         const CelestialBodyData* data = db.getBody(planet.name);
         if (solarUI.enableAxialTilt && data && data->axialTiltDeg != 0.0f) {
-            model = glm::rotate(model, glm::radians(data->axialTiltDeg), glm::vec3(1.0f, 0.0f, 0.2f));
+            rotModel = glm::rotate(rotModel, glm::radians(data->axialTiltDeg), glm::vec3(1.0f, 0.0f, 0.2f));
         }
         float effectiveSpinSpeed = planet.spinSpeed * solarUI.spinSpeedScale;
-        model = glm::rotate(model, glm::radians(time * effectiveSpinSpeed * 0.1f), glm::vec3(0.0f, 1.0f, 0.0f));
+        rotModel = glm::rotate(rotModel, glm::radians(time * effectiveSpinSpeed * 0.1f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), planet.currentPosition) * rotModel;
         glm::mat4 planetMV = viewMat * glm::scale(model, glm::vec3(effectiveSize));
 
         if (planetProgram) {
@@ -546,22 +575,22 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
                 glUniform1f(uSpecularF0Loc, 0.0f);
             }
 
-            // Atmospheric tint & legacy glow fallback
+            // Atmospheric tint (dedicated Atmosphere 2.0 shell handles scattering; surface glow is zero to prevent double-glow)
             if (data) {
                 glUniform3f(uAtmosphereColorLoc, data->themeColor.r, data->themeColor.g, data->themeColor.b);
-                float glowBase = (planet.name == "Mercury" || planet.isDwarf) ? 0.15f : 0.40f;
-                glUniform1f(uAtmosphereGlowLoc, glowBase * solarUI.atmosphereGlowScale);
             } else {
                 glUniform3f(uAtmosphereColorLoc, 1.0f, 1.0f, 1.0f);
-                glUniform1f(uAtmosphereGlowLoc, 0.0f);
             }
+            glUniform1f(uAtmosphereGlowLoc, 0.0f);
 
             // Solar intensity
             float bodySunMult = (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f;
             glUniform1f(uSunIntensityLoc, bodySunMult);
 
-            // Fast Analytical Shadow Sun Vector (direct vector subtraction, zero matrix inverse)
-            glm::vec3 planetSunLocalPos = sunWorldPos - planet.currentPosition;
+            // Fast Analytical Shadow Sun Vector transformed into object/local space
+            glm::mat3 worldToObject = glm::transpose(glm::mat3(rotModel));
+            glm::vec3 sunWorldDir = sunWorldPos - planet.currentPosition;
+            glm::vec3 planetSunLocalPos = worldToObject * sunWorldDir;
             glUniform3f(uSunLocalPosLoc, planetSunLocalPos.x, planetSunLocalPos.y, planetSunLocalPos.z);
 
             if (planet.hasRings) {
@@ -572,17 +601,29 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
                 glUniform1i(uHasRingsLoc, 0);
             }
 
-            // Eclipse shadow check (fast direct vector math)
+            // Eclipse shadow check: true physical alignment check
             bool eclipseFound = false;
-            for (const auto& m : moons) {
-                if (m.parentPlanet == planet.name) {
-                    glm::vec3 moonLocalPos = (m.currentPosition - planet.currentPosition);
-                    float moonLocalRadius = (m.size * solarUI.planetScale) / effectiveSize;
-                    glUniform1i(uHasEclipseLoc, 1);
-                    glUniform3f(uEclipseLocalPosLoc, moonLocalPos.x, moonLocalPos.y, moonLocalPos.z);
-                    glUniform1f(uEclipseRadiusLoc, moonLocalRadius);
-                    eclipseFound = true;
-                    break;
+            float sunDist = glm::length(sunWorldDir);
+            if (sunDist > 1e-4f) {
+                glm::vec3 sunNormDir = sunWorldDir / sunDist;
+                for (const auto& m : moons) {
+                    if (m.parentPlanet == planet.name) {
+                        glm::vec3 moonRel = m.currentPosition - planet.currentPosition;
+                        float tMoon = glm::dot(moonRel, sunNormDir);
+                        if (tMoon > 0.0f && tMoon < sunDist) {
+                            float dPerpSq = glm::dot(moonRel, moonRel) - tMoon * tMoon;
+                            float maxShadowDist = (effectiveSize + m.size * solarUI.planetScale);
+                            if (dPerpSq < maxShadowDist * maxShadowDist) {
+                                glm::vec3 moonLocalPos = (worldToObject * moonRel) / effectiveSize;
+                                float moonLocalRadius = (m.size * solarUI.planetScale) / effectiveSize;
+                                glUniform1i(uHasEclipseLoc, 1);
+                                glUniform3f(uEclipseLocalPosLoc, moonLocalPos.x, moonLocalPos.y, moonLocalPos.z);
+                                glUniform1f(uEclipseRadiusLoc, moonLocalRadius);
+                                eclipseFound = true;
+                                break;
+                            }
+                        }
+                    }
                 }
             }
             if (!eclipseFound) glUniform1i(uHasEclipseLoc, 0);
@@ -597,7 +638,8 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         }
 
         // Atmosphere Glow rendering
-        if (atmo && solarUI.showAtmospheres) {
+        bool bodyHasAtmo = (atmo != nullptr && atmo->getAtmosphereProperties(planet.name).hasAtmosphere);
+        if (bodyHasAtmo && solarUI.showAtmospheres) {
             glm::mat4 atmoMV = viewMat * glm::translate(glm::mat4(1.0f), planet.currentPosition);
             atmo->renderAtmosphere(planet.name, effectiveSize, time, sunEyePos, atmoMV, projMat);
             if (planetProgram) glUseProgram(planetProgram);

@@ -46,6 +46,7 @@ void Engine::applyLoadedSettings() {
     postPipeline.bloomEnabled   = appSettings.bloomEnabled;
     solarUI.timeMultiplier      = appSettings.timeScale;
     cameraCtrl.fieldOfView      = appSettings.fieldOfView;
+    solarUI.isFullscreen        = isFullscreen;
 }
 
 void Engine::captureCurrentSettings() {
@@ -67,6 +68,7 @@ void Engine::captureCurrentSettings() {
     appSettings.bloomEnabled        = postPipeline.bloomEnabled;
     appSettings.timeScale           = solarUI.timeMultiplier;
     appSettings.fieldOfView         = cameraCtrl.fieldOfView;
+    appSettings.fullscreen          = isFullscreen;
 }
 
 void Engine::updateCursorCapture() {
@@ -91,14 +93,19 @@ void Engine::updateCursorCapture() {
 }
 
 void Engine::toggleFullscreen() {
-    if (!window) return;
     isFullscreen = !isFullscreen;
+    solarUI.isFullscreen = isFullscreen;
+    if (!window) return;
     if (isFullscreen) {
         glfwGetWindowPos(window, &savedWindowPos[0], &savedWindowPos[1]);
         glfwGetWindowSize(window, &savedWindowSize[0], &savedWindowSize[1]);
         GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        if (monitor) {
+            const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+            if (mode) {
+                glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+            }
+        }
     } else {
         glfwSetWindowMonitor(window, nullptr, savedWindowPos[0], savedWindowPos[1],
                              savedWindowSize[0], savedWindowSize[1], 0);
@@ -776,14 +783,6 @@ void Engine::renderFrame(float deltaTime) {
 
     renderer.renderStarfield(viewMat, projMat, cameraCtrl.currentEye);
 
-    if (solarUI.showOrbits) {
-        for (const auto &planet : planets) {
-            if (!solarUI.showDwarfPlanets && planet.isDwarf) continue;
-            bool isSel = (cameraCtrl.focusedBodyName == planet.name || solarUI.selectedPlanetName == planet.name);
-            renderer.renderOrbit(planet.orbitRadius, isSel, cameraCtrl, viewMat, projMat);
-        }
-    }
-
     renderer.renderSun(viewMat, projMat, (float)simTime, solarUI.sunIntensity, sunWorldPosition, cameraCtrl, solarUI);
     if (particleSys) {
         particleSys->render(renderer, viewMat, projMat, solarUI.showParticles);
@@ -792,6 +791,15 @@ void Engine::renderFrame(float deltaTime) {
     glm::vec3 sunEyePos = glm::vec3(viewMat * glm::vec4(sunWorldPosition, 1.0f));
     renderer.renderPlanets(planets, moons, viewMat, projMat, sunWorldPosition, sunEyePos, (float)simTime, cloudRotationAngle, solarUI, cameraCtrl, celestialDb, atmosphereEffects);
     renderer.renderMoons(moons, planets, viewMat, projMat, sunWorldPosition, sunEyePos, solarUI, cameraCtrl);
+
+    // Orbit lines: rendered with depth testing against planetary bodies to ensure proper occlusion
+    if (solarUI.showOrbits) {
+        for (const auto &planet : planets) {
+            if (!solarUI.showDwarfPlanets && planet.isDwarf) continue;
+            bool isSel = (cameraCtrl.focusedBodyName == planet.name || solarUI.selectedPlanetName == planet.name);
+            renderer.renderOrbit(planet.orbitRadius, isSel, cameraCtrl, viewMat, projMat);
+        }
+    }
 
     // Pre-lens background celestial elements: Asteroids render into HDR_A
     if (asteroidBelt && solarUI.showAsteroids) {
@@ -876,6 +884,11 @@ void Engine::renderFrame(float deltaTime) {
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    if (solarUI.pendingFullscreenToggle) {
+        solarUI.pendingFullscreenToggle = false;
+        toggleFullscreen();
+    }
 
     if (runQACapture) {
         qaFrameCount++;

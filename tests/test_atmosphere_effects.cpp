@@ -31,7 +31,7 @@ TEST_CASE("Atmosphere 2.0 - Normalized Unit Transformation and Scale Heights (Rp
 
     REQUIRE(normRayleighH == Approx(8.0f / 6371.0f).epsilon(1e-4));
     REQUIRE(normMieH == Approx(1.2f / 6371.0f).epsilon(1e-4));
-    REQUIRE(normAtmoR == Approx(1.065f).epsilon(1e-4));
+    REQUIRE(normAtmoR == Approx(1.0f + 100.0f / 6371.0f).epsilon(1e-4));
     REQUIRE(normRayleighH > normMieH); // Rayleigh scale height is physically larger than aerosol scale height
 }
 

@@ -49,8 +49,16 @@ void main() {
     // Rim optical depth falloff
     float rim = pow(1.0 - NdotV, 3.2);
 
-    // Sunlit forward / twilight wrap
-    float sunlit = max(NdotL * 0.75 + 0.25, 0.02);
+    // Grazing path length through spherical atmosphere: increases dramatically towards terminator
+    float airMass = 1.0 / max(NdotL + 0.08, 0.04);
+
+    // Physical wavelength extinction along solar path (Beer-Lambert attenuation)
+    // Short wavelengths (blue) are strongly scattered out along the long grazing path, leaving warm golden/red light
+    vec3 tauSun = (uRayleighCoeff * 22.0 + vec3(uMieCoeff) * 6.0) * max(airMass - 0.8, 0.0);
+    vec3 solarTransmittance = exp(-tauSun);
+
+    // Sunlit twilight terminator transition (smooth fade into dusk across civil/nautical twilight)
+    float sunlit = smoothstep(-0.12, 0.16, NdotL);
 
     // Single-scattering numerical approximation along view ray
     int samples = clamp(uSampleCount, 4, 16);
@@ -70,11 +78,12 @@ void main() {
         mieAccum += uMieCoeff * dM;
     }
 
-    vec3 inScattered = (rayleighAccum * pR * 12.0 + vec3(mieAccum * pM * 10.0)) * uDensity;
+    vec3 inScattered = (rayleighAccum * pR * 12.0 + vec3(mieAccum * pM * 10.0)) * solarTransmittance * uDensity;
     
-    // Combine with base atmospheric tint for vibrancy
-    vec3 finalColor = (inScattered + uAtmoColor * (rim * 0.8 + 0.2)) * sunlit * uGlowIntensity * 1.5;
-    float alpha = clamp(rim * uDensity * sunlit * 1.2 + length(inScattered) * 0.4, 0.0, 1.0);
+    // Combine physical in-scatter with subtle limb modulation; zero flat nadir tint so surface textures stay crisp
+    vec3 rimGlow = uAtmoColor * solarTransmittance * (rim * 0.6);
+    vec3 finalColor = (inScattered + rimGlow) * sunlit * uGlowIntensity;
+    float alpha = clamp(rim * uDensity * sunlit + length(finalColor) * 0.35, 0.0, 1.0);
 
     FragColor = vec4(finalColor, alpha);
 }

@@ -27,6 +27,7 @@ imgui.ini
 save_state*.json
 qa_save*.json
 *.zip
+Textures/Textures_Source/
 
 # IDE & Editor
 .vs/

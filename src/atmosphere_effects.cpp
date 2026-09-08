@@ -41,7 +41,7 @@ void AtmosphereEffects::initAtmosphereData() {
     venus.mieAnisotropyG = 0.82f;
     venus.densityMultiplier = 1.85f;
     venus.glowIntensity = 1.15f;
-    venus.height = 0.090f;
+    venus.height = venus.atmosphereHeightKm / venus.planetRadiusKm; // 250.0 / 6051.8 ≈ 0.041310f (canonical physical Ratmo/Rp ≈ 1.0413)
     venus.color = glm::vec3(0.95f, 0.82f, 0.52f);
     atmosphereData["Venus"] = venus;
 
@@ -56,8 +56,8 @@ void AtmosphereEffects::initAtmosphereData() {
     earth.mieScatteringCoeff = 21.0e-3f;
     earth.mieAnisotropyG = 0.76f;
     earth.densityMultiplier = 1.0f;
-    earth.glowIntensity = 1.20f;
-    earth.height = 0.065f;
+    earth.glowIntensity = 1.0f;
+    earth.height = earth.atmosphereHeightKm / earth.planetRadiusKm; // 100.0 / 6371.0 ≈ 0.015696f (canonical physical Ratmo/Rp ≈ 1.0157)
     earth.color = glm::vec3(0.35f, 0.68f, 1.0f);
     atmosphereData["Earth"] = earth;
 
@@ -73,11 +73,11 @@ void AtmosphereEffects::initAtmosphereData() {
     mars.mieAnisotropyG = 0.78f;
     mars.densityMultiplier = 0.45f;
     mars.glowIntensity = 0.85f;
-    mars.height = 0.045f;
+    mars.height = mars.atmosphereHeightKm / mars.planetRadiusKm; // 80.0 / 3389.5 ≈ 0.023602f (canonical physical Ratmo/Rp ≈ 1.0236)
     mars.color = glm::vec3(0.92f, 0.55f, 0.38f);
     atmosphereData["Mars"] = mars;
 
-    // Jupiter: Pale golden-cream stratospheric haze
+    // Jupiter: Pale golden-cream stratospheric haze (canonical visual upper-atmosphere definition)
     AtmosphereProperties jupiter;
     jupiter.hasAtmosphere = true;
     jupiter.planetRadiusKm = 69911.0f;
@@ -89,11 +89,11 @@ void AtmosphereEffects::initAtmosphereData() {
     jupiter.mieAnisotropyG = 0.75f;
     jupiter.densityMultiplier = 0.60f;
     jupiter.glowIntensity = 0.70f;
-    jupiter.height = 0.045f;
+    jupiter.height = 0.045f; // Canonical visual upper-atmosphere definition (Ratmo/Rp = 1.045)
     jupiter.color = glm::vec3(0.88f, 0.78f, 0.62f);
     atmosphereData["Jupiter"] = jupiter;
 
-    // Saturn: Golden-amber methane/hydrogen haze
+    // Saturn: Golden-amber methane/hydrogen haze (canonical visual upper-atmosphere definition)
     AtmosphereProperties saturn;
     saturn.hasAtmosphere = true;
     saturn.planetRadiusKm = 58232.0f;
@@ -105,11 +105,11 @@ void AtmosphereEffects::initAtmosphereData() {
     saturn.mieAnisotropyG = 0.75f;
     saturn.densityMultiplier = 0.55f;
     saturn.glowIntensity = 0.65f;
-    saturn.height = 0.045f;
+    saturn.height = 0.045f; // Canonical visual upper-atmosphere definition (Ratmo/Rp = 1.045)
     saturn.color = glm::vec3(0.90f, 0.82f, 0.60f);
     atmosphereData["Saturn"] = saturn;
 
-    // Uranus: Pale cyan / aquamarine methane haze
+    // Uranus: Pale cyan / aquamarine methane haze (canonical visual definition)
     AtmosphereProperties uranus;
     uranus.hasAtmosphere = true;
     uranus.planetRadiusKm = 25362.0f;
@@ -121,11 +121,11 @@ void AtmosphereEffects::initAtmosphereData() {
     uranus.mieAnisotropyG = 0.76f;
     uranus.densityMultiplier = 0.75f;
     uranus.glowIntensity = 0.85f;
-    uranus.height = 0.055f;
+    uranus.height = 0.055f; // Canonical visual definition (Ratmo/Rp = 1.055)
     uranus.color = glm::vec3(0.48f, 0.85f, 0.92f);
     atmosphereData["Uranus"] = uranus;
 
-    // Neptune: Deep azure / cobalt blue atmospheric glow
+    // Neptune: Deep azure / cobalt blue atmospheric glow (canonical visual definition)
     AtmosphereProperties neptune;
     neptune.hasAtmosphere = true;
     neptune.planetRadiusKm = 24622.0f;
@@ -137,8 +137,7 @@ void AtmosphereEffects::initAtmosphereData() {
     neptune.mieAnisotropyG = 0.76f;
     neptune.densityMultiplier = 0.85f;
     neptune.glowIntensity = 0.95f;
-    neptune.height = 0.060f;
-    neptune.color = glm::vec3(0.28f, 0.55f, 1.0f);
+    neptune.height = 0.060f; // Canonical visual definition (Ratmo/Rp = 1.060)
     atmosphereData["Neptune"] = neptune;
 }
 
@@ -205,7 +204,7 @@ void AtmosphereEffects::renderAtmosphere(const std::string& planetName, float pl
         glUniform1f(uPlanetRadiusLoc, planetRadius);
         glUniform1f(uAtmoRadiusLoc, atmoRadius);
 
-        glm::mat4 modelMat = glm::scale(inModelView, glm::vec3(atmoRadius / planetRadius));
+        glm::mat4 modelMat = glm::scale(inModelView, glm::vec3(atmoRadius));
         glUniformMatrix4fv(uModelViewLoc, 1, GL_FALSE, glm::value_ptr(modelMat));
         glUniformMatrix4fv(uProjectionLoc, 1, GL_FALSE, glm::value_ptr(inProjection));
 

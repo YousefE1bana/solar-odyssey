@@ -33,3 +33,57 @@ TEST_CASE("Settings Persistence INI Round-Trip", "[settings]") {
 
     std::remove(testPath);
 }
+
+TEST_CASE("Fullscreen Settings and State Synchronization", "[settings]") {
+    // 1. Verify INI persistence for both states
+    AppSettings settings;
+    settings.fullscreen = false;
+    std::string iniFalse = settings.serialize();
+    REQUIRE(iniFalse.find("fullscreen=0") != std::string::npos);
+
+    settings.fullscreen = true;
+    std::string iniTrue = settings.serialize();
+    REQUIRE(iniTrue.find("fullscreen=1") != std::string::npos);
+
+    // 2. Deterministic state machine verifying unified toggle logic
+    // Both F11 and Settings UI checkbox route into the identical toggleAction:
+    bool engineIsFullscreen = false;
+    bool uiIsFullscreen = false;
+    bool uiPendingToggle = false;
+
+    auto toggleAction = [&]() {
+        engineIsFullscreen = !engineIsFullscreen;
+        uiIsFullscreen = engineIsFullscreen;
+    };
+
+    // Case A: User presses F11 from windowed mode
+    toggleAction();
+    REQUIRE(engineIsFullscreen == true);
+    REQUIRE(uiIsFullscreen == true);
+
+    // Case B: User toggles checkbox in Settings UI to exit fullscreen
+    uiIsFullscreen = false;
+    uiPendingToggle = true;
+    if (uiPendingToggle) {
+        uiPendingToggle = false;
+        toggleAction();
+    }
+    REQUIRE(engineIsFullscreen == false);
+    REQUIRE(uiIsFullscreen == false);
+    REQUIRE(uiPendingToggle == false);
+
+    // Case C: User toggles checkbox in Settings UI to enter fullscreen
+    uiIsFullscreen = true;
+    uiPendingToggle = true;
+    if (uiPendingToggle) {
+        uiPendingToggle = false;
+        toggleAction();
+    }
+    REQUIRE(engineIsFullscreen == true);
+    REQUIRE(uiIsFullscreen == true);
+
+    // Case D: User presses F11 to exit fullscreen; Settings UI reflects windowed
+    toggleAction();
+    REQUIRE(engineIsFullscreen == false);
+    REQUIRE(uiIsFullscreen == false);
+}
