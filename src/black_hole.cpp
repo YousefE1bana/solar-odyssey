@@ -135,7 +135,7 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
 
     renderDiskMesh(accretionDiskInner, accretionDiskOuter, 120);
 
-    if (showLensingArch) {
+    if (showLensingArch && !enableLensingPass) {
         if (program != 0 && uRenderPassLoc != -1) {
             glUniform1i(uRenderPassLoc, 0);
         }
@@ -287,3 +287,200 @@ void BlackHole::renderJetCylinder(float height, float baseRadius, float topRadiu
     jetMeshes.push_back(std::move(m));
     jetMeshes.back().gpu.draw();
 }
+
+void BlackHole::initLensingShader(GLuint shaderProgram) {
+    if (shaderProgram != 0) {
+        lensingProgram = shaderProgram;
+    } else {
+        std::string vs = readFileText("shaders/black_hole_lensing.vert");
+        std::string fs = readFileText("shaders/black_hole_lensing.frag");
+        if (vs.empty() || fs.empty()) {
+            std::cerr << "[BlackHole] Failed to load lensing shaders" << std::endl;
+            return;
+        }
+        GLuint v = compileShader(GL_VERTEX_SHADER, vs);
+        GLuint f = compileShader(GL_FRAGMENT_SHADER, fs);
+        lensingProgram = linkProgram(v, f);
+    }
+
+    if (lensingProgram != 0) {
+        uLensSceneColorTexLoc = glGetUniformLocation(lensingProgram, "uSceneColorTex");
+        uLensCameraLocalLoc = glGetUniformLocation(lensingProgram, "uCameraLocal");
+        uLensSchwarzschildRadiusLoc = glGetUniformLocation(lensingProgram, "uSchwarzschildRadius");
+        uLensInfluenceRadiusLoc = glGetUniformLocation(lensingProgram, "uLensingInfluenceRadius");
+        uLensDiskInnerLoc = glGetUniformLocation(lensingProgram, "uAccretionDiskInner");
+        uLensDiskOuterLoc = glGetUniformLocation(lensingProgram, "uAccretionDiskOuter");
+        uLensTimeLoc = glGetUniformLocation(lensingProgram, "uTime");
+        uLensInvProjectionLoc = glGetUniformLocation(lensingProgram, "uInvProjection");
+        uLensProjectionLoc = glGetUniformLocation(lensingProgram, "uProjection");
+        uLensViewMatrixLoc = glGetUniformLocation(lensingProgram, "uViewMatrix");
+        uLensInvViewMatrixLoc = glGetUniformLocation(lensingProgram, "uInvViewMatrix");
+        uLensScreenResolutionLoc = glGetUniformLocation(lensingProgram, "uScreenResolution");
+        uLensMaxStepsLoc = glGetUniformLocation(lensingProgram, "uMaxSteps");
+    }
+}
+
+void BlackHole::renderLensingPass(GLuint preLensTex, GLuint lensedFBO,
+                                  const glm::mat4& viewMat, const glm::mat4& projMat,
+                                  int screenWidth, int screenHeight,
+                                  const glm::dvec3& cameraWorldPos,
+                                  const glm::dvec3& blackHoleWorldPos) {
+    if (!active || !enableLensingPass || preLensTex == 0 || lensedFBO == 0) return;
+    if (lensingProgram == 0) {
+        initLensingShader();
+        if (lensingProgram == 0) return;
+    }
+
+    BlackHoleScreenBounds bounds = calculateScreenBounds(viewMat, projMat, screenWidth, screenHeight);
+    if (!bounds.isVisible) return;
+
+    // GL State Preservation: Query and save previous state
+    GLboolean depthTestEnabled = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean depthMask = GL_TRUE;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+    GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLint prevFBO = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevFBO);
+    GLint prevViewport[4];
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLint prevScissor[4];
+    glGetIntegerv(GL_SCISSOR_BOX, prevScissor);
+    GLint prevProgram = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
+    GLint prevActiveTex = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    GLint prevBoundTex = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevBoundTex);
+
+    // Target Isolation: Assert preLensTex is not attached to lensedFBO
+    GLint attachedTex = 0;
+    glGetNamedFramebufferAttachmentParameteriv(lensedFBO, GL_COLOR_ATTACHMENT0,
+                                               GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &attachedTex);
+    assert((GLuint)attachedTex != preLensTex && "Feedback loop detected! preLensTex is attached to lensedFBO");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, lensedFBO);
+    glViewport(0, 0, screenWidth, screenHeight);
+
+    // Precision architecture: Compute camera relative to black hole in double precision, cast to float
+    glm::dvec3 camLocalD = cameraWorldPos - blackHoleWorldPos;
+    glm::vec3 cameraLocal = glm::vec3(camLocalD);
+
+    // Invert matrices
+    glm::mat4 invProj = glm::inverse(projMat);
+    glm::mat4 invView = glm::inverse(viewMat);
+
+    glUseProgram(lensingProgram);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, preLensTex);
+    if (uLensSceneColorTexLoc != -1) glUniform1i(uLensSceneColorTexLoc, 0);
+
+    if (uLensCameraLocalLoc != -1) glUniform3f(uLensCameraLocalLoc, cameraLocal.x, cameraLocal.y, cameraLocal.z);
+    if (uLensSchwarzschildRadiusLoc != -1) glUniform1f(uLensSchwarzschildRadiusLoc, schwarzschildRadius);
+    if (uLensInfluenceRadiusLoc != -1) glUniform1f(uLensInfluenceRadiusLoc, lensingInfluenceRadius);
+    if (uLensDiskInnerLoc != -1) glUniform1f(uLensDiskInnerLoc, accretionDiskInner);
+    if (uLensDiskOuterLoc != -1) glUniform1f(uLensDiskOuterLoc, accretionDiskOuter);
+    if (uLensTimeLoc != -1) glUniform1f(uLensTimeLoc, simTime);
+    if (uLensInvProjectionLoc != -1) glUniformMatrix4fv(uLensInvProjectionLoc, 1, GL_FALSE, glm::value_ptr(invProj));
+    if (uLensProjectionLoc != -1) glUniformMatrix4fv(uLensProjectionLoc, 1, GL_FALSE, glm::value_ptr(projMat));
+    if (uLensViewMatrixLoc != -1) glUniformMatrix4fv(uLensViewMatrixLoc, 1, GL_FALSE, glm::value_ptr(viewMat));
+    if (uLensInvViewMatrixLoc != -1) glUniformMatrix4fv(uLensInvViewMatrixLoc, 1, GL_FALSE, glm::value_ptr(invView));
+    if (uLensScreenResolutionLoc != -1) glUniform2f(uLensScreenResolutionLoc, (float)screenWidth, (float)screenHeight);
+    if (uLensMaxStepsLoc != -1) glUniform1i(uLensMaxStepsLoc, 24);
+
+    // Depth and blending state for screen-space bounded overwrite
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_BLEND);
+
+    // OpenGL Scissor test using bottom-left convention
+    glEnable(GL_SCISSOR_TEST);
+    int scissorW = std::max(1, bounds.maxX - bounds.minX);
+    int scissorH = std::max(1, bounds.maxY - bounds.minY);
+    glScissor(bounds.minX, bounds.minY, scissorW, scissorH);
+
+    // Draw fullscreen quad (clipped by scissor box)
+    glprims::sharedFullscreenQuad().draw();
+
+    // Deterministic State Restoration
+    if (scissorEnabled) {
+        glScissor(prevScissor[0], prevScissor[1], prevScissor[2], prevScissor[3]);
+    } else {
+        glDisable(GL_SCISSOR_TEST);
+    }
+    if (depthTestEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    glDepthMask(depthMask);
+    if (blendEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (cullEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+
+    glBindTexture(GL_TEXTURE_2D, prevBoundTex);
+    glActiveTexture(prevActiveTex);
+    glUseProgram(prevProgram);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+}
+
+double BlackHole::computeWeakFieldDeflection(double rs, double impactParam, double domainRadius, int steps) {
+    if (impactParam <= 0.0 || rs <= 0.0 || steps <= 0) return 0.0;
+    double L = domainRadius;
+    double totalDist = 2.0 * L;
+    double dt = totalDist / (double)steps;
+
+    glm::dvec3 pos(-L, impactParam, 0.0);
+    glm::dvec3 vel(1.0, 0.0, 0.0);
+
+    auto accel = [rs](const glm::dvec3& p) -> glm::dvec3 {
+        double r2 = glm::dot(p, p);
+        double r = std::sqrt(std::max(r2, 1e-12));
+        double factor = (rs / (r * r * r)) * (1.0 + 1.5 * rs / r);
+        return -factor * p;
+    };
+
+    glm::dvec3 a = accel(pos);
+    for (int i = 0; i < steps; ++i) {
+        pos += vel * dt + 0.5 * a * (dt * dt);
+        glm::dvec3 aNext = accel(pos);
+        vel = glm::normalize(vel + 0.5 * (a + aNext) * dt);
+        a = aNext;
+    }
+
+    double cosAlpha = glm::clamp(glm::dot(glm::dvec3(1.0, 0.0, 0.0), vel), -1.0, 1.0);
+    return std::acos(cosAlpha);
+}
+
+double BlackHole::computeBoundedDeflection(double rs, double impactParam, double influenceRadius, int steps) {
+    if (impactParam <= 0.0 || impactParam >= influenceRadius || rs <= 0.0 || steps <= 0) return 0.0;
+    double b = impactParam;
+    double R = influenceRadius;
+    double xStart = -std::sqrt(std::max(0.0, R * R - b * b));
+    glm::dvec3 pos(xStart, b, 0.0);
+    glm::dvec3 vel(1.0, 0.0, 0.0);
+
+    auto accel = [rs](const glm::dvec3& p) -> glm::dvec3 {
+        double r2 = glm::dot(p, p);
+        double r = std::sqrt(std::max(r2, 1e-12));
+        double factor = (rs / (r * r * r)) * (1.0 + 1.5 * rs / r);
+        return -factor * p;
+    };
+
+    double totalDist = 2.0 * std::abs(xStart);
+    double dtBase = totalDist / (double)steps;
+
+    for (int i = 0; i < steps; ++i) {
+        double r = glm::length(pos);
+        if (r <= rs * 1.05) break; // Horizon capture
+        double stepScale = glm::clamp((r - rs) / (R - rs), 0.40, 1.40);
+        double dt = dtBase * stepScale;
+        glm::dvec3 a = accel(pos);
+        pos += vel * dt + 0.5 * a * (dt * dt);
+        glm::dvec3 aNext = accel(pos);
+        vel = glm::normalize(vel + 0.5 * (a + aNext) * dt);
+        if (glm::length(pos) > R && glm::dot(pos, vel) > 0.0) break; // Escaped
+    }
+
+    double cosAlpha = glm::clamp(glm::dot(glm::dvec3(1.0, 0.0, 0.0), vel), -1.0, 1.0);
+    return std::acos(cosAlpha);
+}
+

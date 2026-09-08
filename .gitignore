@@ -26,6 +26,7 @@ Trash/
 imgui.ini
 save_state*.json
 qa_save*.json
+*.zip
 
 # IDE & Editor
 .vs/

@@ -149,6 +149,7 @@ add_executable(SolarOdysseyTests
   tests/test_atmosphere_effects.cpp
   tests/test_earth_surface.cpp
   tests/test_black_hole_pipeline.cpp
+  tests/test_black_hole_lensing.cpp
   src/post_processing.cpp
   src/black_hole.cpp
   src/planet_data.cpp

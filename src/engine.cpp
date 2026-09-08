@@ -360,6 +360,7 @@ bool Engine::init(int width, int height, const char* title) {
     inputMgr->init(window);
     renderer.init();
     blackHole.initShader(renderer.blackHoleProgram);
+    blackHole.initLensingShader();
     initPlanetsAndMoons();
 
     asteroidBelt = new AsteroidBelt(800, 15.0f, 17.8f, "Textures/moon.jpg");
@@ -806,6 +807,15 @@ void Engine::renderFrame(float deltaTime) {
     // Copies complete pre-lens scene from sceneFBO to lensedFBO with zero feedback loop.
     // sceneDepthRBO is shared, preserving depth buffer without clearing.
     postPipeline.transitionToLensed();
+
+    // Checkpoint C3.4: Bounded Relativistic Deflection Pass (reads HDR_A / sceneColorTex, writes HDR_B / lensedFBO)
+    if (blackHole.active && blackHole.enableLensingPass) {
+        glm::dvec3 bhPosD = glm::dvec3(blackHole.position);
+        glm::dvec3 camPosD = glm::dvec3(cameraCtrl.currentEye);
+        blackHole.renderLensingPass(postPipeline.sceneColorTex, postPipeline.lensedFBO,
+                                    viewMat, projMat, postPipeline.width, postPipeline.height,
+                                    camPosD, bhPosD);
+    }
 
     // Composite Black Hole primary components and foreground entities into HDR_B (lensedFBO)
     renderer.renderBlackHole(blackHole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);

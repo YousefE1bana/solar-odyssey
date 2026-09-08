@@ -107,6 +107,8 @@ bool BenchmarkRunner::initFromArgs(int argc, char** argv) {
             config.c31Baseline = true;
         } else if (strcmp(argv[i], "--bypass-copy") == 0 || strcmp(argv[i], "--c32-control") == 0) {
             config.bypassCopy = true;
+        } else if (strcmp(argv[i], "--disable-lensing") == 0 || strcmp(argv[i], "--lensing-off") == 0) {
+            config.disableLensing = true;
         }
     }
     
@@ -123,6 +125,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
     // Initialize real OpenGL timer query ring buffer
     gpuTimer.init();
     engine->postPipeline.bypassPreLensCopy = config.bypassCopy;
+    engine->blackHole.enableLensingPass = !config.disableLensing;
 
     // Bypass cinematic startup fade (guarantee 100% visible 3D scene)
     engine->postPipeline.skipStartup();
@@ -146,6 +149,9 @@ void BenchmarkRunner::onSetup(Engine* engine) {
     engine->solarUI.isPaused = config.captureGolden;
     engine->solarUI.timeMultiplier = config.captureGolden ? 0.0f : 1.0f;
     engine->simTime = 0.0; // Fixed deterministic start timestamp
+    engine->cloudRotationAngle = 0.0f;
+    engine->simCtrl.setSimTime(0.0);
+    engine->simCtrl.setCloudRotationAngle(0.0);
     srand(42);             // Fixed PRNG seed
     engine->renderer.surfaceOverrides = SceneRenderer::SurfaceFeatureOverrides{};
 
@@ -409,6 +415,39 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentTarget = engine->cameraCtrl.currentEye + engine->cameraCtrl.freeFront;
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
+    } else if (scene == "black_hole_oblique" || scene == "BlackHole_Oblique" || scene == "Lensing_ON" || scene == "lensing_on") {
+        engine->cameraCtrl.mode = CAM_BLACK_HOLE;
+        engine->cameraCtrl.focusedBodyName = "Black Hole";
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 65.0f;
+        engine->cameraCtrl.focusDistance = 34.0f;
+        engine->cameraCtrl.currentTarget = engine->blackHole.position;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(34.0f, 25.0f, 65.0f, engine->blackHole.position);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        if (!config.disableLensing) engine->blackHole.enableLensingPass = true;
+    } else if (scene == "black_hole_frontal" || scene == "BlackHole_Frontal") {
+        engine->cameraCtrl.mode = CAM_BLACK_HOLE;
+        engine->cameraCtrl.focusedBodyName = "Black Hole";
+        engine->cameraCtrl.focusAngleX = 2.0f;
+        engine->cameraCtrl.focusAngleY = 65.0f;
+        engine->cameraCtrl.focusDistance = 34.0f;
+        engine->cameraCtrl.currentTarget = engine->blackHole.position;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(34.0f, 2.0f, 65.0f, engine->blackHole.position);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        if (!config.disableLensing) engine->blackHole.enableLensingPass = true;
+    } else if (scene == "black_hole_lensing_off" || scene == "Lensing_OFF" || scene == "lensing_off") {
+        engine->cameraCtrl.mode = CAM_BLACK_HOLE;
+        engine->cameraCtrl.focusedBodyName = "Black Hole";
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 65.0f;
+        engine->cameraCtrl.focusDistance = 34.0f;
+        engine->cameraCtrl.currentTarget = engine->blackHole.position;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(34.0f, 25.0f, 65.0f, engine->blackHole.position);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->blackHole.enableLensingPass = false;
     } else if (scene == "wormhole") {
         engine->cameraCtrl.mode = CAM_FREE;
         engine->cameraCtrl.freePos = glm::vec3(0.0f, 10.0f, 40.0f);

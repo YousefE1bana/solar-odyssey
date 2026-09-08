@@ -22,6 +22,7 @@ struct BenchmarkConfig {
     std::string goldenOutputPath = "";
     bool c31Baseline = false;
     bool bypassCopy = false;
+    bool disableLensing = false;
 };
 
 struct FrameMetric {
