@@ -20,6 +20,8 @@ struct BenchmarkConfig {
     bool captureGolden = false;
     std::string goldenScene = "";
     std::string goldenOutputPath = "";
+    bool c31Baseline = false;
+    bool bypassCopy = false;
 };
 
 struct FrameMetric {

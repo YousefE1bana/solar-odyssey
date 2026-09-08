@@ -147,6 +147,10 @@ add_executable(SolarOdysseyTests
   tests/test_save_state.cpp
   tests/test_shadow_math.cpp
   tests/test_atmosphere_effects.cpp
+  tests/test_earth_surface.cpp
+  tests/test_black_hole_pipeline.cpp
+  src/post_processing.cpp
+  src/black_hole.cpp
   src/planet_data.cpp
   src/canonical_inventory.cpp
   src/picking.cpp

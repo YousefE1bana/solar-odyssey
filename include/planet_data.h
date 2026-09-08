@@ -4,6 +4,17 @@
 #include <map>
 #include <glm/glm.hpp>
 
+// Logical material and surface capabilities (renderer-independent)
+struct PlanetSurfaceCapabilities {
+    bool hasNightLights = false;
+    bool hasClouds = false;
+    bool hasOceanMask = false;
+    float specularRoughness = 0.12f;
+    float specularF0 = 0.02f;         // Water dielectric F0 ~ 0.02
+    float cloudHeight = 0.015f;       // Cloud shell height relative to unit radius
+    float cloudShadowIntensity = 0.70f; // Shadow darkening multiplier
+};
+
 // Scientific and educational data for celestial bodies in the Solar System
 struct CelestialBodyData {
     std::string name;
@@ -36,9 +47,13 @@ struct CelestialBodyData {
     std::string textureFile;          // Primary texture relative path
     std::string secondaryTexture;     // Optional secondary texture (night map, atmosphere)
     std::string cloudsTexture;        // Optional clouds texture
+    std::string oceanMaskTexture;     // Optional ocean/specular mask texture (linear data)
     bool hasRings = false;
     float ringInnerRadius = 0.0f;
     float ringOuterRadius = 0.0f;
+
+    // Logical surface capabilities
+    PlanetSurfaceCapabilities surfaceCaps;
 };
 
 class CelestialDatabase {

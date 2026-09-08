@@ -1,0 +1,17 @@
+{
+  "scene": "earth",
+  "type": "SMOKE_TEST",
+  "warmup_frames": 60,
+  "measured_frames": 300,
+  "median_fps": 690.8940,
+  "median_cpu_ms": 1.4474,
+  "median_gpu_ms": 0.7465,
+  "gpu_time_available": true,
+  "p1_low_fps": 313.9915,
+  "p01_low_fps": 261.3764,
+  "p1_low_cpu_ms": 3.1848,
+  "p01_low_cpu_ms": 3.8259,
+  "median_draw_calls": 42,
+  "median_triangles": 121928,
+  "passed": true
+}

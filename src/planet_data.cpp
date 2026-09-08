@@ -119,6 +119,9 @@ void CelestialDatabase::initDatabase() {
         venus.visualOrbitSpeed = 120.0f;
         venus.textureFile = "Textures/venus_surface.jpg";
         venus.secondaryTexture = "Textures/venus_atmosphere.jpg";
+        venus.surfaceCaps.hasClouds = true;
+        venus.surfaceCaps.cloudHeight = 0.020f;
+        venus.surfaceCaps.cloudShadowIntensity = 0.40f;
         venus.hasRings = false;
         bodies[venus.name] = venus;
         order.push_back(venus.name);
@@ -158,6 +161,14 @@ void CelestialDatabase::initDatabase() {
         earth.textureFile = "Textures/earth_daymap.jpg";
         earth.secondaryTexture = "Textures/earth_nightmap.jpg";
         earth.cloudsTexture = "Textures/earth_clouds.jpg";
+        earth.oceanMaskTexture = "Textures/earth_specular.png";
+        earth.surfaceCaps.hasNightLights = true;
+        earth.surfaceCaps.hasClouds = true;
+        earth.surfaceCaps.hasOceanMask = true;
+        earth.surfaceCaps.specularRoughness = 0.28f;
+        earth.surfaceCaps.specularF0 = 0.02f;
+        earth.surfaceCaps.cloudHeight = 0.015f;
+        earth.surfaceCaps.cloudShadowIntensity = 0.70f;
         earth.hasRings = false;
         bodies[earth.name] = earth;
         order.push_back(earth.name);

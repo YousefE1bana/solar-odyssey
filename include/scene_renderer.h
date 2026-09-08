@@ -16,6 +16,18 @@
 #include "lod_manager.h"
 #include "shadow_math.h"
 
+// Material resources owned by the renderer
+struct PlanetMaterialResources {
+    GLuint diffuseTexture = 0;
+    GLuint nightTexture = 0;
+    GLuint cloudTexture = 0;
+    GLuint oceanMaskTexture = 0;
+};
+
+// Texture loading helpers
+GLuint loadTexture(const char* filename);
+GLuint loadTextureOrFallback(const char* primary, const char* fallback);
+
 // Planet runtime structure
 struct Planet {
     std::string name;
@@ -24,17 +36,38 @@ struct Planet {
     float spinSpeed;
     float orbitSpeed;
     float initialAngle = 0.0f;
-    GLuint texture = 0;
-    GLuint secondaryTexture = 0;
-    GLuint cloudsTexture = 0;
+    GLuint texture = 0;          // Aliases materials.diffuseTexture for compatibility
+    GLuint secondaryTexture = 0; // Aliases materials.nightTexture for compatibility
+    GLuint cloudsTexture = 0;    // Aliases materials.cloudTexture for compatibility
     bool hasRings = false;
     float ringInnerRadius = 0.0f;
     float ringOuterRadius = 0.0f;
     bool isDwarf = false;
     glm::vec3 currentPosition = glm::vec3(0.0f);
 
+    // Logical surface capabilities (declared)
+    PlanetSurfaceCapabilities surfaceCaps;
+
+    // Renderer-owned OpenGL material resources
+    PlanetMaterialResources materials;
+
+    // Effective activation requires BOTH declared capability && successfully loaded renderer resource
+    bool isNightLightsActive() const {
+        return surfaceCaps.hasNightLights && (materials.nightTexture != 0 || secondaryTexture != 0);
+    }
+    bool isCloudsActive() const {
+        return surfaceCaps.hasClouds && (materials.cloudTexture != 0 || cloudsTexture != 0);
+    }
+    bool isOceanMaskActive() const {
+        return surfaceCaps.hasOceanMask && (materials.oceanMaskTexture != 0);
+    }
+
+    Planet() = default;
+    Planet(const std::string& n, float s, float r, float ss, float os)
+        : name(n), size(s), orbitRadius(r), spinSpeed(ss), orbitSpeed(os) {}
+
     Planet(const std::string& n, float s, float r, float ss, float os,
-           const std::string& tex = "", bool rings = false, float rIn = 0.0f,
+           const std::string& tex, bool rings = false, float rIn = 0.0f,
            float rOut = 0.0f, bool dwarf = false, float initAngle = 0.0f);
 };
 
@@ -71,6 +104,7 @@ public:
     GLuint earthNightTexture = 0;
     GLuint earthCloudsTexture = 0;
     GLuint venusAtmosphereTexture = 0;
+    GLuint earthOceanMaskTexture = 0;
 
     // VAOs & VBOs
     GLuint starfieldVAO = 0;
@@ -90,6 +124,17 @@ public:
     GLint uSpecularStrengthLoc = -1, uTimeLoc = -1, uSunEyePosLoc = -1;
     GLint uSunLocalPosLoc = -1, uHasRingsLoc = -1, uRingInnerRadiusLoc = -1, uRingOuterRadiusLoc = -1;
     GLint uIsRingLoc = -1, uPlanetRadiusLoc = -1, uHasEclipseLoc = -1, uEclipseLocalPosLoc = -1, uEclipseRadiusLoc = -1;
+    GLint uOceanMaskTexLoc = -1, uHasOceanMaskLoc = -1;
+    GLint uSpecularRoughnessLoc = -1, uSpecularF0Loc = -1;
+    GLint uCloudHeightLoc = -1, uCloudShadowIntensityLoc = -1;
+
+    // Diagnostic / Verification Overrides (controlled feature ON/OFF comparisons)
+    struct SurfaceFeatureOverrides {
+        bool enableCloudShadows = true;
+        bool enableOceanSpecular = true;
+        bool enableNightLights = true;
+    };
+    SurfaceFeatureOverrides surfaceOverrides;
 
     // Uniform locations for Starfield
     GLint uStarTexLoc = -1, uStarModelViewLoc = -1, uStarProjectionLoc = -1;

@@ -120,13 +120,46 @@ void Engine::initPlanetsAndMoons() {
                            def.texture, def.parentPlanet, def.initialAngle);
     }
 
-    // Special textures
+    // Configure data-driven planetary surface capabilities and bind renderer material resources
     for (auto &planet : planets) {
-        if (planet.name == "Earth") {
-            planet.secondaryTexture = renderer.earthNightTexture;
-            planet.cloudsTexture = renderer.earthCloudsTexture;
-        } else if (planet.name == "Venus") {
-            planet.secondaryTexture = renderer.venusAtmosphereTexture;
+        const CelestialBodyData* bodyData = celestialDb.getBody(planet.name);
+        if (bodyData) {
+            // Adopt declared logical surface capabilities
+            planet.surfaceCaps = bodyData->surfaceCaps;
+
+            // Diffuse base map
+            planet.materials.diffuseTexture = planet.texture;
+
+            // Secondary / Night texture binding
+            if (!bodyData->secondaryTexture.empty()) {
+                if (bodyData->secondaryTexture == "Textures/earth_nightmap.jpg") {
+                    planet.materials.nightTexture = renderer.earthNightTexture;
+                } else if (bodyData->secondaryTexture == "Textures/venus_atmosphere.jpg") {
+                    planet.materials.nightTexture = renderer.venusAtmosphereTexture;
+                } else {
+                    planet.materials.nightTexture = loadTextureOrFallback(bodyData->secondaryTexture.c_str(), "");
+                }
+                planet.secondaryTexture = planet.materials.nightTexture;
+            }
+
+            // Clouds texture binding
+            if (!bodyData->cloudsTexture.empty()) {
+                if (bodyData->cloudsTexture == "Textures/earth_clouds.jpg") {
+                    planet.materials.cloudTexture = renderer.earthCloudsTexture;
+                } else {
+                    planet.materials.cloudTexture = loadTextureOrFallback(bodyData->cloudsTexture.c_str(), "");
+                }
+                planet.cloudsTexture = planet.materials.cloudTexture;
+            }
+
+            // Ocean / Specular mask texture binding
+            if (!bodyData->oceanMaskTexture.empty()) {
+                if (bodyData->oceanMaskTexture == "Textures/earth_specular.png") {
+                    planet.materials.oceanMaskTexture = renderer.earthOceanMaskTexture;
+                } else {
+                    planet.materials.oceanMaskTexture = loadTextureOrFallback(bodyData->oceanMaskTexture.c_str(), "");
+                }
+            }
         }
     }
 
@@ -759,14 +792,7 @@ void Engine::renderFrame(float deltaTime) {
     renderer.renderPlanets(planets, moons, viewMat, projMat, sunWorldPosition, sunEyePos, (float)simTime, cloudRotationAngle, solarUI, cameraCtrl, celestialDb, atmosphereEffects);
     renderer.renderMoons(moons, planets, viewMat, projMat, sunWorldPosition, sunEyePos, solarUI, cameraCtrl);
 
-    renderer.renderBlackHole(blackHole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
-    renderer.renderWormhole(wormhole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
-
-    if (spaceship.active) {
-        spaceship.render(projMat, viewMat);
-        spaceship.warpSystem.renderStreaks(viewMat, projMat, cameraCtrl.currentEye, spaceship.forward, spaceship.right, spaceship.smoothCameraUp);
-    }
-
+    // Pre-lens background celestial elements: Asteroids render into HDR_A
     if (asteroidBelt && solarUI.showAsteroids) {
         float focusFade = 1.0f;
         if (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || (cameraCtrl.tourActive && cameraCtrl.focusedPlanetIndex >= 0)) {
@@ -774,6 +800,20 @@ void Engine::renderFrame(float deltaTime) {
         }
         asteroidBelt->render(focusFade, renderer.asteroidProgram != 0 ? renderer.asteroidProgram : renderer.planetProgram,
                              viewMat, projMat, sunEyePos, cameraCtrl.currentEye, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
+    }
+
+    // Checkpoint C3.3: Dual-HDR Pre-Lens Transition (HDR_A -> HDR_B full copy, bind HDR_B)
+    // Copies complete pre-lens scene from sceneFBO to lensedFBO with zero feedback loop.
+    // sceneDepthRBO is shared, preserving depth buffer without clearing.
+    postPipeline.transitionToLensed();
+
+    // Composite Black Hole primary components and foreground entities into HDR_B (lensedFBO)
+    renderer.renderBlackHole(blackHole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
+    renderer.renderWormhole(wormhole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
+
+    if (spaceship.active) {
+        spaceship.render(projMat, viewMat);
+        spaceship.warpSystem.renderStreaks(viewMat, projMat, cameraCtrl.currentEye, spaceship.forward, spaceship.right, spaceship.smoothCameraUp);
     }
 
     postPipeline.endSceneAndPostProcess();

@@ -124,6 +124,7 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
         if (uNormalMatrixLoc != -1) glUniformMatrix3fv(uNormalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMat));
     }
 
+    GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
@@ -192,8 +193,73 @@ void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, c
         particleBatch.end();
     }
 
-    glEnable(GL_CULL_FACE);
+    if (cullWasEnabled) {
+        glEnable(GL_CULL_FACE);
+    } else {
+        glDisable(GL_CULL_FACE);
+    }
     glDisable(GL_BLEND);
+}
+
+BlackHoleScreenBounds BlackHole::calculateScreenBounds(const glm::mat4& inViewMat, const glm::mat4& inProjMat, int screenWidth, int screenHeight, float customRadius) const {
+    BlackHoleScreenBounds bounds;
+    if (!active || screenWidth <= 0 || screenHeight <= 0) return bounds;
+
+    float r = (customRadius > 0.0f) ? customRadius : lensingInfluenceRadius;
+
+    glm::vec4 viewPos = inViewMat * glm::vec4(position, 1.0f);
+    // If behind camera or intersecting near plane (OpenGL looks down -Z in eye space)
+    if (viewPos.z >= -0.1f) {
+        bounds.isVisible = false;
+        return bounds;
+    }
+
+    glm::vec4 clipCenter = inProjMat * viewPos;
+    if (clipCenter.w <= 0.0001f) {
+        bounds.isVisible = false;
+        return bounds;
+    }
+
+    glm::vec3 ndcCenter = glm::vec3(clipCenter) / clipCenter.w;
+
+    // Estimate screen radius using view-space perpendicular offset
+    glm::vec4 viewOffset = viewPos + glm::vec4(r, 0.0f, 0.0f, 0.0f);
+    glm::vec4 clipOffset = inProjMat * viewOffset;
+    if (clipOffset.w <= 0.0001f) {
+        bounds.isVisible = false;
+        return bounds;
+    }
+    glm::vec3 ndcOffset = glm::vec3(clipOffset) / clipOffset.w;
+
+    float screenRadiusX = std::abs(ndcOffset.x - ndcCenter.x) * 0.5f * (float)screenWidth;
+    float screenRadiusY = std::abs(ndcOffset.y - ndcCenter.y) * 0.5f * (float)screenHeight;
+    float radius = std::max(screenRadiusX, screenRadiusY);
+
+    float cx = (ndcCenter.x * 0.5f + 0.5f) * (float)screenWidth;
+    float cy = (ndcCenter.y * 0.5f + 0.5f) * (float)screenHeight;
+
+    bounds.centerScreenX = cx;
+    bounds.centerScreenY = cy;
+    bounds.screenRadius = radius;
+
+    int minX = (int)std::floor(cx - radius);
+    int maxX = (int)std::ceil(cx + radius);
+    int minY = (int)std::floor(cy - radius);
+    int maxY = (int)std::ceil(cy + radius);
+
+    // Clamping to screen rectangle
+    bounds.minX = std::max(0, minX);
+    bounds.maxX = std::min(screenWidth, maxX);
+    bounds.minY = std::max(0, minY);
+    bounds.maxY = std::min(screenHeight, maxY);
+
+    if (bounds.minX >= bounds.maxX || bounds.minY >= bounds.maxY) {
+        bounds.isVisible = false;
+    } else {
+        bounds.isVisible = true;
+    }
+
+    return bounds;
 }
 
 bool BlackHole::keyMatches(const StripMesh& m, float innerR, float outerR, int segments) {

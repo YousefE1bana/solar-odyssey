@@ -1,0 +1,18 @@
+{
+  "scene": "black_hole",
+  "type": "SMOKE_TEST",
+  "warmup_frames": 60,
+  "measured_frames": 300,
+  "bypass_copy": false,
+  "median_fps": 739.2076,
+  "median_cpu_ms": 1.3528,
+  "median_gpu_ms": 0.7731,
+  "gpu_time_available": true,
+  "p1_low_fps": 477.3498,
+  "p01_low_fps": 427.8990,
+  "p1_low_cpu_ms": 2.0949,
+  "p01_low_cpu_ms": 2.3370,
+  "median_draw_calls": 42,
+  "median_triangles": 115872,
+  "passed": true
+}

@@ -5,10 +5,14 @@
 
 class PostProcessingPipeline {
 public:
-    // Framebuffers and textures
+    // Framebuffers and textures (HDR_A: Pre-lens background)
     GLuint sceneFBO = 0;
     GLuint sceneColorTex = 0;
     GLuint sceneDepthRBO = 0;
+
+    // Checkpoint C3.3: Dual-HDR Pre-Lens Infrastructure (HDR_B: Lensed & composite target)
+    GLuint lensedFBO = 0;
+    GLuint lensedColorTex = 0;
 
     // Ping-pong buffers for bloom
     GLuint pingPongFBO[2] = {0, 0};
@@ -48,6 +52,9 @@ public:
     bool vignetteEnabled = true;
     float vignetteStrength = 0.22f;
 
+    // Checkpoint C3.3: Dual-HDR Pre-Lens Copy Control
+    bool bypassPreLensCopy = false;
+
     // Cinematic Startup State
     bool startupActive = true;
     float startupTimer = 0.0f;
@@ -75,6 +82,18 @@ public:
 
     void beginScene();
     void renderFullscreenQuad();
+
+    // Checkpoint C3.3: Dual-HDR Pre-Lens Pipeline methods
+    void copyPreLensToLensed();
+    void transitionToLensed();
+    bool validateHDRTargetIsolation() const;
+    void assertNoFeedbackLoop() const;
+
+    GLuint getPreLensFBO() const { return sceneFBO; }
+    GLuint getPreLensTexture() const { return sceneColorTex; }
+    GLuint getLensedFBO() const { return lensedFBO; }
+    GLuint getLensedTexture() const { return lensedColorTex; }
+
     void endSceneAndPostProcess();
 
     void triggerScreenshot(const char* customPath = nullptr);

@@ -1,13 +1,94 @@
 {
+  "overview": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 3.3748490811783647,
+    "rmse_normalized": 0.013234702279130843,
+    "mae": 0.09700376157407407,
+    "max_delta": 231,
+    "psnr_db": 37.56571647823857,
+    "ssim": 0.9967877698718173,
+    "baseline_validity": {
+      "mean_luminance": 5.7221074095602775,
+      "variance": 354.63372190882353,
+      "non_black_pct": 29.417486496913583,
+      "sha256": "543c45be2238646b21cd81c408c626c3322c4ddd15a367a29f52594454f02ee5",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 5.739677655026505,
+      "variance": 356.74940494488465,
+      "non_black_pct": 29.388551311728396,
+      "sha256": "671e1257d727e11c5db5c8878b49fe0916abfaa88917752f9ee03b97880cf4b9",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": true
+  },
+  "earth": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 37.61195829130945,
+    "rmse_normalized": 0.1474978756521939,
+    "mae": 12.502302919238684,
+    "max_delta": 239,
+    "psnr_db": 16.624284691909402,
+    "ssim": 0.832184131537148,
+    "baseline_validity": {
+      "mean_luminance": 8.239070431115584,
+      "variance": 529.0242964475519,
+      "non_black_pct": 36.426697530864196,
+      "sha256": "721590fa626e0676e5eb3187a77ea46c1a9de5ce3a5b9f949dc6e9e2ea3aa396",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 18.36482392454863,
+      "variance": 1704.5359230919166,
+      "non_black_pct": 39.38937114197531,
+      "sha256": "40eb566e9f5facf08d516dc3495410bd8b0099d5323e0be881793d131b8a9980",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": false
+  },
+  "saturn": {
+    "width": 1920,
+    "height": 1080,
+    "rmse": 22.141662357788462,
+    "rmse_normalized": 0.08683004846191554,
+    "mae": 4.037553208590535,
+    "max_delta": 200,
+    "psnr_db": 21.226599131743438,
+    "ssim": 0.9624900044455159,
+    "baseline_validity": {
+      "mean_luminance": 6.823302060331205,
+      "variance": 368.3541312569241,
+      "non_black_pct": 34.71031057098766,
+      "sha256": "47a8f8763d06c9f7464645729a7993dbe05c6039b49a943c4f3b28e16dd2eae1",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "test_validity": {
+      "mean_luminance": 10.691867840140706,
+      "variance": 1153.3236908121155,
+      "non_black_pct": 34.64848572530864,
+      "sha256": "052a08a17937ae40c0e4e6f232a6817eb140c8904d8b3d132253c34edc6fde67",
+      "is_valid": true,
+      "validity_errors": []
+    },
+    "passed": false
+  },
   "black_hole": {
     "width": 1920,
     "height": 1080,
-    "rmse": 6.4673974500969535,
-    "rmse_normalized": 0.02536234294155668,
-    "mae": 0.2966674704218107,
-    "max_delta": 236,
-    "psnr_db": 31.916212587108053,
-    "ssim": 0.9948246798346738,
+    "rmse": 9.389890908822007,
+    "rmse_normalized": 0.03682310160322356,
+    "mae": 0.6218828768004115,
+    "max_delta": 246,
+    "psnr_db": 28.677592674905004,
+    "ssim": 0.9911664509165738,
     "baseline_validity": {
       "mean_luminance": 5.387466602350111,
       "variance": 1017.5853518842428,
@@ -17,10 +98,10 @@
       "validity_errors": []
     },
     "test_validity": {
-      "mean_luminance": 5.682776950344148,
-      "variance": 1057.2089757195367,
-      "non_black_pct": 4.145061728395062,
-      "sha256": "367178338413d67186a09b44c952429f9cde10eb8e701f3e700c0c6df13fde40",
+      "mean_luminance": 5.67176482090733,
+      "variance": 1054.3389932007408,
+      "non_black_pct": 4.071903935185185,
+      "sha256": "0b2a6140dff8caeb2ff0cf711f8d508b45db6bd109841168f87af0dc5c29592c",
       "is_valid": true,
       "validity_errors": []
     },

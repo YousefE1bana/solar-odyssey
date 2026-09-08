@@ -12,26 +12,32 @@ out vec4 FragColor;
 uniform sampler2D uDayTex;
 uniform sampler2D uNightTex;
 uniform sampler2D uCloudsTex;
+uniform sampler2D uOceanMaskTex;
 
-uniform int uHasNightTex;       // 1 if planet has night texture (Earth)
-uniform int uHasClouds;         // 1 if clouds (Earth), 2 if Jupiter procedural bands
-uniform vec2 uCloudOffset;      // Animated independent cloud UV offset
-uniform vec3 uEmissive;         // Base emissive color
-uniform float uSunIntensity;    // Sun light strength (default 1.0)
-uniform vec3 uAtmosphereColor;  // Rim atmospheric scattering tint
-uniform float uAtmosphereGlow;  // Atmosphere rim strength (0.0 .. 1.0)
-uniform float uSpecularStrength;// Specular reflection strength (oceans)
-uniform float uTime;            // Time for subtle animated effects
+uniform int uHasNightTex;          // 1 if planet has night texture (Earth)
+uniform int uHasClouds;            // 1 if clouds (Earth), 2 if procedural
+uniform int uHasOceanMask;         // 1 if dedicated ocean/specular mask texture is active
+uniform vec2 uCloudOffset;         // Animated independent cloud UV offset
+uniform float uCloudHeight;        // Cloud shell height relative to unit radius (e.g. 0.015)
+uniform float uCloudShadowIntensity; // Intensity of cloud shadow darkening (0.0 .. 1.0)
+uniform float uSpecularRoughness;  // Ocean surface roughness parameter
+uniform float uSpecularF0;         // Ocean surface dielectric F0 (e.g. 0.02)
+uniform vec3 uEmissive;            // Base emissive color
+uniform float uSunIntensity;       // Sun light strength (default 1.0)
+uniform vec3 uAtmosphereColor;     // Rim atmospheric scattering tint
+uniform float uAtmosphereGlow;     // Atmosphere rim strength (0.0 .. 1.0)
+uniform float uSpecularStrength;   // Legacy specular multiplier (fallback)
+uniform float uTime;               // Time for subtle animated effects
 
 // Analytical Ring & Eclipse Shadow Uniforms
-uniform int uHasRings;          // 1 if planet has rings casting shadows on itself
-uniform float uRingInnerRadius; // Inner ring radius in local units
-uniform float uRingOuterRadius; // Outer ring radius in local units
-uniform int uIsRing;            // 1 if rendering ring geometry (planet casts shadow on ring)
-uniform float uPlanetRadius;    // Planet sphere radius in local ring units
-uniform int uHasEclipse;        // 1 if moon eclipse shadow is active
-uniform vec3 uEclipseLocalPos;  // Moon position in local space
-uniform float uEclipseRadius;   // Moon radius in local space
+uniform int uHasRings;             // 1 if planet has rings casting shadows on itself
+uniform float uRingInnerRadius;    // Inner ring radius in local units
+uniform float uRingOuterRadius;    // Outer ring radius in local units
+uniform int uIsRing;               // 1 if rendering ring geometry (planet casts shadow on ring)
+uniform float uPlanetRadius;       // Planet sphere radius in local ring units
+uniform int uHasEclipse;           // 1 if moon eclipse shadow is active
+uniform vec3 uEclipseLocalPos;     // Moon position in local space
+uniform float uEclipseRadius;      // Moon radius in local space
 
 // 1. Ring Shadow cast onto Planet Globe
 float calculateRingShadowOnPlanet(vec3 localPos, vec3 sunDir) {
@@ -109,6 +115,78 @@ float calculateEclipseShadow(vec3 localPos, vec3 sunDir) {
     return 1.0;
 }
 
+// 4. Spherical Cloud-Shell Shadow Projection (Curvature-Aware Ray/Sphere Intersection)
+float calculateSphericalCloudShadow(vec3 localPos, vec3 localSunDir, float NdotL, float cloudHeight, float shadowIntensity) {
+    // Mandatory sun-facing condition: points where Sun is below local horizon or shadows inactive
+    if (NdotL <= 0.0 || uHasClouds == 0 || shadowIntensity <= 0.0) {
+        return 1.0;
+    }
+
+    vec3 P = normalize(localPos);
+    vec3 L = normalize(localSunDir);
+    float PdotL = dot(P, L);
+
+    // Outer cloud shell radius Rc = 1.0 + cloudHeight
+    float Rc = 1.0 + max(cloudHeight, 0.001);
+    float discr = PdotL * PdotL + (Rc * Rc - 1.0);
+    if (discr <= 0.0) {
+        return 1.0;
+    }
+
+    float t = -PdotL + sqrt(discr);
+    if (t <= 0.0) {
+        return 1.0;
+    }
+
+    vec3 Q = normalize(P + t * L);
+
+    // Convert Q to equirectangular UV matching ModernSphere convention:
+    // u = atan2(z, x) / 2pi + offset
+    // v = acos(y) / pi
+    float theta = atan(Q.z, Q.x);
+    if (theta < 0.0) theta += 6.28318530718;
+    float shadowU = fract(theta * 0.15915494309 + uCloudOffset.x);
+    float shadowV = acos(clamp(Q.y, -1.0, 1.0)) * 0.31830988618;
+
+    float shadowAlpha = texture(uCloudsTex, vec2(shadowU, shadowV)).r;
+    return 1.0 - shadowAlpha * clamp(shadowIntensity, 0.0, 1.0);
+}
+
+// 5. Trowbridge-Reitz GGX Specular BRDF (Water Dielectric)
+vec3 calculateGGXOceanSpecular(vec3 N, vec3 V, vec3 L, float NdotL, float NdotV, float roughness, float F0, vec3 lightColor) {
+    if (NdotL <= 0.0 || NdotV <= 0.0) {
+        return vec3(0.0);
+    }
+
+    vec3 H = normalize(L + V);
+    float NdotH = clamp(dot(N, H), 0.0, 1.0);
+    float VdotH = clamp(dot(V, H), 0.0, 1.0);
+
+    // Alpha = roughness^2
+    float r = clamp(roughness > 0.01 ? roughness : 0.28, 0.02, 1.0);
+    float alpha = r * r;
+    float alpha2 = alpha * alpha;
+
+    // Normal Distribution Function D (Trowbridge-Reitz GGX)
+    float denomD = (NdotH * NdotH * (alpha2 - 1.0) + 1.0);
+    float D = (alpha2 * 0.31830988618) / max(denomD * denomD, 1e-7);
+
+    // Height-correlated Smith Masking-Shadowing Function G2
+    // vis = G2 / (4 * NdotL * NdotV) = 0.5 / (NdotL * sqrt(alpha2 + (1-alpha2)*NdotV^2) + NdotV * sqrt(alpha2 + (1-alpha2)*NdotL^2))
+    float gL = NdotL * sqrt(alpha2 + (1.0 - alpha2) * (NdotV * NdotV));
+    float gV = NdotV * sqrt(alpha2 + (1.0 - alpha2) * (NdotL * NdotL));
+    float vis = 0.5 / max(gL + gV, 1e-7);
+
+    // Schlick Fresnel F
+    float f0 = clamp(F0 > 0.001 ? F0 : 0.02, 0.0, 0.2); // Typical dielectric range
+    float F = f0 + (1.0 - f0) * pow(1.0 - VdotH, 5.0);
+
+    // Direct light applies NdotL exactly once: f_spec * NdotL * lightColor
+    float specTerm = D * vis * F * NdotL;
+    return lightColor * clamp(specTerm, 0.0, 10.0);
+}
+
+
 void main() {
     vec3 N = normalize(vNormal);
     vec3 V = normalize(vViewDir);
@@ -117,10 +195,11 @@ void main() {
 
     // Illumination dot product with sun
     float NdotL = dot(N, L);
+    float NdotV = clamp(dot(N, V), 0.0, 1.0);
 
-    // Soft wrap diffuse for atmospheric planetary surfaces
-    float dayFactor = smoothstep(-0.16, 0.22, NdotL);
-    float diffuse = max((NdotL + 0.12) / 1.12, 0.0);
+    // Separation of direct sunlight from twilight blend
+    float directSun = max(NdotL, 0.0);
+    float twilightFactor = smoothstep(-0.18, 0.22, NdotL);
 
     // Analytical Shadows (Ring on planet, Planet on ring, Moon eclipse on planet)
     float ringShadow = calculateRingShadowOnPlanet(vLocalPos, localSun);
@@ -128,11 +207,17 @@ void main() {
     float eclipseShadow = calculateEclipseShadow(vLocalPos, localSun);
     float totalShadow = ringShadow * planetOnRingShadow * eclipseShadow;
 
+    // Curvature-aware spherical cloud-shadow projection (sun-facing condition)
+    float cloudShadow = calculateSphericalCloudShadow(vLocalPos, localSun, NdotL, uCloudHeight, uCloudShadowIntensity);
+
     // Sample daytime surface color
     vec4 dayColor = texture(uDayTex, vTexCoord);
     vec3 surfaceColor = dayColor.rgb;
     float alpha = 1.0;
 
+    vec3 oceanSpecular = vec3(0.0);
+    vec3 ggxSpec = vec3(0.0);
+    float oceanMask = 0.0;
     if (uIsRing > 0) {
         // Double-sided translucent ring particle scattering
         float ringDiff = max(abs(dot(N, L)), 0.25);
@@ -140,45 +225,44 @@ void main() {
         vec3 ambientRing = dayColor.rgb * vec3(0.18, 0.18, 0.22);
         surfaceColor = litRing + ambientRing;
         alpha = dayColor.a;
-    } else if (uHasNightTex > 0) {
-        // Handle Night Texture (City Lights on Earth)
-        vec4 nightColor = texture(uNightTex, vTexCoord);
-        float nightFactor = (1.0 - dayFactor);
-        vec3 cityLights = nightColor.rgb * vec3(1.15, 1.05, 0.85) * nightFactor * 1.5;
-
-        vec3 ambient = dayColor.rgb * vec3(0.04, 0.04, 0.06);
-        vec3 litDay = dayColor.rgb * (diffuse * vec3(1.0, 0.98, 0.92) * uSunIntensity * totalShadow);
-        surfaceColor = litDay + ambient + cityLights;
     } else {
-        // Standard celestial body lighting with soft ambient floor
-        vec3 ambient = surfaceColor * vec3(0.10, 0.10, 0.12);
-        vec3 litDay = surfaceColor * (diffuse * vec3(1.05, 1.02, 0.96) * uSunIntensity * totalShadow);
-        surfaceColor = litDay + ambient;
+        // Direct solar irradiance applied with cloud and astronomical shadows
+        vec3 litDay = dayColor.rgb * (directSun * vec3(1.0, 0.98, 0.92) * uSunIntensity * totalShadow * cloudShadow);
+        vec3 ambient = dayColor.rgb * vec3(0.04, 0.04, 0.06);
+
+        // Night city lights (finite-safe grazing attenuation, dark-side exclusive)
+        vec3 cityLights = vec3(0.0);
+        if (uHasNightTex > 0 && twilightFactor < 0.99) {
+            vec4 nightTex = texture(uNightTex, vTexCoord);
+            float nightFactor = 1.0 - twilightFactor; // Fades through [-0.18, 0.22]
+            float viewAtten = pow(NdotV, 0.45); // Atmospheric column attenuation
+            cityLights = nightTex.rgb * vec3(1.15, 1.05, 0.85) * (nightFactor * viewAtten * 1.5);
+        }
+
+        // Ocean GGX Specular Highlight (physical dielectric BRDF)
+        if (uHasOceanMask > 0 && NdotL > 0.0 && NdotV > 0.0 && totalShadow > 0.01) {
+            oceanMask = texture(uOceanMaskTex, vTexCoord).r; // 1.0 = ocean, 0.0 = land
+            if (oceanMask > 0.01) {
+                vec3 sunColor = vec3(1.0, 0.98, 0.92) * (uSunIntensity * totalShadow);
+                ggxSpec = calculateGGXOceanSpecular(N, V, L, NdotL, NdotV, uSpecularRoughness, uSpecularF0, sunColor);
+                oceanSpecular = ggxSpec * (oceanMask * cloudShadow);
+            }
+        }
+
+        surfaceColor = litDay + ambient + cityLights + oceanSpecular;
     }
 
-    // Specular highlight for oceans/water (Earth only)
-    if (uSpecularStrength > 0.0 && diffuse > 0.0) {
-        vec3 H = normalize(L + V);
-        float NdotH = max(dot(N, H), 0.0);
-        float spec = pow(NdotH, 24.0);
-        float isWater = max(0.0, dayColor.b - (dayColor.r + dayColor.g) * 0.45);
-        vec3 specular = vec3(0.9, 0.95, 1.0) * spec * isWater * uSpecularStrength * diffuse * totalShadow;
-        surfaceColor += specular;
-    }
-
-    // Clouds Overlay (Earth)
-    if (uHasClouds == 1) {
-        vec2 cloudUV = vTexCoord + uCloudOffset;
+    // Visible Clouds Overlay
+    if (uHasClouds > 0) {
+        vec2 cloudUV = vec2(fract(vTexCoord.x + uCloudOffset.x), vTexCoord.y);
         vec4 cloudTex = texture(uCloudsTex, cloudUV);
         float cloudAlpha = cloudTex.r;
 
-        vec3 cloudColor = vec3(0.98, 0.98, 1.0) * (diffuse * 1.1 * totalShadow + 0.05);
-        float cloudShadow = (1.0 - cloudAlpha * 0.35 * smoothstep(0.0, 0.3, diffuse));
-        surfaceColor *= cloudShadow;
-        surfaceColor = mix(surfaceColor, cloudColor, cloudAlpha * dayFactor * 0.92 * totalShadow);
+        vec3 cloudColor = vec3(0.98, 0.98, 1.0) * (directSun * 1.1 * totalShadow + 0.05);
+        surfaceColor = mix(surfaceColor, cloudColor, cloudAlpha * twilightFactor * 0.92 * totalShadow);
     }
 
-    // Rayleigh / Fresnel Limb Glow
+    // Rayleigh / Fresnel Limb Glow (for legacy fallback or bodies without Atmosphere 2.0)
     if (uAtmosphereGlow > 0.0) {
         float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
         float sunlitRim = max(NdotL + 0.25, 0.0);

@@ -20,6 +20,17 @@ struct InfallingParticle {
     float maxLife;
 };
 
+struct BlackHoleScreenBounds {
+    bool isVisible = false;
+    int minX = 0;
+    int minY = 0;
+    int maxX = 0;
+    int maxY = 0;
+    float centerScreenX = 0.0f;
+    float centerScreenY = 0.0f;
+    float screenRadius = 0.0f;
+};
+
 class BlackHole {
 public:
     ImmediateBatch particleBatch;
@@ -30,6 +41,11 @@ public:
     float photonSphereRadius = 3.75f;
     float accretionDiskInner = 4.0f;
     float accretionDiskOuter = 18.0f;
+
+    // Checkpoint C3.3: Pre-Lens Screen-Space Bounding Infrastructure
+    // Explicit gravitational lensing influence cutoff boundary (independent from visual accretionDiskOuter)
+    float lensingInfluenceRadius = 24.0f;
+    bool enableLensingPass = false; // Passthrough in C3.3; C3.4 activates relativistic deflection
 
     float simTime = 0.0f;
     bool active = true;
@@ -58,6 +74,8 @@ public:
     void initShader(GLuint shaderProgram = 0);
     void update(float deltaTime, const glm::vec3& cameraPos);
     void render(const glm::vec3& cameraPos, const glm::mat4& inViewMat = glm::mat4(0.0f), const glm::mat4& inProjMat = glm::mat4(0.0f));
+
+    BlackHoleScreenBounds calculateScreenBounds(const glm::mat4& viewMat, const glm::mat4& projMat, int screenWidth, int screenHeight, float customRadius = 0.0f) const;
 
 private:
     struct StripMesh {

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <cassert>
 
 static void uploadCoreMatrices(GLint mvLoc, GLint pLoc, GLint nLoc, const glm::mat4& mv, const glm::mat4& p) {
     if (mvLoc >= 0) glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mv));
@@ -77,12 +78,13 @@ GLuint loadTexture(const char* filename) {
         return 0;
     }
 
-    GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+    GLenum format = (channels == 4) ? GL_RGBA : (channels == 1 ? GL_RED : GL_RGB);
+    GLenum internalFormat = (channels == 1) ? GL_R8 : format;
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, image);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, image);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -219,6 +221,7 @@ bool SceneRenderer::init() {
     earthNightTexture = loadTextureOrFallback("Textures/earth_nightmap.jpg", "Textures/earth_daymap.jpg");
     earthCloudsTexture = loadTextureOrFallback("Textures/earth_clouds.jpg", "Textures/venus_atmosphere.jpg");
     venusAtmosphereTexture = loadTextureOrFallback("Textures/venus_atmosphere.jpg", "Textures/venus_surface.jpg");
+    earthOceanMaskTexture = loadTextureOrFallback("Textures/earth_specular.png", "");
 
     // Cache Sun Uniforms
     if (sunProgram) {
@@ -257,6 +260,12 @@ bool SceneRenderer::init() {
         uHasEclipseLoc = glGetUniformLocation(planetProgram, "uHasEclipse");
         uEclipseLocalPosLoc = glGetUniformLocation(planetProgram, "uEclipseLocalPos");
         uEclipseRadiusLoc = glGetUniformLocation(planetProgram, "uEclipseRadius");
+        uOceanMaskTexLoc = glGetUniformLocation(planetProgram, "uOceanMaskTex");
+        uHasOceanMaskLoc = glGetUniformLocation(planetProgram, "uHasOceanMask");
+        uSpecularRoughnessLoc = glGetUniformLocation(planetProgram, "uSpecularRoughness");
+        uSpecularF0Loc = glGetUniformLocation(planetProgram, "uSpecularF0");
+        uCloudHeightLoc = glGetUniformLocation(planetProgram, "uCloudHeight");
+        uCloudShadowIntensityLoc = glGetUniformLocation(planetProgram, "uCloudShadowIntensity");
     }
 
     initStarfield();
@@ -275,6 +284,7 @@ void SceneRenderer::cleanup() {
     safeDeleteTex(earthNightTexture);
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
+    safeDeleteTex(earthOceanMaskTexture);
 
     if (starfieldVAO) { glDeleteVertexArrays(1, &starfieldVAO); starfieldVAO = 0; }
     if (starfieldVBO) { glDeleteBuffers(1, &starfieldVBO); starfieldVBO = 0; }
@@ -417,6 +427,8 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    GLboolean cullWasOn = GL_FALSE;
+    glGetBooleanv(GL_CULL_FACE, &cullWasOn);
     glDisable(GL_CULL_FACE);
 
     glUseProgram(planetProgram);
@@ -446,11 +458,23 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
 
     glUniform1i(uIsRingLoc, 0);
     glUseProgram(0);
-    glEnable(GL_CULL_FACE);
+    if (cullWasOn) {
+        glEnable(GL_CULL_FACE);
+    } else {
+        glDisable(GL_CULL_FACE);
+    }
+    if (glIsEnabled(GL_CULL_FACE) != cullWasOn) {
+        std::cerr << "[GL State Error] GL_CULL_FACE restoration mismatch in renderSaturnRings!" << std::endl;
+        if (cullWasOn) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    }
+    assert(glIsEnabled(GL_CULL_FACE) == cullWasOn);
     glDisable(GL_BLEND);
 }
 
 void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vector<Moon>& moons, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, float time, float cloudRotation, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl, const CelestialDatabase& db, AtmosphereEffects* atmo) {
+    GLboolean cullWasOn = GL_FALSE;
+    glGetBooleanv(GL_CULL_FACE, &cullWasOn);
+    glDisable(GL_CULL_FACE);
     if (planetProgram) {
         glUseProgram(planetProgram);
         glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
@@ -477,49 +501,64 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
         if (planetProgram) {
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, planet.texture);
+            glBindTexture(GL_TEXTURE_2D, planet.materials.diffuseTexture ? planet.materials.diffuseTexture : planet.texture);
             glUniform1i(uDayTexLoc, 0);
 
-            if (planet.secondaryTexture) {
+            // Night texture binding (requires declared capability && successfully loaded resource)
+            if (planet.isNightLightsActive() && surfaceOverrides.enableNightLights) {
                 glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, planet.secondaryTexture);
+                GLuint nightTex = planet.materials.nightTexture ? planet.materials.nightTexture : planet.secondaryTexture;
+                glBindTexture(GL_TEXTURE_2D, nightTex);
                 glUniform1i(uNightTexLoc, 1);
                 glUniform1i(uHasNightTexLoc, 1);
             } else {
                 glUniform1i(uHasNightTexLoc, 0);
             }
 
-            if (planet.cloudsTexture) {
+            // Clouds texture binding (requires declared capability && successfully loaded resource)
+            if (planet.isCloudsActive()) {
                 glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, planet.cloudsTexture);
+                GLuint cloudTex = planet.materials.cloudTexture ? planet.materials.cloudTexture : planet.cloudsTexture;
+                glBindTexture(GL_TEXTURE_2D, cloudTex);
                 glUniform1i(uCloudsTexLoc, 2);
                 glUniform1i(uHasCloudsLoc, 1);
                 glUniform2f(uCloudOffsetLoc, cloudRotation * 0.05f, 0.0f);
+                glUniform1f(uCloudHeightLoc, planet.surfaceCaps.cloudHeight);
+                float shadowIntensity = surfaceOverrides.enableCloudShadows ? planet.surfaceCaps.cloudShadowIntensity : 0.0f;
+                glUniform1f(uCloudShadowIntensityLoc, shadowIntensity);
             } else {
                 glUniform1i(uHasCloudsLoc, 0);
+                glUniform1f(uCloudHeightLoc, 0.0f);
+                glUniform1f(uCloudShadowIntensityLoc, 0.0f);
             }
 
-            if (planet.name == "Earth") {
-                glUniform1f(uSpecularStrengthLoc, 0.85f);
-                glUniform3f(uAtmosphereColorLoc, 0.35f, 0.70f, 1.0f);
-                glUniform1f(uAtmosphereGlowLoc, 0.65f * solarUI.atmosphereGlowScale);
-            } else if (planet.name == "Jupiter") {
-                glUniform1f(uSpecularStrengthLoc, 0.0f);
-                glUniform3f(uAtmosphereColorLoc, 0.88f, 0.65f, 0.45f);
-                glUniform1f(uAtmosphereGlowLoc, 0.35f * solarUI.atmosphereGlowScale);
-            } else if (planet.name == "Saturn") {
-                glUniform1f(uSpecularStrengthLoc, 0.0f);
-                glUniform3f(uAtmosphereColorLoc, 0.90f, 0.82f, 0.58f);
-                glUniform1f(uAtmosphereGlowLoc, 0.30f * solarUI.atmosphereGlowScale);
+            // Ocean mask texture binding (requires declared capability && successfully loaded resource)
+            if (planet.isOceanMaskActive() && surfaceOverrides.enableOceanSpecular) {
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, planet.materials.oceanMaskTexture);
+                glUniform1i(uOceanMaskTexLoc, 3);
+                glUniform1i(uHasOceanMaskLoc, 1);
+                glUniform1f(uSpecularRoughnessLoc, planet.surfaceCaps.specularRoughness);
+                glUniform1f(uSpecularF0Loc, planet.surfaceCaps.specularF0);
             } else {
-                glUniform1f(uSpecularStrengthLoc, 0.0f);
-                if (data) {
-                    glUniform3f(uAtmosphereColorLoc, data->themeColor.r, data->themeColor.g, data->themeColor.b);
-                    glUniform1f(uAtmosphereGlowLoc, ((planet.name == "Mercury" || planet.isDwarf) ? 0.15f : 0.40f) * solarUI.atmosphereGlowScale);
-                }
+                glUniform1i(uHasOceanMaskLoc, 0);
+                glUniform1f(uSpecularRoughnessLoc, 0.5f);
+                glUniform1f(uSpecularF0Loc, 0.0f);
             }
 
-            glUniform1f(uSunIntensityLoc, (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f);
+            // Atmospheric tint & legacy glow fallback
+            if (data) {
+                glUniform3f(uAtmosphereColorLoc, data->themeColor.r, data->themeColor.g, data->themeColor.b);
+                float glowBase = (planet.name == "Mercury" || planet.isDwarf) ? 0.15f : 0.40f;
+                glUniform1f(uAtmosphereGlowLoc, glowBase * solarUI.atmosphereGlowScale);
+            } else {
+                glUniform3f(uAtmosphereColorLoc, 1.0f, 1.0f, 1.0f);
+                glUniform1f(uAtmosphereGlowLoc, 0.0f);
+            }
+
+            // Solar intensity
+            float bodySunMult = (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f;
+            glUniform1f(uSunIntensityLoc, bodySunMult);
 
             // Fast Analytical Shadow Sun Vector (direct vector subtraction, zero matrix inverse)
             glm::vec3 planetSunLocalPos = sunWorldPos - planet.currentPosition;
@@ -578,6 +617,16 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
     if (planetProgram) {
         glUseProgram(0);
     }
+    if (cullWasOn) {
+        glEnable(GL_CULL_FACE);
+    } else {
+        glDisable(GL_CULL_FACE);
+    }
+    if (glIsEnabled(GL_CULL_FACE) != cullWasOn) {
+        std::cerr << "[GL State Error] GL_CULL_FACE restoration mismatch in renderPlanets!" << std::endl;
+        if (cullWasOn) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    }
+    assert(glIsEnabled(GL_CULL_FACE) == cullWasOn);
 }
 
 void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Planet>& planets, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl) {
@@ -593,6 +642,7 @@ void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Plan
         glUniform1i(uIsRingLoc, 0);
         glUniform1i(uHasRingsLoc, 0);
         glUniform1i(uHasEclipseLoc, 0);
+        glUniform1i(uHasOceanMaskLoc, 0);
     }
 
     for (auto &moon : moons) {
