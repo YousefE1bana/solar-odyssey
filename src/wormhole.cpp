@@ -460,87 +460,147 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     glUniform3fv(uCamPosLoc, 1, glm::value_ptr(camPos));
     glUniform1f(uTimeLoc, time);
 
-    // Accretion Vortex Disk
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glDisable(GL_CULL_FACE);
-
-    glm::mat4 modelDisk = glm::translate(glm::mat4(1.0f), position);
-    modelDisk = glm::rotate(modelDisk, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
-    glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelDisk));
-    glUniform1i(uMeshTypeLoc, 1);
-
-    glBindVertexArray(diskVAO);
-    RenderProfiler::instance().recordDrawCall();
-    glDrawArrays(GL_TRIANGLES, 0, diskVertexCount);
-
-    // Gravitational Lensing Halo Arch
-    glUniform1i(uMeshTypeLoc, 2);
-    glBindVertexArray(archVAO);
-
-    glm::mat4 modelArchUp = glm::translate(glm::mat4(1.0f), position);
-    modelArchUp = glm::rotate(modelArchUp, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
-    glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchUp));
-    RenderProfiler::instance().recordDrawCall();
-    glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
-
-    glm::mat4 modelArchDown = glm::translate(glm::mat4(1.0f), position);
-    modelArchDown = glm::rotate(modelArchDown, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
-    modelArchDown = glm::rotate(modelArchDown, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchDown));
-    RenderProfiler::instance().recordDrawCall();
-    glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
-
-    // Throat Sphere (Portal Gateway)
     glm::dvec3 camPosD = glm::dvec3(camPos);
     ApertureBasis basis = computeApertureBasis(entranceWorldD, camPosD, cameraUp);
     double distToObs = glm::length(camPosD - entranceWorldD);
-
     bool isInsideThroat = (distToObs <= (double)throatRadius);
+
     if (portalTex && portalAvailable) {
-        // Normal gameplay traversal triggers at threshold = 4.8f, strictly before
-        // the observer reaches throatRadius (4.2f). For debug/free-camera cases inside the throat,
-        // disable culling and fall back to procedural interior so geometry does not disappear.
+        // =========================================================================
+        // C3.6 Portal Active: Render Throat Sphere First
+        // =========================================================================
+        // The Throat Sphere is the physical gateway aperture. Rendering it first with depth
+        // writing allows the subsequent accretion disk and halo arches to test against the
+        // throat surface, so the Einstein ring halo cleanly frames the aperture exterior
+        // without bisecting or occluding the destination window interior.
         if (isInsideThroat) {
             glDisable(GL_CULL_FACE);
         } else {
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
         }
-    } else {
-        // Literal C3.5 Legacy Fallback: culling was left disabled from disk pass
-        glDisable(GL_CULL_FACE);
-    }
 
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glUniform1i(uMeshTypeLoc, 0);
+        glDepthMask(GL_TRUE);
+        glEnable(GL_DEPTH_TEST);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glUniform1i(uMeshTypeLoc, 0);
 
-    glActiveTexture(GL_TEXTURE0);
-    if (portalTex && portalAvailable) {
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, portalTex);
         glUniform1i(uPortalTexLoc, 0);
         glUniform1i(uPortalAvailLoc, 1);
+
+        glUniform1f(uThroatRadiusLoc, throatRadius);
+        glUniform3fv(uApRightLoc, 1, glm::value_ptr(basis.rightLocal));
+        glUniform3fv(uApUpLoc, 1, glm::value_ptr(basis.upLocal));
+        glUniform3fv(uApNormLoc, 1, glm::value_ptr(basis.normalLocal));
+        glUniform1i(uIsInsideThroatLoc, isInsideThroat ? 1 : 0);
+
+        float progress = isTransitioning ? (transitionTimer / std::max(0.001f, transitionDuration)) : 0.0f;
+        glUniform1f(uTransitionProgressLoc, progress);
+
+        glm::mat4 modelSphere = glm::translate(glm::mat4(1.0f), position);
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelSphere));
+
+        glBindVertexArray(sphereVAO);
+        RenderProfiler::instance().recordDrawCall();
+        glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+        // --- Accretion Disk and Framing Arches (depth tested, framing the throat) ---
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_FALSE);
+
+        glm::mat4 modelDisk = glm::translate(glm::mat4(1.0f), position);
+        modelDisk = glm::rotate(modelDisk, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelDisk));
+        glUniform1i(uMeshTypeLoc, 1);
+
+        glBindVertexArray(diskVAO);
+        RenderProfiler::instance().recordDrawCall();
+        glDrawArrays(GL_TRIANGLES, 0, diskVertexCount);
+
+        // Gravitational Lensing Halo Arch (Einstein Ring framing)
+        glUniform1i(uMeshTypeLoc, 2);
+        glBindVertexArray(archVAO);
+
+        glm::mat4 modelArchUp = glm::translate(glm::mat4(1.0f), position);
+        modelArchUp = glm::rotate(modelArchUp, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchUp));
+        RenderProfiler::instance().recordDrawCall();
+        glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
+
+        glm::mat4 modelArchDown = glm::translate(glm::mat4(1.0f), position);
+        modelArchDown = glm::rotate(modelArchDown, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
+        modelArchDown = glm::rotate(modelArchDown, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchDown));
+        RenderProfiler::instance().recordDrawCall();
+        glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
+
+        glDepthMask(GL_TRUE);
     } else {
+        // =========================================================================
+        // Literal C3.5 Legacy Fallback: Exact Unchanged Predecessor Execution
+        // =========================================================================
+        // Accretion Vortex Disk
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDisable(GL_CULL_FACE);
+
+        glm::mat4 modelDisk = glm::translate(glm::mat4(1.0f), position);
+        modelDisk = glm::rotate(modelDisk, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelDisk));
+        glUniform1i(uMeshTypeLoc, 1);
+
+        glBindVertexArray(diskVAO);
+        RenderProfiler::instance().recordDrawCall();
+        glDrawArrays(GL_TRIANGLES, 0, diskVertexCount);
+
+        // Gravitational Lensing Halo Arch
+        glUniform1i(uMeshTypeLoc, 2);
+        glBindVertexArray(archVAO);
+
+        glm::mat4 modelArchUp = glm::translate(glm::mat4(1.0f), position);
+        modelArchUp = glm::rotate(modelArchUp, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchUp));
+        RenderProfiler::instance().recordDrawCall();
+        glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
+
+        glm::mat4 modelArchDown = glm::translate(glm::mat4(1.0f), position);
+        modelArchDown = glm::rotate(modelArchDown, glm::radians(22.0f), glm::vec3(1.0f, 0.0f, 0.4f));
+        modelArchDown = glm::rotate(modelArchDown, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelArchDown));
+        RenderProfiler::instance().recordDrawCall();
+        glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
+
+        // Throat Sphere (Legacy Procedural Fallback)
+        glDisable(GL_CULL_FACE);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glUniform1i(uMeshTypeLoc, 0);
+
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, 0);
         glUniform1i(uPortalAvailLoc, 0);
+
+        glUniform1f(uThroatRadiusLoc, throatRadius);
+        glUniform3fv(uApRightLoc, 1, glm::value_ptr(basis.rightLocal));
+        glUniform3fv(uApUpLoc, 1, glm::value_ptr(basis.upLocal));
+        glUniform3fv(uApNormLoc, 1, glm::value_ptr(basis.normalLocal));
+        glUniform1i(uIsInsideThroatLoc, isInsideThroat ? 1 : 0);
+
+        float progress = isTransitioning ? (transitionTimer / std::max(0.001f, transitionDuration)) : 0.0f;
+        glUniform1f(uTransitionProgressLoc, progress);
+
+        glm::mat4 modelSphere = glm::translate(glm::mat4(1.0f), position);
+        glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelSphere));
+
+        glBindVertexArray(sphereVAO);
+        RenderProfiler::instance().recordDrawCall();
+        glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
     }
-
-    glUniform1f(uThroatRadiusLoc, throatRadius);
-    glUniform3fv(uApRightLoc, 1, glm::value_ptr(basis.rightLocal));
-    glUniform3fv(uApUpLoc, 1, glm::value_ptr(basis.upLocal));
-    glUniform3fv(uApNormLoc, 1, glm::value_ptr(basis.normalLocal));
-    glUniform1i(uIsInsideThroatLoc, isInsideThroat ? 1 : 0);
-
-    float progress = isTransitioning ? (transitionTimer / std::max(0.001f, transitionDuration)) : 0.0f;
-    glUniform1f(uTransitionProgressLoc, progress);
-
-    glm::mat4 modelSphere = glm::translate(glm::mat4(1.0f), position);
-    glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelSphere));
-
-    glBindVertexArray(sphereVAO);
-    RenderProfiler::instance().recordDrawCall();
-    glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
 
     if (!particleBatch.isReady()) {
         particleBatch.init(kFlatVS, kFlatFS);

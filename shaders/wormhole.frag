@@ -98,18 +98,12 @@ void main() {
         float r_throat = (uThroatRadius > 0.001) ? uThroatRadius : 4.2;
         float u_ap = dot(vLocalPos, uApertureRightLocal) / r_throat;
         float v_ap = dot(vLocalPos, uApertureUpLocal) / r_throat;
-        float frontFacing = dot(vLocalPos, uApertureNormalLocal);
 
         // Map aperture coordinate to normalized offset d from center where ||d|| <= 0.5
         vec2 d = vec2(u_ap, v_ap) * 0.5;
-        float rho = length(vec2(u_ap, v_ap)); // rho in [0, 1] on sphere surface
+        float rho = clamp(length(vec2(u_ap, v_ap)), 0.0, 1.0); // rho in [0, 1] on sphere surface
 
-        // 2. Front vs Back Hemisphere Discrimination:
-        // Front hemisphere faces the incoming observer (frontFacing > 0).
-        // Smoothly transition to dark interior absorption for non-front faces:
-        float frontMask = smoothstep(-0.02, 0.08, frontFacing);
-
-        // 3. Inward Throat Compression (Contract: pushes samples toward center):
+        // 2. Inward Throat Compression (Contract: pushes samples toward center):
         // warpWeight = k * rho^2. uvWarped = center + d * (1.0 - warpWeight)
         float k_warp = 0.22;
         float warpWeight = k_warp * rho * rho;
@@ -121,7 +115,7 @@ void main() {
         vec2 warpDir = (rho > 1e-4) ? normalize(d) : vec2(0.0);
         vec2 uvWarped = uvCenter + d * (1.0 - warpWeight) + warpDir * ripple;
 
-        // 4. Stylized / Fictional Throat-Interface Spectral Dispersion:
+        // 3. Stylized / Fictional Throat-Interface Spectral Dispersion:
         // Vacuum GR lensing is strictly achromatic. Here, RGB chromatic separation is a deliberately
         // stylized Wormhole 2.0 visual cue representing fictional throat-interface boundary dispersion.
         // Vanishes at center (rho = 0) so the destination scene remains 100% sharp and readable.
@@ -141,7 +135,7 @@ void main() {
         float sB = texture(uPortalTex, uvB).b;
         vec3 portalColor = vec3(sR, sG, sB);
 
-        // 5. Throat Boundary Halo & Fresnel Rim Blending:
+        // 4. Throat Boundary Halo & Fresnel Rim Blending:
         float fresnel = pow(1.0 - NdotV, 2.5);
         float rimFactor = smoothstep(0.70, 1.0, rho);
 
@@ -153,12 +147,8 @@ void main() {
         vec3 haloColor = mix(hotViolet, midCyan, 0.5 + 0.5 * sin(uTime * 1.5 + rho * 6.28));
         haloColor += coreWhite * pow(fresnel, 3.0) * 1.5;
 
-        // Blend portal view with boundary glow at the rim
+        // Blend portal view with boundary glow at the rim (seamless one-piece aperture disk)
         vec3 compositedThroat = mix(portalColor, haloColor, rimFactor * 0.75 + fresnel * 0.25);
-
-        // Dark absorption backing for non-front faces
-        vec3 darkInterior = vec3(0.01, 0.005, 0.03);
-        compositedThroat = mix(darkInterior, compositedThroat, frontMask);
 
         // Traversal transition flare effect if uTransitionProgress > 0
         if (uTransitionProgress > 0.0) {

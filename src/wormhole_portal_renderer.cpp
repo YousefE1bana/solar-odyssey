@@ -144,7 +144,7 @@ CameraRenderState WormholePortalRenderer::computePortalCameraState(const CameraR
     glm::dmat3 R_src(rightSrc, upSrc, -fwdSrc);
     glm::dmat3 R_portal = R_dest * glm::transpose(R_src);
 
-    // Transform position and direction in double precision
+    // Transform position and direction in double precision (exact distance preservation)
     glm::dvec3 portalEyeD = destinationWorldD + R_portal * relPos;
     glm::dvec3 portalFwdD = R_portal * glm::dvec3(mainCam.forward);
     glm::dvec3 portalUpD = R_portal * glm::dvec3(mainCam.up);
