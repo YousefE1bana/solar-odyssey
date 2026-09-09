@@ -13,6 +13,7 @@ uniform sampler2D uDayTex;
 uniform sampler2D uNightTex;
 uniform sampler2D uCloudsTex;
 uniform sampler2D uOceanMaskTex;
+uniform sampler2D uRingTex;          // Unit 4: Authentic ring alpha texture for ring-on-planet shadow projection
 
 uniform int uHasNightTex;          // 1 if planet has night texture (Earth)
 uniform int uHasClouds;            // 1 if clouds (Earth), 2 if procedural
@@ -33,11 +34,18 @@ uniform float uTime;               // Time for subtle animated effects
 uniform int uHasRings;             // 1 if planet has rings casting shadows on itself
 uniform float uRingInnerRadius;    // Inner ring radius in local units
 uniform float uRingOuterRadius;    // Outer ring radius in local units
+uniform float uRingOpacity;        // Ring shadow opacity modulation (default 0.90)
 uniform int uIsRing;               // 1 if rendering ring geometry (planet casts shadow on ring)
 uniform float uPlanetRadius;       // Planet sphere radius in local ring units
-uniform int uHasEclipse;           // 1 if moon eclipse shadow is active
-uniform vec3 uEclipseLocalPos;     // Moon position in local space
-uniform float uEclipseRadius;      // Moon radius in local space
+uniform float uSunAngularRadius;   // Physical apparent solar angular radius: tan(theta_sun) = Rsun / Dsun
+uniform int uC37Active;            // 1 for C3.7 upgraded math, 0 for C3.6 legacy control
+
+#define MAX_ECLIPSES 4
+uniform int uEclipseCount;                 // Number of active occluders (0 .. 4)
+uniform vec4 uEclipseSpheres[MAX_ECLIPSES]; // xyz = localPos, w = radius
+uniform int uHasEclipse;           // Legacy: 1 if moon eclipse shadow is active
+uniform vec3 uEclipseLocalPos;     // Legacy: Moon position in local space
+uniform float uEclipseRadius;      // Legacy: Moon radius in local space
 
 // 1. Ring Shadow cast onto Planet Globe
 float calculateRingShadowOnPlanet(vec3 localPos, vec3 sunDir) {
@@ -54,65 +62,117 @@ float calculateRingShadowOnPlanet(vec3 localPos, vec3 sunDir) {
     float dist = length(hitPoint.xz);
 
     if (dist >= uRingInnerRadius && dist <= uRingOuterRadius) {
-        float normDist = (dist - uRingInnerRadius) / (uRingOuterRadius - uRingInnerRadius);
-        
-        // Cassini division gap at ~0.76 normalized radius
-        float cassiniGap = smoothstep(0.02, 0.0, abs(normDist - 0.76));
-        float ringDensity = (1.0 - cassiniGap * 0.75) * 0.90;
-        
-        // Soft edges at ring inner and outer boundaries
-        float edgeFade = smoothstep(uRingInnerRadius, uRingInnerRadius + 0.04, dist) *
-                         (1.0 - smoothstep(uRingOuterRadius - 0.04, uRingOuterRadius, dist));
-        
-        return 1.0 - ringDensity * edgeFade;
+        float ringSpan = uRingOuterRadius - uRingInnerRadius;
+        float normDist = (dist - uRingInnerRadius) / ringSpan;
+
+        if (uC37Active == 0) {
+            // C3.6 Legacy polynomial formula
+            float cassiniGap = smoothstep(0.02, 0.0, abs(normDist - 0.76));
+            float ringDensity = (1.0 - cassiniGap * 0.75) * 0.90;
+            float edgeFade = smoothstep(uRingInnerRadius, uRingInnerRadius + 0.04, dist) *
+                             (1.0 - smoothstep(uRingOuterRadius - 0.04, uRingOuterRadius, dist));
+            return 1.0 - ringDensity * edgeFade;
+        }
+
+        // C3.7 Authentic texture sampling with finite-source penumbra filtering
+        float safeTan = max(0.005, uSunAngularRadius);
+        float wu = max(0.002, (t * safeTan * 0.15) / ringSpan);
+
+        float a0 = texture(uRingTex, vec2(clamp(normDist, 0.0, 1.0), 0.5)).a;
+        float aMinus = texture(uRingTex, vec2(clamp(normDist - 0.75 * wu, 0.0, 1.0), 0.5)).a;
+        float aPlus = texture(uRingTex, vec2(clamp(normDist + 0.75 * wu, 0.0, 1.0), 0.5)).a;
+        float effAlpha = 0.50 * a0 + 0.25 * (aMinus + aPlus);
+
+        float edgeInner = smoothstep(0.0, wu * 2.0, normDist);
+        float edgeOuter = 1.0 - smoothstep(1.0 - wu * 2.0, 1.0, normDist);
+        float edgeFade = edgeInner * edgeOuter;
+
+        float opacity = (uRingOpacity > 0.0 ? uRingOpacity : 0.90);
+        return 1.0 - (effAlpha * edgeFade * opacity);
     }
     return 1.0;
 }
 
 // 2. Planet Sphere Shadow cast onto Ring Geometry
 float calculatePlanetShadowOnRing(vec3 localPos, vec3 sunDir) {
-    if (uIsRing == 0) return 1.0;
+    if (uIsRing == 0 || uPlanetRadius <= 1e-4) return 1.0;
 
     // Ray from ring localPos towards Sun: R(t) = localPos + t * sunDir
     // Planet is a sphere of radius uPlanetRadius at (0,0,0)
     float b = dot(localPos, sunDir);
-    float c = dot(localPos, localPos) - uPlanetRadius * uPlanetRadius;
-    
     if (b > 0.0) return 1.0; // Ring point is facing the sun, planet cannot occlude
 
-    float discr = b * b - c;
-    if (discr > 0.0) {
-        float dPerp = sqrt(max(0.0, dot(localPos, localPos) - b * b));
-        // Soft penumbra edge
-        float shadow = smoothstep(uPlanetRadius * 0.96, uPlanetRadius * 1.03, dPerp);
-        return shadow;
+    float z = -b;
+    float dPerpSq = max(0.0, dot(localPos, localPos) - b * b);
+    float dPerp = sqrt(dPerpSq);
+
+    if (uC37Active == 0) {
+        // C3.6 Legacy step formula
+        return smoothstep(uPlanetRadius * 0.96, uPlanetRadius * 1.03, dPerp);
     }
-    return 1.0;
+
+    // C3.7 Geometry-derived finite-source umbra and penumbra
+    float safeTan = max(0.005, uSunAngularRadius);
+    float penumbraSpread = z * safeTan * 0.40;
+    float umbraRadius = max(0.0, uPlanetRadius - penumbraSpread);
+    float penumbraRadius = uPlanetRadius + penumbraSpread;
+
+    return smoothstep(umbraRadius, penumbraRadius, dPerp);
 }
 
 // 3. Moon Eclipse Shadow cast onto Planet Globe
 float calculateEclipseShadow(vec3 localPos, vec3 sunDir) {
-    if (uHasEclipse == 0) return 1.0;
-
-    // Vector from localPos to occluder moon center
-    vec3 toMoon = uEclipseLocalPos - localPos;
-    float t = dot(toMoon, sunDir);
-    if (t <= 0.0) return 1.0; // Moon is behind the planet surface point
-
-    // Perpendicular distance from moon center to the light ray
-    float dSq = dot(toMoon, toMoon) - t * t;
-    float r = uEclipseRadius;
-    float rSq = r * r;
-
-    if (dSq < rSq * 2.25) {
-        float d = sqrt(max(0.0, dSq));
-        // Umbra (total) and Penumbra (partial)
-        float umbraRadius = r * 0.70;
-        float penumbraRadius = r * 1.30;
-        float shadow = smoothstep(umbraRadius, penumbraRadius, d);
-        return mix(0.05, 1.0, shadow);
+    if (uC37Active == 0) {
+        // C3.6 Legacy single-moon eclipse
+        if (uHasEclipse == 0) return 1.0;
+        vec3 toMoon = uEclipseLocalPos - localPos;
+        float t = dot(toMoon, sunDir);
+        if (t <= 0.0) return 1.0;
+        float dSq = dot(toMoon, toMoon) - t * t;
+        float r = uEclipseRadius;
+        float rSq = r * r;
+        if (dSq < rSq * 2.25) {
+            float d = sqrt(max(0.0, dSq));
+            float shadow = smoothstep(r * 0.70, r * 1.30, d);
+            return mix(0.05, 1.0, shadow);
+        }
+        return 1.0;
     }
-    return 1.0;
+
+    // C3.7 Multi-occluder finite-source analytical eclipse
+    int count = uEclipseCount;
+    if (count <= 0 && uHasEclipse > 0) {
+        count = 1;
+    }
+    if (count <= 0) return 1.0;
+
+    float safeTan = max(0.005, uSunAngularRadius);
+    float totalEclipse = 1.0;
+
+    for (int i = 0; i < MAX_ECLIPSES; ++i) {
+        if (i >= count) break;
+        vec3 moonPos = (uEclipseCount > 0) ? uEclipseSpheres[i].xyz : uEclipseLocalPos;
+        float moonRadius = (uEclipseCount > 0) ? uEclipseSpheres[i].w : uEclipseRadius;
+
+        vec3 toMoon = moonPos - localPos;
+        float t = dot(toMoon, sunDir);
+        if (t <= 0.0) continue;
+
+        float dSq = dot(toMoon, toMoon) - t * t;
+        if (dSq < 0.0) continue;
+
+        float penumbraSpread = t * safeTan;
+        float umbraRadius = max(0.0, moonRadius - penumbraSpread);
+        float penumbraRadius = moonRadius + penumbraSpread;
+
+        float d = sqrt(dSq);
+        if (d < penumbraRadius) {
+            float shadow = smoothstep(umbraRadius, penumbraRadius, d);
+            float moonFactor = mix(0.05, 1.0, shadow);
+            totalEclipse *= moonFactor;
+        }
+    }
+    return totalEclipse;
 }
 
 // 4. Spherical Cloud-Shell Shadow Projection (Curvature-Aware Ray/Sphere Intersection)
@@ -225,12 +285,43 @@ void main() {
     vec3 ggxSpec = vec3(0.0);
     float oceanMask = 0.0;
     if (uIsRing > 0) {
-        // Double-sided translucent ring particle scattering
-        float ringDiff = max(abs(dot(N, L)), 0.25);
-        vec3 litRing = dayColor.rgb * (ringDiff * vec3(1.15, 1.10, 1.02) * uSunIntensity * totalShadow);
-        vec3 ambientRing = dayColor.rgb * vec3(0.18, 0.18, 0.22);
-        surfaceColor = litRing + ambientRing;
-        alpha = dayColor.a;
+        if (uC37Active == 0) {
+            // C3.6 Legacy ring lighting
+            float ringDiff = max(abs(dot(N, L)), 0.25);
+            vec3 litRing = dayColor.rgb * (ringDiff * vec3(1.15, 1.10, 1.02) * uSunIntensity * totalShadow);
+            vec3 ambientRing = dayColor.rgb * vec3(0.18, 0.18, 0.22);
+            surfaceColor = litRing + ambientRing;
+            alpha = dayColor.a;
+        } else {
+            // C3.7 Double-sided translucent ring particle scattering with phase response
+            float mu0 = dot(N, L);
+            float mu = dot(N, V);
+            float s = mu0 * mu;
+
+            // Two-lobed phase function based on Sun-ring-viewer geometry
+            float cosTheta = dot(L, V);
+            float fwdScat = pow(max(0.0, -cosTheta), 3.0);
+            float backScat = pow(max(0.0, cosTheta), 5.0);
+            float phase = 0.40 + 0.45 * fwdScat + 0.35 * backScat;
+
+            float absMu0 = max(abs(mu0), 0.04);
+            float ringAlpha = clamp(dayColor.a, 0.0, 1.0);
+
+            // Lit face (reflection / backscattering)
+            float R = (1.0 - exp(-2.5 * ringAlpha / absMu0)) * absMu0;
+
+            // Unlit face (transmission / forward scattering through particles)
+            float T = ringAlpha * exp(-1.8 * ringAlpha / absMu0) * absMu0 + 0.06 * ringAlpha;
+
+            // Smooth face transition
+            float faceBlend = smoothstep(-0.05, 0.05, s);
+            float directScattering = (faceBlend * R + (1.0 - faceBlend) * T) * phase;
+
+            vec3 litRing = dayColor.rgb * (directScattering * vec3(1.20, 1.15, 1.05) * uSunIntensity * totalShadow);
+            vec3 ambientRing = dayColor.rgb * vec3(0.08, 0.08, 0.10);
+            surfaceColor = litRing + ambientRing;
+            alpha = clamp(dayColor.a * (0.6 + 0.4 * faceBlend), 0.0, 1.0);
+        }
     } else {
         // Direct solar irradiance with Atmosphere 2.0 physical wavelength extinction near terminator
         float atmoAirMass = 1.0 / max(NdotL + 0.08, 0.04);

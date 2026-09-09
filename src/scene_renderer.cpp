@@ -289,6 +289,12 @@ bool SceneRenderer::init() {
         uSpecularF0Loc = glGetUniformLocation(planetProgram, "uSpecularF0");
         uCloudHeightLoc = glGetUniformLocation(planetProgram, "uCloudHeight");
         uCloudShadowIntensityLoc = glGetUniformLocation(planetProgram, "uCloudShadowIntensity");
+        uRingTexLoc = glGetUniformLocation(planetProgram, "uRingTex");
+        uRingOpacityLoc = glGetUniformLocation(planetProgram, "uRingOpacity");
+        uSunAngularRadiusLoc = glGetUniformLocation(planetProgram, "uSunAngularRadius");
+        uC37ActiveLoc = glGetUniformLocation(planetProgram, "uC37Active");
+        uEclipseCountLoc = glGetUniformLocation(planetProgram, "uEclipseCount");
+        uEclipseSpheresLoc = glGetUniformLocation(planetProgram, "uEclipseSpheres[0]");
     }
 
     initStarfield();
@@ -450,7 +456,7 @@ void SceneRenderer::renderOrbit(float radius, bool isSelected, const CameraContr
     glDisable(GL_BLEND);
 }
 
-void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, float planetRadius, const glm::mat4& ringModel, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos, float opacity) {
+void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, float planetRadius, const glm::mat4& ringModel, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos, float opacity, float sunAngularRadius, const glm::vec3& ringSunLocalPos) {
     if (!planetProgram || !ringVAO) return;
 
     glEnable(GL_BLEND);
@@ -460,9 +466,17 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
     glDisable(GL_CULL_FACE);
 
     glUseProgram(planetProgram);
+
+    // C3.7: preserve exact previous GL texture state (dedicated ring unit must
+    // leave no residue; no blind unbind/reset-to-zero on teardown).
+    GLint prevActiveTex = GL_TEXTURE0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    GLint prevUnit0Binding = 0;
     glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevUnit0Binding);
+
     glBindTexture(GL_TEXTURE_2D, saturnRingTexture);
-    glUniform1i(uDayTexLoc, 0);
+    glUniform1i(uDayTexLoc, C37TextureUnits::kDay);
 
     glUniform1i(uHasNightTexLoc, 0);
     glUniform1i(uHasCloudsLoc, 0);
@@ -475,7 +489,11 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
     glUniform1f(uAtmosphereGlowLoc, 0.0f);
     glUniform3f(uEmissiveLoc, 0.0f, 0.0f, 0.0f);
     glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
+    glUniform3f(uSunLocalPosLoc, ringSunLocalPos.x, ringSunLocalPos.y, ringSunLocalPos.z);
     glUniform1f(uSunIntensityLoc, 1.25f);
+    if (uSunAngularRadiusLoc >= 0) glUniform1f(uSunAngularRadiusLoc, sunAngularRadius);
+    if (uRingOpacityLoc >= 0) glUniform1f(uRingOpacityLoc, opacity);
+    if (uC37ActiveLoc >= 0) glUniform1i(uC37ActiveLoc, c37Active ? 1 : 0);
 
     uploadCoreMatrices(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, ringMV, projMat);
 
@@ -486,6 +504,10 @@ void SceneRenderer::renderSaturnRings(float innerRadius, float outerRadius, floa
 
     glUniform1i(uIsRingLoc, 0);
     glUseProgram(0);
+    // C3.7: restore the exact previous bindings captured on entry.
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevUnit0Binding));
+    glActiveTexture(static_cast<GLenum>(prevActiveTex));
     if (cullWasOn) {
         glEnable(GL_CULL_FACE);
     } else {
@@ -503,6 +525,15 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
     GLboolean cullWasOn = GL_FALSE;
     glGetBooleanv(GL_CULL_FACE, &cullWasOn);
     glDisable(GL_CULL_FACE);
+    // C3.7: save exact previous texture bindings (units 0..4) + active unit.
+    // Restored verbatim on exit; no blind unbind/reset-to-zero.
+    GLint prevActiveTex = GL_TEXTURE0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    GLint prevBindings[C37TextureUnits::kCount] = {0};
+    for (GLint u = 0; u < C37TextureUnits::kCount; ++u) {
+        glActiveTexture(GL_TEXTURE0 + u);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevBindings[u]);
+    }
     if (planetProgram) {
         glUseProgram(planetProgram);
         glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
@@ -518,6 +549,17 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         float distToPlanet = glm::distance(cameraCtrl.currentEye, planet.currentPosition);
         lod::SphereTier planetTier = lod::LODManager::instance().computeSphereTier(distToPlanet, effectiveSize, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
 
+        glm::vec3 sunWorldDir = sunWorldPos - planet.currentPosition;
+        float sunDist = glm::length(sunWorldDir);
+        // C3.7: finite-source penumbra derived from the ACTUAL Sun radius in
+        // CelestialDatabase (visualSize = 2.0 scene units) and live Sun distance:
+        // tan(theta_sun) = R_sun / D_sun. Fallback preserves the canonical value.
+        float sunRadiusWorld = 2.0f * solarUI.planetScale;
+        if (const CelestialBodyData* sunData = db.getBody("Sun")) {
+            sunRadiusWorld = sunData->visualSize * solarUI.planetScale;
+        }
+        float tanSun = sunRadiusWorld / std::max(sunDist, 1e-4f);
+
         glm::mat4 rotModel = glm::mat4(1.0f);
         const CelestialBodyData* data = db.getBody(planet.name);
         if (solarUI.enableAxialTilt && data && data->axialTiltDeg != 0.0f) {
@@ -529,16 +571,16 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         glm::mat4 planetMV = viewMat * glm::scale(model, glm::vec3(effectiveSize));
 
         if (planetProgram) {
-            glActiveTexture(GL_TEXTURE0);
+            glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kDay);
             glBindTexture(GL_TEXTURE_2D, planet.materials.diffuseTexture ? planet.materials.diffuseTexture : planet.texture);
-            glUniform1i(uDayTexLoc, 0);
+            glUniform1i(uDayTexLoc, C37TextureUnits::kDay);
 
             // Night texture binding (requires declared capability && successfully loaded resource)
             if (planet.isNightLightsActive() && surfaceOverrides.enableNightLights) {
-                glActiveTexture(GL_TEXTURE1);
+                glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kNight);
                 GLuint nightTex = planet.materials.nightTexture ? planet.materials.nightTexture : planet.secondaryTexture;
                 glBindTexture(GL_TEXTURE_2D, nightTex);
-                glUniform1i(uNightTexLoc, 1);
+                glUniform1i(uNightTexLoc, C37TextureUnits::kNight);
                 glUniform1i(uHasNightTexLoc, 1);
             } else {
                 glUniform1i(uHasNightTexLoc, 0);
@@ -546,10 +588,10 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             // Clouds texture binding (requires declared capability && successfully loaded resource)
             if (planet.isCloudsActive()) {
-                glActiveTexture(GL_TEXTURE2);
+                glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kClouds);
                 GLuint cloudTex = planet.materials.cloudTexture ? planet.materials.cloudTexture : planet.cloudsTexture;
                 glBindTexture(GL_TEXTURE_2D, cloudTex);
-                glUniform1i(uCloudsTexLoc, 2);
+                glUniform1i(uCloudsTexLoc, C37TextureUnits::kClouds);
                 glUniform1i(uHasCloudsLoc, 1);
                 glUniform2f(uCloudOffsetLoc, cloudRotation * 0.05f, 0.0f);
                 glUniform1f(uCloudHeightLoc, planet.surfaceCaps.cloudHeight);
@@ -563,9 +605,9 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             // Ocean mask texture binding (requires declared capability && successfully loaded resource)
             if (planet.isOceanMaskActive() && surfaceOverrides.enableOceanSpecular) {
-                glActiveTexture(GL_TEXTURE3);
+                glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kOceanMask);
                 glBindTexture(GL_TEXTURE_2D, planet.materials.oceanMaskTexture);
-                glUniform1i(uOceanMaskTexLoc, 3);
+                glUniform1i(uOceanMaskTexLoc, C37TextureUnits::kOceanMask);
                 glUniform1i(uHasOceanMaskLoc, 1);
                 glUniform1f(uSpecularRoughnessLoc, planet.surfaceCaps.specularRoughness);
                 glUniform1f(uSpecularF0Loc, planet.surfaceCaps.specularF0);
@@ -589,49 +631,76 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             // Fast Analytical Shadow Sun Vector transformed into object/local space
             glm::mat3 worldToObject = glm::transpose(glm::mat3(rotModel));
-            glm::vec3 sunWorldDir = sunWorldPos - planet.currentPosition;
             glm::vec3 planetSunLocalPos = worldToObject * sunWorldDir;
             glUniform3f(uSunLocalPosLoc, planetSunLocalPos.x, planetSunLocalPos.y, planetSunLocalPos.z);
+
+            if (uSunAngularRadiusLoc >= 0) glUniform1f(uSunAngularRadiusLoc, tanSun);
+            if (uC37ActiveLoc >= 0) glUniform1i(uC37ActiveLoc, c37Active ? 1 : 0);
 
             if (planet.hasRings) {
                 glUniform1i(uHasRingsLoc, 1);
                 glUniform1f(uRingInnerRadiusLoc, planet.ringInnerRadius / planet.size);
                 glUniform1f(uRingOuterRadiusLoc, planet.ringOuterRadius / planet.size);
+                if (uRingOpacityLoc >= 0) glUniform1f(uRingOpacityLoc, solarUI.ringOpacity);
+
+                // Dedicated ring-alpha unit: no collision with surface units 0..3.
+                glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kRingAlpha);
+                glBindTexture(GL_TEXTURE_2D, saturnRingTexture);
+                if (uRingTexLoc >= 0) glUniform1i(uRingTexLoc, C37TextureUnits::kRingAlpha);
             } else {
                 glUniform1i(uHasRingsLoc, 0);
             }
 
-            // Eclipse shadow check: true physical alignment check
-            bool eclipseFound = false;
-            float sunDist = glm::length(sunWorldDir);
+            // Multi-Moon Analytical Eclipse check (finite-source geometry)
+            std::vector<glm::vec4> activeEclipses;
             if (sunDist > 1e-4f) {
                 glm::vec3 sunNormDir = sunWorldDir / sunDist;
+
+                auto checkAndAddOccluder = [&](const glm::vec3& occWorldPos, float occSize, const std::string& parentPlanet) {
+                    if (parentPlanet != planet.name) return;
+                    if (activeEclipses.size() >= static_cast<size_t>(kMaxEclipses)) return;
+
+                    // C3.7: single analytical authority for occluder acceptance —
+                    // ShadowMath::isMoonEclipseAligned enforces occluder strictly
+                    // between receiver and Sun with finite-source penumbra reach.
+                    // (Occluder behind receiver or beyond Sun is rejected: no shadow.)
+                    if (!ShadowMath::isMoonEclipseAligned(occWorldPos, planet.currentPosition, sunNormDir,
+                                                          effectiveSize, occSize * solarUI.planetScale,
+                                                          sunDist, tanSun)) return;
+                    glm::vec3 moonRel = occWorldPos - planet.currentPosition;
+                    glm::vec3 moonLocalPos = (worldToObject * moonRel) / effectiveSize;
+                    float moonLocalRadius = (occSize * solarUI.planetScale) / effectiveSize;
+                    activeEclipses.emplace_back(moonLocalPos.x, moonLocalPos.y, moonLocalPos.z, moonLocalRadius);
+                };
+
                 for (const auto& m : moons) {
-                    if (m.parentPlanet == planet.name) {
-                        glm::vec3 moonRel = m.currentPosition - planet.currentPosition;
-                        float tMoon = glm::dot(moonRel, sunNormDir);
-                        if (tMoon > 0.0f && tMoon < sunDist) {
-                            float dPerpSq = glm::dot(moonRel, moonRel) - tMoon * tMoon;
-                            float maxShadowDist = (effectiveSize + m.size * solarUI.planetScale);
-                            if (dPerpSq < maxShadowDist * maxShadowDist) {
-                                glm::vec3 moonLocalPos = (worldToObject * moonRel) / effectiveSize;
-                                float moonLocalRadius = (m.size * solarUI.planetScale) / effectiveSize;
-                                glUniform1i(uHasEclipseLoc, 1);
-                                glUniform3f(uEclipseLocalPosLoc, moonLocalPos.x, moonLocalPos.y, moonLocalPos.z);
-                                glUniform1f(uEclipseRadiusLoc, moonLocalRadius);
-                                eclipseFound = true;
-                                break;
-                            }
-                        }
-                    }
+                    checkAndAddOccluder(m.currentPosition, m.size, m.parentPlanet);
+                }
+
+                if (benchmarkOccluder.active) {
+                    checkAndAddOccluder(benchmarkOccluder.worldPos, benchmarkOccluder.size, benchmarkOccluder.parentPlanet);
                 }
             }
-            if (!eclipseFound) glUniform1i(uHasEclipseLoc, 0);
+
+            if (uEclipseCountLoc >= 0) glUniform1i(uEclipseCountLoc, (GLint)activeEclipses.size());
+            if (!activeEclipses.empty()) {
+                if (uEclipseSpheresLoc >= 0) {
+                    glUniform4fv(uEclipseSpheresLoc, (GLsizei)activeEclipses.size(), glm::value_ptr(activeEclipses[0]));
+                }
+                if (uHasEclipseLoc >= 0) glUniform1i(uHasEclipseLoc, 1);
+                if (uEclipseLocalPosLoc >= 0) glUniform3f(uEclipseLocalPosLoc, activeEclipses[0].x, activeEclipses[0].y, activeEclipses[0].z);
+                if (uEclipseRadiusLoc >= 0) glUniform1f(uEclipseRadiusLoc, activeEclipses[0].w);
+            } else {
+                if (uHasEclipseLoc >= 0) glUniform1i(uHasEclipseLoc, 0);
+            }
 
             uploadCoreMatrices(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, planetMV, projMat);
 
             lod::LODManager::instance().drawSphere(planetTier);
             lod::LODManager::instance().recordBodyRender(planet.name, distToPlanet, effectiveSize, planetTier);
+
+            // C3.7: no per-planet unbind; unit 4 is rebound for the next ringed
+            // body as needed and all bindings are restored verbatim on exit.
         } else {
             lod::LODManager::instance().drawSphere(planetTier);
             lod::LODManager::instance().recordBodyRender(planet.name, distToPlanet, effectiveSize, planetTier);
@@ -648,10 +717,18 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         // Saturn Rings
         if (planet.hasRings) {
             glm::mat4 ringModel = glm::translate(glm::mat4(1.0f), planet.currentPosition);
-            ringModel = glm::rotate(ringModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            ringModel = glm::rotate(ringModel, glm::radians(26.7f), glm::vec3(1.0f, 0.0f, 0.2f));
+            if (solarUI.enableAxialTilt && data && data->axialTiltDeg != 0.0f) {
+                ringModel = glm::rotate(ringModel, glm::radians(data->axialTiltDeg), glm::vec3(1.0f, 0.0f, 0.2f));
+            }
             glm::mat4 ringMV = viewMat * ringModel;
-            renderSaturnRings(planet.ringInnerRadius * solarUI.planetScale, planet.ringOuterRadius * solarUI.planetScale, effectiveSize, ringModel, ringMV, projMat, sunEyePos, solarUI.ringOpacity);
+
+            glm::mat3 worldToRing = glm::transpose(glm::mat3(ringModel));
+            glm::vec3 ringSunLocalPos = worldToRing * sunWorldDir;
+
+            renderSaturnRings(planet.ringInnerRadius * solarUI.planetScale,
+                              planet.ringOuterRadius * solarUI.planetScale,
+                              effectiveSize, ringModel, ringMV, projMat, sunEyePos,
+                              solarUI.ringOpacity, tanSun, ringSunLocalPos);
             if (planetProgram) glUseProgram(planetProgram);
         }
     }
@@ -659,6 +736,12 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
     if (planetProgram) {
         glUseProgram(0);
     }
+    // C3.7: restore the exact previous texture bindings + active unit.
+    for (GLint u = 0; u < C37TextureUnits::kCount; ++u) {
+        glActiveTexture(GL_TEXTURE0 + u);
+        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevBindings[u]));
+    }
+    glActiveTexture(static_cast<GLenum>(prevActiveTex));
     if (cullWasOn) {
         glEnable(GL_CULL_FACE);
     } else {
@@ -685,6 +768,7 @@ void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Plan
         glUniform1i(uHasRingsLoc, 0);
         glUniform1i(uHasEclipseLoc, 0);
         glUniform1i(uHasOceanMaskLoc, 0);
+        if (uEclipseCountLoc >= 0) glUniform1i(uEclipseCountLoc, 0);
     }
 
     for (auto &moon : moons) {

@@ -1,0 +1,18 @@
+{
+  "scene": "saturn",
+  "type": "SMOKE_TEST",
+  "warmup_frames": 60,
+  "measured_frames": 300,
+  "bypass_copy": false,
+  "median_fps": 720.6688,
+  "median_cpu_ms": 1.3876,
+  "median_gpu_ms": 0.8079,
+  "gpu_time_available": true,
+  "p1_low_fps": 172.2683,
+  "p01_low_fps": 72.8470,
+  "p1_low_cpu_ms": 5.8049,
+  "p01_low_cpu_ms": 13.7274,
+  "median_draw_calls": 41,
+  "median_triangles": 83384,
+  "passed": true
+}

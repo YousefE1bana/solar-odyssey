@@ -113,6 +113,10 @@ bool BenchmarkRunner::initFromArgs(int argc, char** argv) {
             config.disablePortal = true;
         } else if (strcmp(argv[i], "--enable-portal") == 0 || strcmp(argv[i], "--portal-on") == 0) {
             config.disablePortal = false;
+        } else if (strcmp(argv[i], "--c37-off") == 0 || strcmp(argv[i], "--disable-c37") == 0) {
+            config.disableC37 = true;
+        } else if (strcmp(argv[i], "--c37-on") == 0 || strcmp(argv[i], "--enable-c37") == 0) {
+            config.disableC37 = false;
         }
     }
     
@@ -159,6 +163,8 @@ void BenchmarkRunner::onSetup(Engine* engine) {
     engine->simCtrl.setCloudRotationAngle(0.0);
     srand(42);             // Fixed PRNG seed
     engine->renderer.surfaceOverrides = SceneRenderer::SurfaceFeatureOverrides{};
+    engine->renderer.c37Active = !config.disableC37;
+    engine->renderer.benchmarkOccluder.active = false;
 
     // 3. Setup Scene-Specific Deterministic Viewpoints
     std::string scene = config.captureGolden ? config.goldenScene : config.sceneName;
@@ -391,16 +397,92 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.transitionProgress = 1.0f;
         engine->solarUI.selectedPlanetName = "Jupiter";
     } else if (scene == "saturn") {
-        float satAngle = 190.0f;
-        float satRad = 27.0f;
-        glm::vec3 satPos(satRad * cosf(glm::radians(satAngle)), 0.0f, satRad * sinf(glm::radians(satAngle)));
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Saturn";
+        engine->cameraCtrl.focusDistance = 7.0f;
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 125.0f;
+        engine->cameraCtrl.currentTarget = satPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.0f, 25.0f, 125.0f, satPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "saturn_rings_litside" || scene == "Saturn_Rings_LitSide") {
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Saturn";
+        engine->cameraCtrl.focusDistance = 7.0f;
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 125.0f;
+        engine->cameraCtrl.currentTarget = satPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.0f, 25.0f, 125.0f, satPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "saturn_rings_transmissionside" || scene == "Saturn_Rings_TransmissionSide") {
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Saturn";
+        engine->cameraCtrl.focusDistance = 7.0f;
+        engine->cameraCtrl.focusAngleX = 170.0f;
+        engine->cameraCtrl.focusAngleY = 55.0f;
+        engine->cameraCtrl.currentTarget = satPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.0f, 170.0f, 55.0f, satPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "saturn_ring_shadow" || scene == "Saturn_Ring_Shadow") {
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Saturn";
+        engine->cameraCtrl.focusDistance = 3.2f;
+        engine->cameraCtrl.focusAngleX = 15.0f;
+        engine->cameraCtrl.focusAngleY = 115.0f;
+        engine->cameraCtrl.currentTarget = satPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.2f, 15.0f, 115.0f, satPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "saturn_planet_shadow_on_rings" || scene == "Saturn_Planet_Shadow_On_Rings") {
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
         engine->cameraCtrl.focusedBodyName = "Saturn";
         engine->cameraCtrl.focusDistance = 7.5f;
-        engine->cameraCtrl.focusAngleX = 35.0f;
-        engine->cameraCtrl.focusAngleY = 55.0f;
+        engine->cameraCtrl.focusAngleX = 175.0f;
+        engine->cameraCtrl.focusAngleY = 135.0f;
         engine->cameraCtrl.currentTarget = satPos;
-        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.5f, 35.0f, 55.0f, satPos);
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.5f, 175.0f, 135.0f, satPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "saturn_eclipse" || scene == "Saturn_Eclipse") {
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
+        glm::vec3 dirToSun = glm::normalize(-satPos);
+        engine->renderer.benchmarkOccluder.active = true;
+        engine->renderer.benchmarkOccluder.worldPos = satPos + dirToSun * 3.5f;
+        engine->renderer.benchmarkOccluder.size = 0.22f;
+        engine->renderer.benchmarkOccluder.parentPlanet = "Saturn";
+
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Saturn";
+        engine->cameraCtrl.focusDistance = 3.5f;
+        engine->cameraCtrl.focusAngleX = 355.0f;
+        engine->cameraCtrl.focusAngleY = 95.0f;
+        engine->cameraCtrl.currentTarget = satPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.5f, 355.0f, 95.0f, satPos);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->solarUI.selectedPlanetName = "Saturn";
+    } else if (scene == "saturn_oblique" || scene == "Saturn_Oblique") {
+        glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
+        engine->cameraCtrl.mode = CAM_FOCUS;
+        engine->cameraCtrl.focusedBodyName = "Saturn";
+        engine->cameraCtrl.focusDistance = 8.5f;
+        engine->cameraCtrl.focusAngleX = 45.0f;
+        engine->cameraCtrl.focusAngleY = 50.0f;
+        engine->cameraCtrl.currentTarget = satPos;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(8.5f, 45.0f, 50.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
         engine->solarUI.selectedPlanetName = "Saturn";

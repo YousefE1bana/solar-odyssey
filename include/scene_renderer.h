@@ -16,6 +16,22 @@
 #include "lod_manager.h"
 #include "shadow_math.h"
 
+// C3.7 planet-program texture unit assignments.
+// Units 0..3 carry planet surface maps; unit 4 is DEDICATED to the authentic
+// Saturn ring-alpha texture and must never collide with the surface units.
+// (Covered by Catch2: distinctness + GL minimum-unit-count bound.)
+struct C37TextureUnits {
+    static constexpr GLint kDay = 0;
+    static constexpr GLint kNight = 1;
+    static constexpr GLint kClouds = 2;
+    static constexpr GLint kOceanMask = 3;
+    static constexpr GLint kRingAlpha = 4;
+    static constexpr GLint kCount = 5;
+};
+
+// Maximum simultaneous eclipse occluders (must match MAX_ECLIPSES in planet.frag).
+static constexpr GLint kMaxEclipses = 4;
+
 // Material resources owned by the renderer
 struct PlanetMaterialResources {
     GLuint diffuseTexture = 0;
@@ -127,6 +143,8 @@ public:
     GLint uOceanMaskTexLoc = -1, uHasOceanMaskLoc = -1;
     GLint uSpecularRoughnessLoc = -1, uSpecularF0Loc = -1;
     GLint uCloudHeightLoc = -1, uCloudShadowIntensityLoc = -1;
+    GLint uRingTexLoc = -1, uRingOpacityLoc = -1, uSunAngularRadiusLoc = -1, uC37ActiveLoc = -1;
+    GLint uEclipseCountLoc = -1, uEclipseSpheresLoc = -1;
 
     // Diagnostic / Verification Overrides (controlled feature ON/OFF comparisons)
     struct SurfaceFeatureOverrides {
@@ -135,6 +153,17 @@ public:
         bool enableNightLights = true;
     };
     SurfaceFeatureOverrides surfaceOverrides;
+
+    // Benchmark-only synthetic occluder for deterministic eclipse verification
+    // (zero mutation of canonical inventory, simulation state, or save state)
+    struct BenchmarkSyntheticOccluder {
+        bool active = false;
+        std::string parentPlanet;
+        glm::vec3 worldPos{0.0f};
+        float size = 0.22f;
+    };
+    BenchmarkSyntheticOccluder benchmarkOccluder;
+    bool c37Active = true;
 
     // Uniform locations for Starfield
     GLint uStarTexLoc = -1, uStarModelViewLoc = -1, uStarProjectionLoc = -1;
@@ -151,7 +180,7 @@ public:
     void renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& cameraEye);
     void renderSun(const glm::mat4& viewMat, const glm::mat4& projMat, float time, float intensity, const glm::vec3& sunWorldPos, const CameraController& cameraCtrl, const SolarOdysseyUI& solarUI);
     void renderOrbit(float radius, bool isSelected, const CameraController& cameraCtrl, const glm::mat4& viewMat, const glm::mat4& projMat);
-    void renderSaturnRings(float innerRadius, float outerRadius, float planetRadius, const glm::mat4& ringModel, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos, float opacity);
+    void renderSaturnRings(float innerRadius, float outerRadius, float planetRadius, const glm::mat4& ringModel, const glm::mat4& ringMV, const glm::mat4& projMat, const glm::vec3& sunEyePos, float opacity, float sunAngularRadius = 0.07407f, const glm::vec3& ringSunLocalPos = glm::vec3(0.0f, 1.0f, 0.0f));
     void renderPlanets(std::vector<Planet>& planets, const std::vector<Moon>& moons, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, float time, float cloudRotation, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl, const CelestialDatabase& db, AtmosphereEffects* atmo);
     void renderMoons(std::vector<Moon>& moons, const std::vector<Planet>& planets, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& sunWorldPos, const glm::vec3& sunEyePos, const SolarOdysseyUI& solarUI, const CameraController& cameraCtrl);
     void renderBlackHole(BlackHole& bh, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& eyePos, float time);
