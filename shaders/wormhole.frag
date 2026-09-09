@@ -11,6 +11,7 @@ out vec4 FragColor;
 uniform float uTime;
 uniform int uMeshType;       // 0 = Throat Sphere, 1 = Accretion Vortex Disk, 2 = Gravitational Halo Arch
 uniform vec3 uWormholePos;
+uniform vec3 uCameraPos;
 uniform float uRadius;
 
 // C3.6 Portal Uniforms
@@ -62,6 +63,21 @@ void main() {
     vec3 V = normalize(vViewDir);
     float NdotV = max(0.0, dot(N, V));
 
+    // For Accretion Disk (Type 1) and Halo Arches (Type 2):
+    // When portal is active, carve out the portal aperture cylinder so disk/halo geometry
+    // NEVER occludes or contaminates the interior portal window from ANY viewpoint.
+    if (uPortalAvailable && !uIsInsideThroat && (uMeshType == 1 || uMeshType == 2)) {
+        vec3 rayDir = normalize(vWorldPos - uCameraPos);
+        vec3 toCenter = uWormholePos - uCameraPos;
+        float tClose = dot(toCenter, rayDir);
+        if (tClose > 0.0) {
+            vec3 perp = (uCameraPos + tClose * rayDir) - uWormholePos;
+            if (dot(perp, perp) < (uThroatRadius * uThroatRadius)) {
+                discard;
+            }
+        }
+    }
+
     // TYPE 0: THROAT SPHERE (Center portal depth / hyperspace gateway)
     if (uMeshType == 0) {
         if (!uPortalAvailable || uIsInsideThroat) {
@@ -89,6 +105,11 @@ void main() {
             float alpha = clamp(0.75 + fresnel * 0.35, 0.0, 1.0);
             FragColor = vec4(portalColor, alpha);
             return;
+        }
+
+        // Safety: cull back-facing fragments on the throat sphere
+        if (!uIsInsideThroat && dot(vNormal, vViewDir) <= 0.0) {
+            discard;
         }
 
         // C3.6 Portal Active Path:
@@ -135,30 +156,28 @@ void main() {
         float sB = texture(uPortalTex, uvB).b;
         vec3 portalColor = vec3(sR, sG, sB);
 
-        // 4. Throat Boundary Halo & Fresnel Rim Blending:
-        float fresnel = pow(1.0 - NdotV, 2.5);
-        float rimFactor = smoothstep(0.70, 1.0, rho);
+        // 4. Throat Boundary Halo Rim Blending:
+        // Inside aperture (rho <= 0.85): 100% pure portal destination scene.
+        // Zero fresnel or halo wash inside the interior aperture window.
+        float rimFactor = smoothstep(0.85, 0.98, rho);
 
-        // Ethereal cyan/violet throat interface glow
+        // Ethereal cyan/violet throat interface boundary glow (confined to rim)
         vec3 midCyan   = vec3(0.0, 0.85, 1.0);
         vec3 hotViolet = vec3(0.85, 0.2, 1.0);
-        vec3 coreWhite = vec3(0.9, 0.95, 1.0);
-
         vec3 haloColor = mix(hotViolet, midCyan, 0.5 + 0.5 * sin(uTime * 1.5 + rho * 6.28));
-        haloColor += coreWhite * pow(fresnel, 3.0) * 1.5;
+        haloColor += vec3(0.9, 0.95, 1.0) * pow(1.0 - NdotV, 3.0) * 1.5;
 
-        // Blend portal view with boundary glow at the rim (seamless one-piece aperture disk)
-        vec3 compositedThroat = mix(portalColor, haloColor, rimFactor * 0.75 + fresnel * 0.25);
+        // Blend portal view with boundary glow ONLY at the outer boundary rim
+        vec3 compositedThroat = mix(portalColor, haloColor, rimFactor);
 
         // Traversal transition flare effect if uTransitionProgress > 0
         if (uTransitionProgress > 0.0) {
             float tau = clamp(uTransitionProgress, 0.0, 1.0);
             float flare = sin(tau * 3.14159265);
-            compositedThroat += coreWhite * flare * 0.85;
+            compositedThroat += vec3(0.9, 0.95, 1.0) * flare * 0.85;
         }
 
-        float alpha = clamp(0.92 + fresnel * 0.08, 0.0, 1.0);
-        FragColor = vec4(compositedThroat, alpha);
+        FragColor = vec4(compositedThroat, 1.0);
         return;
     }
 

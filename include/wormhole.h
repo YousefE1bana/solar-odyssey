@@ -58,7 +58,8 @@ public:
           uModelLoc = -1, uMeshTypeLoc = -1;
     GLint uPortalTexLoc = -1, uPortalAvailLoc = -1, uThroatRadiusLoc = -1,
           uApRightLoc = -1, uApUpLoc = -1, uApNormLoc = -1,
-          uIsInsideThroatLoc = -1, uTransitionProgressLoc = -1;
+          uIsInsideThroatLoc = -1, uTransitionProgressLoc = -1,
+          uWormholePosLoc = -1;
     GLuint cachedProgram = 0;
 
     struct ApertureBasis {
