@@ -1,0 +1,18 @@
+{
+  "scene": "wormhole",
+  "type": "SMOKE_TEST",
+  "warmup_frames": 60,
+  "measured_frames": 300,
+  "bypass_copy": false,
+  "median_fps": 804.2464,
+  "median_cpu_ms": 1.2434,
+  "median_gpu_ms": 1.4899,
+  "gpu_time_available": true,
+  "p1_low_fps": 405.2685,
+  "p01_low_fps": 105.4419,
+  "p1_low_cpu_ms": 2.4675,
+  "p01_low_cpu_ms": 9.4839,
+  "median_draw_calls": 63,
+  "median_triangles": 142976,
+  "passed": true
+}

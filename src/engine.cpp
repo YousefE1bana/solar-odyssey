@@ -870,7 +870,13 @@ void Engine::renderFrame(float deltaTime) {
 
     // Composite Black Hole primary components and foreground entities into HDR_B (lensedFBO)
     renderer.renderBlackHole(blackHole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
-    renderer.renderWormhole(wormhole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
+
+    bool portalReady = wormholePortalRenderer.lastPassExecuted &&
+                       !wormholePortalRenderer.forceDisable &&
+                       (wormholePortalRenderer.portalTarget.colorTex != 0);
+    GLuint portalTex = portalReady ? wormholePortalRenderer.portalTarget.colorTex : 0;
+    renderer.renderWormhole(wormhole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime,
+                            portalTex, portalReady, cameraCtrl.currentUp);
 
     if (spaceship.active) {
         spaceship.render(projMat, viewMat);

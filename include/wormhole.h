@@ -56,7 +56,20 @@ public:
 
     GLint uViewLoc = -1, uProjLoc = -1, uCamPosLoc = -1, uTimeLoc = -1,
           uModelLoc = -1, uMeshTypeLoc = -1;
+    GLint uPortalTexLoc = -1, uPortalAvailLoc = -1, uThroatRadiusLoc = -1,
+          uApRightLoc = -1, uApUpLoc = -1, uApNormLoc = -1,
+          uIsInsideThroatLoc = -1, uTransitionProgressLoc = -1;
     GLuint cachedProgram = 0;
+
+    struct ApertureBasis {
+        glm::vec3 rightLocal;
+        glm::vec3 upLocal;
+        glm::vec3 normalLocal;
+    };
+
+    static ApertureBasis computeApertureBasis(const glm::dvec3& entrancePosD,
+                                             const glm::dvec3& cameraEyeD,
+                                             const glm::vec3& cameraUp);
 
     Wormhole();
     ~Wormhole();
@@ -80,5 +93,8 @@ public:
     bool checkTraversal(const glm::vec3& shipPos, float threshold = 4.8f);
     void ensureInitialized();
     void cacheUniforms(GLuint shaderProgram);
-    void render(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& camPos, float time);
+    void render(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& proj,
+                const glm::vec3& camPos, float time,
+                GLuint portalTex = 0, bool portalAvailable = false,
+                const glm::vec3& cameraUp = glm::vec3(0.0f, 1.0f, 0.0f));
 };

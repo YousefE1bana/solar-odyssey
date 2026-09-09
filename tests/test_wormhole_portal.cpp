@@ -561,3 +561,210 @@ TEST_CASE("Wormhole - Simulation Side-Effect Free Invariant", "[wormhole_portal]
 
     renderer.cleanup();
 }
+
+TEST_CASE("Wormhole - Degeneracy-Safe Aperture Basis Invariants", "[wormhole_portal]") {
+    glm::dvec3 entrancePosD(0.0, 10.0, -90.0);
+
+    // Test a wide variety of observer positions, including collinear and near-collinear axes
+    std::vector<glm::dvec3> testEyePositions = {
+        glm::dvec3(0.0, 10.0, -50.0),   // Looking along -Z (standard frontal)
+        glm::dvec3(0.0, 10.0, -130.0),  // Looking along +Z (rear)
+        glm::dvec3(40.0, 10.0, -90.0),   // Looking along -X (lateral)
+        glm::dvec3(0.0, 50.0, -90.0),   // Looking along -Y (top down, parallel to standard Up)
+        glm::dvec3(0.0, -30.0, -90.0),  // Looking along +Y (bottom up, antiparallel to standard Up)
+        glm::dvec3(0.0, 10.0001, -90.0), // Extreme grazing near-pole
+        glm::dvec3(25.0, 35.0, -65.0)   // Oblique 3D angle
+    };
+
+    std::vector<glm::vec3> testUpVectors = {
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        glm::vec3(0.0f, -1.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 1.0f),
+        glm::normalize(glm::vec3(1.0f, 1.0f, 1.0f))
+    };
+
+    for (const auto& eye : testEyePositions) {
+        for (const auto& up : testUpVectors) {
+            auto basis = Wormhole::computeApertureBasis(entrancePosD, eye, up);
+
+            // 1. Invariant: Finite basis (no NaNs, no Infs)
+            for (int i = 0; i < 3; ++i) {
+                REQUIRE(std::isfinite(basis.rightLocal[i]));
+                REQUIRE(std::isfinite(basis.upLocal[i]));
+                REQUIRE(std::isfinite(basis.normalLocal[i]));
+            }
+
+            // 2. Invariant: Unit length
+            REQUIRE(std::abs(glm::length(basis.rightLocal) - 1.0f) < 1e-4f);
+            REQUIRE(std::abs(glm::length(basis.upLocal) - 1.0f) < 1e-4f);
+            REQUIRE(std::abs(glm::length(basis.normalLocal) - 1.0f) < 1e-4f);
+
+            // 3. Invariant: Mutual Orthogonality
+            REQUIRE(std::abs(glm::dot(basis.rightLocal, basis.upLocal)) < 1e-4f);
+            REQUIRE(std::abs(glm::dot(basis.rightLocal, basis.normalLocal)) < 1e-4f);
+            REQUIRE(std::abs(glm::dot(basis.upLocal, basis.normalLocal)) < 1e-4f);
+
+            // 4. Invariant: Right-Handedness (R x U = N)
+            glm::vec3 crossRU = glm::cross(basis.rightLocal, basis.upLocal);
+            REQUIRE(std::abs(glm::length(crossRU - basis.normalLocal)) < 1e-4f);
+
+            glm::mat3 R(basis.rightLocal, basis.upLocal, basis.normalLocal);
+            float det = glm::determinant(R);
+            REQUIRE(std::abs(det - 1.0f) < 1e-4f);
+        }
+    }
+}
+
+TEST_CASE("Wormhole - Local Coordinate Space and Inward Distortion Contract", "[wormhole_portal]") {
+    Wormhole wormhole;
+    float throatR = wormhole.throatRadius;
+    REQUIRE(throatR == 4.2f);
+
+    // Verify model-space geometry property:
+    // Any point on the sphere surface in model-local space has length == throatRadius
+    glm::dvec3 entranceD(0.0, 10.0, -90.0);
+    glm::dvec3 eyeD(0.0, 10.0, -60.0);
+    auto basis = Wormhole::computeApertureBasis(entranceD, eyeD, glm::vec3(0.0f, 1.0f, 0.0f));
+
+    // Test a set of sphere surface points
+    int numSamples = 50;
+    for (int i = 0; i < numSamples; ++i) {
+        float theta = ((float)i / numSamples) * 6.2831853f;
+        float phi = ((float)i / numSamples) * 3.14159265f;
+
+        glm::vec3 vLocalPos(sinf(phi) * cosf(theta) * throatR,
+                            cosf(phi) * throatR,
+                            sinf(phi) * sinf(theta) * throatR);
+
+        float u_ap = glm::dot(vLocalPos, basis.rightLocal) / throatR;
+        float v_ap = glm::dot(vLocalPos, basis.upLocal) / throatR;
+        float rho = std::sqrt(u_ap * u_ap + v_ap * v_ap);
+
+        // Invariant: By orthogonal projection of sphere surface, rho <= 1.0 strictly
+        REQUIRE(rho <= 1.0001f);
+
+        glm::vec2 d = glm::vec2(u_ap, v_ap) * 0.5f;
+        REQUIRE(glm::length(d) <= 0.5001f);
+
+        // Inward distortion math
+        float k_warp = 0.22f;
+        float warpWeight = k_warp * rho * rho;
+        glm::vec2 uvCenter(0.5f, 0.5f);
+
+        // Max bounded ripple and dispersion
+        float maxRipple = 0.012f;
+        float maxDisp = 0.007f * rho * rho;
+
+        glm::vec2 warpDir = (rho > 1e-4f) ? glm::normalize(d) : glm::vec2(0.0f);
+        glm::vec2 uvWarped = uvCenter + d * (1.0f - warpWeight) + warpDir * maxRipple;
+        glm::vec2 uvExtreme = uvWarped + warpDir * maxDisp;
+
+        // Invariant: Even under maximum warp, maximum ripple, and maximum dispersion,
+        // the UV coordinate remains strictly inside safe texture margins [0.05, 0.95]
+        REQUIRE(uvExtreme.x >= 0.05f);
+        REQUIRE(uvExtreme.x <= 0.95f);
+        REQUIRE(uvExtreme.y >= 0.05f);
+        REQUIRE(uvExtreme.y <= 0.95f);
+
+        // Inward throat compression invariant:
+        // At non-zero radius, the un-rippled radius is strictly less than or equal to d
+        glm::vec2 uvCompressed = uvCenter + d * (1.0f - warpWeight);
+        float r_compressed = glm::length(uvCompressed - uvCenter);
+        float r_uncompressed = glm::length(d);
+        REQUIRE(r_compressed <= r_uncompressed + 1e-5f);
+    }
+
+    // Invariant: Center of aperture (rho = 0) is perfectly invariant
+    glm::vec2 centerD(0.0f, 0.0f);
+    float rhoCenter = 0.0f;
+    float warpWeightCenter = 0.22f * rhoCenter * rhoCenter;
+    glm::vec2 uvCenterSample = glm::vec2(0.5f, 0.5f) + centerD * (1.0f - warpWeightCenter);
+    REQUIRE(uvCenterSample.x == 0.5f);
+    REQUIRE(uvCenterSample.y == 0.5f);
+}
+
+TEST_CASE("Wormhole - Traversal Threshold vs Throat Radius Separation", "[wormhole_portal]") {
+    Wormhole wormhole;
+    REQUIRE(wormhole.throatRadius == 4.2f);
+
+    // Traversal distance threshold is 4.8f
+    float threshold = 4.8f;
+    REQUIRE(threshold > wormhole.throatRadius);
+    REQUIRE(threshold - wormhole.throatRadius >= 0.5f);
+
+    // Normal gameplay ship approaching entrance along +Z towards (0, 10, -90)
+    glm::vec3 shipPos(0.0f, 10.0f, -90.0f + 5.0f); // distance = 5.0 > 4.8
+    REQUIRE_FALSE(wormhole.checkTraversal(shipPos, threshold));
+    REQUIRE_FALSE(wormhole.isTransitioning);
+
+    // Move to 4.7f (< 4.8f threshold, but > 4.2f throat sphere surface)
+    shipPos.z = -90.0f + 4.7f;
+    REQUIRE(wormhole.checkTraversal(shipPos, threshold));
+    REQUIRE(wormhole.isTransitioning);
+    REQUIRE(wormhole.transitionTimer == 0.0f);
+
+    // Traversal triggers before observer can reach throat radius 4.2f
+    float distAtTrigger = glm::length(shipPos - wormhole.position);
+    REQUIRE(distAtTrigger > wormhole.throatRadius);
+}
+
+TEST_CASE("Wormhole - Wormhole Render GL State Restoration", "[wormhole_portal]") {
+    OffscreenPortalGLContext glCtx;
+    if (!glCtx.valid) {
+        WARN("Headless OpenGL context unavailable; skipping GL state restoration test.");
+        return;
+    }
+
+    Wormhole wormhole;
+    wormhole.initGeometry();
+
+    // Set distinctive GL states before calling render
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    glDisable(GL_BLEND);
+    glDepthMask(GL_FALSE);
+    glActiveTexture(GL_TEXTURE4);
+
+    // Create and link a valid minimal shader program for state testing
+    const char* vsSrc = "#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n";
+    const char* fsSrc = "#version 450 core\nout vec4 c;\nvoid main() { c = vec4(1.0); }\n";
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vs, 1, &vsSrc, nullptr);
+    glCompileShader(vs);
+    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fs, 1, &fsSrc, nullptr);
+    glCompileShader(fs);
+
+    GLuint dummyShader = glCreateProgram();
+    glAttachShader(dummyShader, vs);
+    glAttachShader(dummyShader, fs);
+    glLinkProgram(dummyShader);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    // Wormhole::render guards states via RAII WormholeGLStateGuard
+    wormhole.render(dummyShader, glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f, 10.0f, -60.0f), 0.0f);
+
+    // Assert states are restored exactly
+    REQUIRE(glIsEnabled(GL_CULL_FACE) == GL_TRUE);
+    GLint cullMode = 0;
+    glGetIntegerv(GL_CULL_FACE_MODE, &cullMode);
+    REQUIRE(cullMode == GL_FRONT);
+
+    REQUIRE(glIsEnabled(GL_BLEND) == GL_FALSE);
+
+    GLboolean depthMask = GL_TRUE;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+    REQUIRE(depthMask == GL_FALSE);
+
+    GLint activeTex = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTex);
+    REQUIRE(activeTex == GL_TEXTURE4);
+
+    glDeleteProgram(dummyShader);
+    REQUIRE(glGetError() == GL_NO_ERROR);
+
+    // Restore standard C PRNG seed so other test suites are isolated
+    srand(1);
+}

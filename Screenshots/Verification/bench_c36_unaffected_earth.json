@@ -1,0 +1,18 @@
+{
+  "scene": "earth_day",
+  "type": "SMOKE_TEST",
+  "warmup_frames": 60,
+  "measured_frames": 300,
+  "bypass_copy": false,
+  "median_fps": 674.9916,
+  "median_cpu_ms": 1.4815,
+  "median_gpu_ms": 0.8192,
+  "gpu_time_available": true,
+  "p1_low_fps": 476.5990,
+  "p01_low_fps": 314.7822,
+  "p1_low_cpu_ms": 2.0982,
+  "p01_low_cpu_ms": 3.1768,
+  "median_draw_calls": 40,
+  "median_triangles": 122240,
+  "passed": true
+}

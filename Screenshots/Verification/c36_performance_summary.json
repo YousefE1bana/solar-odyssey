@@ -1,0 +1,47 @@
+{
+  "protocol": "3+3 balanced benchmark (60 warmup, 300 measured)",
+  "portal_off": {
+    "runs_gpu_ms": [
+      1.3937,
+      1.3906,
+      1.3937
+    ],
+    "mean_gpu_ms": 1.3926666666666667,
+    "median_gpu_ms": 1.3937,
+    "std_gpu_ms": 0.001461354014452142,
+    "mean_fps": 891.3067333333333,
+    "mean_cpu_ms": 1.1594
+  },
+  "portal_on": {
+    "runs_gpu_ms": [
+      1.4029,
+      1.4899,
+      1.4367
+    ],
+    "mean_gpu_ms": 1.4431666666666667,
+    "median_gpu_ms": 1.4367,
+    "std_gpu_ms": 0.035810737061513935,
+    "mean_fps": 695.4751666666666,
+    "mean_cpu_ms": 1.4948333333333332
+  },
+  "delta_gpu_ms": 0.05049999999999999,
+  "delta_cpu_ms": 0.33543333333333325,
+  "unaffected_earth_day": {
+    "scene": "earth_day",
+    "type": "SMOKE_TEST",
+    "warmup_frames": 60,
+    "measured_frames": 300,
+    "bypass_copy": false,
+    "median_fps": 674.9916,
+    "median_cpu_ms": 1.4815,
+    "median_gpu_ms": 0.8192,
+    "gpu_time_available": true,
+    "p1_low_fps": 476.599,
+    "p01_low_fps": 314.7822,
+    "p1_low_cpu_ms": 2.0982,
+    "p01_low_cpu_ms": 3.1768,
+    "median_draw_calls": 40,
+    "median_triangles": 122240,
+    "passed": true
+  }
+}

@@ -722,7 +722,9 @@ void SceneRenderer::renderBlackHole(BlackHole& bh, const glm::mat4& viewMat, con
     bh.render(eyePos, viewMat, projMat);
 }
 
-void SceneRenderer::renderWormhole(Wormhole& wh, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& eyePos, float time) {
-    wh.render(wormholeProgram, viewMat, projMat, eyePos, time);
+void SceneRenderer::renderWormhole(Wormhole& wh, const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& eyePos, float time,
+                                   GLuint portalTex, bool portalAvailable,
+                                   const glm::vec3& cameraUp) {
+    wh.render(wormholeProgram, viewMat, projMat, eyePos, time, portalTex, portalAvailable, cameraUp);
 }
 

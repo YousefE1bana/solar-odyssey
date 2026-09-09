@@ -79,12 +79,12 @@ void Wormhole::initGeometry() {
             int second = first + slices + 1;
 
             sphereIndices.push_back(first);
-            sphereIndices.push_back(second);
             sphereIndices.push_back(first + 1);
+            sphereIndices.push_back(second);
 
             sphereIndices.push_back(second);
-            sphereIndices.push_back(second + 1);
             sphereIndices.push_back(first + 1);
+            sphereIndices.push_back(second + 1);
         }
     }
     sphereIndexCount = (int)sphereIndices.size();
@@ -322,22 +322,136 @@ void Wormhole::ensureInitialized() {
     }
 }
 
+Wormhole::ApertureBasis Wormhole::computeApertureBasis(const glm::dvec3& entrancePosD,
+                                                      const glm::dvec3& cameraEyeD,
+                                                      const glm::vec3& cameraUp) {
+    ApertureBasis basis;
+    glm::dvec3 v_obs = cameraEyeD - entrancePosD;
+    double distToObs = glm::length(v_obs);
+
+    glm::dvec3 v_norm = (distToObs > 1e-6) ? (v_obs / distToObs) : glm::dvec3(0.0, 0.0, 1.0);
+
+    glm::dvec3 camUpD = glm::dvec3(cameraUp);
+    if (glm::length(camUpD) < 1e-6) {
+        camUpD = glm::dvec3(0.0, 1.0, 0.0);
+    } else {
+        camUpD = glm::normalize(camUpD);
+    }
+
+    // Gram-Schmidt projection of camera up onto plane perpendicular to viewDir (v_norm)
+    glm::dvec3 projUp = camUpD - v_norm * glm::dot(camUpD, v_norm);
+    glm::dvec3 upLocal;
+    if (glm::length(projUp) > 1e-4) {
+        upLocal = glm::normalize(projUp);
+    } else {
+        // Degeneracy-Safe Fallback:
+        // Camera up is parallel/antiparallel to viewDir.
+        // Select deterministic fallback axis least aligned with v_norm
+        glm::dvec3 fallbackAxis = (std::abs(v_norm.y) < 0.9) ? glm::dvec3(0.0, 1.0, 0.0) : glm::dvec3(0.0, 0.0, 1.0);
+        upLocal = glm::normalize(fallbackAxis - v_norm * glm::dot(fallbackAxis, v_norm));
+    }
+
+    // Right-handed orthonormal basis:
+    // v_norm points toward camera (+Z), upLocal points up (+Y) -> rightLocal = upLocal x v_norm (+X)
+    glm::dvec3 rightLocal = glm::normalize(glm::cross(upLocal, v_norm));
+
+    basis.rightLocal = glm::vec3(rightLocal);
+    basis.upLocal = glm::vec3(upLocal);
+    basis.normalLocal = glm::vec3(v_norm);
+    return basis;
+}
+
+namespace {
+
+struct WormholeGLStateGuard {
+    GLint prevProgram = 0;
+    GLint prevActiveTex = GL_TEXTURE0;
+    GLint prevTex0Binding = 0;
+    GLboolean prevCullFace = GL_FALSE;
+    GLint prevCullFaceMode = GL_BACK;
+    GLboolean prevBlend = GL_FALSE;
+    GLint prevBlendSrcRGB = GL_SRC_ALPHA;
+    GLint prevBlendDstRGB = GL_ONE_MINUS_SRC_ALPHA;
+    GLint prevBlendSrcAlpha = GL_SRC_ALPHA;
+    GLint prevBlendDstAlpha = GL_ONE_MINUS_SRC_ALPHA;
+    GLboolean prevDepthMask = GL_TRUE;
+    GLint prevVAO = 0;
+
+    WormholeGLStateGuard() {
+        glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex0Binding);
+        prevCullFace = glIsEnabled(GL_CULL_FACE);
+        glGetIntegerv(GL_CULL_FACE_MODE, &prevCullFaceMode);
+        prevBlend = glIsEnabled(GL_BLEND);
+        glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrcRGB);
+        glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDstRGB);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevBlendSrcAlpha);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &prevBlendDstAlpha);
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVAO);
+    }
+
+    ~WormholeGLStateGuard() {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)prevTex0Binding);
+        glActiveTexture((GLenum)prevActiveTex);
+
+        glBindVertexArray((GLuint)prevVAO);
+
+        if (prevBlend) {
+            glEnable(GL_BLEND);
+        } else {
+            glDisable(GL_BLEND);
+        }
+        glBlendFuncSeparate((GLenum)prevBlendSrcRGB, (GLenum)prevBlendDstRGB,
+                            (GLenum)prevBlendSrcAlpha, (GLenum)prevBlendDstAlpha);
+
+        if (prevCullFace) {
+            glEnable(GL_CULL_FACE);
+        } else {
+            glDisable(GL_CULL_FACE);
+        }
+        glCullFace((GLenum)prevCullFaceMode);
+
+        glDepthMask(prevDepthMask);
+        glUseProgram((GLuint)prevProgram);
+    }
+};
+
+} // anonymous namespace
+
 void Wormhole::cacheUniforms(GLuint shaderProgram) {
     if (cachedProgram == shaderProgram) return;
     cachedProgram = shaderProgram;
-    uViewLoc     = glGetUniformLocation(shaderProgram, "uView");
-    uProjLoc     = glGetUniformLocation(shaderProgram, "uProjection");
-    uCamPosLoc   = glGetUniformLocation(shaderProgram, "uCameraPos");
-    uTimeLoc     = glGetUniformLocation(shaderProgram, "uTime");
-    uModelLoc    = glGetUniformLocation(shaderProgram, "uModel");
-    uMeshTypeLoc = glGetUniformLocation(shaderProgram, "uMeshType");
+    uViewLoc                = glGetUniformLocation(shaderProgram, "uView");
+    uProjLoc                = glGetUniformLocation(shaderProgram, "uProjection");
+    uCamPosLoc              = glGetUniformLocation(shaderProgram, "uCameraPos");
+    uTimeLoc                = glGetUniformLocation(shaderProgram, "uTime");
+    uModelLoc               = glGetUniformLocation(shaderProgram, "uModel");
+    uMeshTypeLoc            = glGetUniformLocation(shaderProgram, "uMeshType");
+    uPortalTexLoc           = glGetUniformLocation(shaderProgram, "uPortalTex");
+    uPortalAvailLoc         = glGetUniformLocation(shaderProgram, "uPortalAvailable");
+    uThroatRadiusLoc        = glGetUniformLocation(shaderProgram, "uThroatRadius");
+    uApRightLoc             = glGetUniformLocation(shaderProgram, "uApertureRightLocal");
+    uApUpLoc                = glGetUniformLocation(shaderProgram, "uApertureUpLocal");
+    uApNormLoc              = glGetUniformLocation(shaderProgram, "uApertureNormalLocal");
+    uIsInsideThroatLoc      = glGetUniformLocation(shaderProgram, "uIsInsideThroat");
+    uTransitionProgressLoc  = glGetUniformLocation(shaderProgram, "uTransitionProgress");
 }
 
-void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& camPos, float time) {
+void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& proj,
+                      const glm::vec3& camPos, float time,
+                      GLuint portalTex, bool portalAvailable,
+                      const glm::vec3& cameraUp) {
     if (!shaderProgram) return;
     cacheUniforms(shaderProgram);
 
     ensureInitialized();
+
+    // Exact RAII OpenGL pipeline state capture and restoration guard
+    WormholeGLStateGuard stateGuard;
 
     glUseProgram(shaderProgram);
 
@@ -346,6 +460,7 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     glUniform3fv(uCamPosLoc, 1, glm::value_ptr(camPos));
     glUniform1f(uTimeLoc, time);
 
+    // Accretion Vortex Disk
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glDisable(GL_CULL_FACE);
@@ -359,6 +474,7 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, diskVertexCount);
 
+    // Gravitational Lensing Halo Arch
     glUniform1i(uMeshTypeLoc, 2);
     glBindVertexArray(archVAO);
 
@@ -375,8 +491,49 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
     RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, archVertexCount);
 
+    // Throat Sphere (Portal Gateway)
+    glm::dvec3 camPosD = glm::dvec3(camPos);
+    ApertureBasis basis = computeApertureBasis(entranceWorldD, camPosD, cameraUp);
+    double distToObs = glm::length(camPosD - entranceWorldD);
+
+    bool isInsideThroat = (distToObs <= (double)throatRadius);
+    if (portalTex && portalAvailable) {
+        // Normal gameplay traversal triggers at threshold = 4.8f, strictly before
+        // the observer reaches throatRadius (4.2f). For debug/free-camera cases inside the throat,
+        // disable culling and fall back to procedural interior so geometry does not disappear.
+        if (isInsideThroat) {
+            glDisable(GL_CULL_FACE);
+        } else {
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+        }
+    } else {
+        // Literal C3.5 Legacy Fallback: culling was left disabled from disk pass
+        glDisable(GL_CULL_FACE);
+    }
+
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glUniform1i(uMeshTypeLoc, 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    if (portalTex && portalAvailable) {
+        glBindTexture(GL_TEXTURE_2D, portalTex);
+        glUniform1i(uPortalTexLoc, 0);
+        glUniform1i(uPortalAvailLoc, 1);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glUniform1i(uPortalAvailLoc, 0);
+    }
+
+    glUniform1f(uThroatRadiusLoc, throatRadius);
+    glUniform3fv(uApRightLoc, 1, glm::value_ptr(basis.rightLocal));
+    glUniform3fv(uApUpLoc, 1, glm::value_ptr(basis.upLocal));
+    glUniform3fv(uApNormLoc, 1, glm::value_ptr(basis.normalLocal));
+    glUniform1i(uIsInsideThroatLoc, isInsideThroat ? 1 : 0);
+
+    float progress = isTransitioning ? (transitionTimer / std::max(0.001f, transitionDuration)) : 0.0f;
+    glUniform1f(uTransitionProgressLoc, progress);
+
     glm::mat4 modelSphere = glm::translate(glm::mat4(1.0f), position);
     glUniformMatrix4fv(uModelLoc, 1, GL_FALSE, glm::value_ptr(modelSphere));
 
@@ -395,10 +552,4 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
         }
         particleBatch.end();
     }
-
-    glUseProgram(0);
-    glEnable(GL_CULL_FACE);
-    glDisable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_TRUE);
 }

@@ -193,6 +193,7 @@ CameraRenderState WormholePortalRenderer::computePortalCameraState(const CameraR
 void WormholePortalRenderer::renderPortalDestination(const SceneRenderContext& parentCtx,
                                                      const Wormhole& wormhole,
                                                      const std::function<void(const SceneRenderContext&)>& renderWorldBg) {
+    lastPassExecuted = false;
     if (forceDisable) return;
 
     // Hard Non-Recursion Guard: maximum depth is 1
@@ -223,6 +224,7 @@ void WormholePortalRenderer::renderPortalDestination(const SceneRenderContext& p
     GLStateGuard stateGuard;
 
     portalPassExecutionCount++;
+    lastPassExecuted = true;
 
     // Bind dedicated Portal FBO
     glBindFramebuffer(GL_FRAMEBUFFER, portalTarget.fbo);

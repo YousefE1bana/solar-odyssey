@@ -20,6 +20,7 @@ public:
     int portalDrawCallCount = 0;
     float lastGpuTimeMs = 0.0f;
     bool forceDisable = false; // For balanced A/B performance auditing (Portal OFF vs ON)
+    bool lastPassExecuted = false; // True if the portal pass executed on the current frame
 
     WormholePortalRenderer();
     ~WormholePortalRenderer();

@@ -8,6 +8,7 @@ out vec3 vWorldPos;
 out vec3 vNormal;
 out vec2 vTexCoord;
 out vec3 vViewDir;
+out vec3 vLocalPos;
 
 uniform mat4 uModel;
 uniform mat4 uView;
@@ -20,6 +21,7 @@ void main() {
     vNormal = normalize(mat3(uModel) * aNormal);
     vTexCoord = aTexCoord;
     vViewDir = normalize(uCameraPos - worldPos.xyz);
+    vLocalPos = aPos;
 
     gl_Position = uProjection * uView * worldPos;
 }
