@@ -27,6 +27,8 @@
 #include "spaceship.h"
 #include "black_hole.h"
 #include "wormhole.h"
+#include "wormhole_portal_renderer.h"
+#include "render_context.h"
 #include "mission_system.h"
 #include "warp_system.h"
 #include "lod_manager.h"
@@ -72,6 +74,7 @@ public:
     Spaceship spaceship;
     BlackHole blackHole;
     Wormhole wormhole;
+    WormholePortalRenderer wormholePortalRenderer;
     MissionSystem missionSystem;
     SceneRenderer renderer;
 
@@ -126,6 +129,7 @@ public:
     void processInput(float deltaTime);
     void updateSimulation(float deltaTime);
     void renderFrame(float deltaTime);
+    void renderWorldBackground(const SceneRenderContext& ctx);
     void runQACaptureSequence(int qaFrameCount);
 
     // Callbacks

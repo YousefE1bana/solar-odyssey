@@ -374,6 +374,7 @@ bool Engine::init(int width, int height, const char* title) {
     planetPov = new PlanetPOV();
     atmosphereEffects = new AtmosphereEffects();
     postPipeline.init(windowWidth, windowHeight);
+    wormholePortalRenderer.init(512, 512);
     lod::LODManager::instance().init();
 
     solarUI.applyQualityPreset(QUALITY_HIGH, postPipeline, asteroidBelt);
@@ -416,8 +417,9 @@ void Engine::cleanup() {
         particleSys.reset();
     }
 
-    // Step 4: Teardown Post-Processing FBOs & pipelines
+    // Step 4: Teardown Post-Processing and Portal FBOs & pipelines
     postPipeline.cleanup();
+    wormholePortalRenderer.cleanup();
 
     // Step 5: Teardown SceneRenderer VAOs, textures, shaders, and celestial resources
     if (planetPov) {
@@ -766,22 +768,13 @@ void Engine::updateSimulation(float deltaTime) {
     }
 }
 
-void Engine::renderFrame(float deltaTime) {
-    RenderProfiler::instance().beginFrame();
-    postPipeline.beginScene();
+void Engine::renderWorldBackground(const SceneRenderContext& ctx) {
+    const auto& cam = ctx.camera;
+    const glm::mat4& viewMat = cam.viewMatrix;
+    const glm::mat4& projMat = cam.projMatrix;
+    const glm::vec3& eyePos = cam.eye;
 
-    float currentFOV = cameraCtrl.fieldOfView + (spaceship.active ? spaceship.warpSystem.fovOffset : 0.0f);
-    glm::mat4 projMat = glm::perspective(glm::radians(currentFOV),
-                                         (float)windowWidth / (float)windowHeight, 0.1f, 600.0f);
-
-    glm::mat4 viewMat = cameraCtrl.getViewMatrix();
-    if (spaceship.active && spaceship.warpSystem.cameraShakeIntensity > 0.001f) {
-        viewMat = glm::translate(viewMat, spaceship.warpSystem.cameraShakeOffset);
-    }
-
-    lod::LODManager::instance().beginFrame();
-
-    renderer.renderStarfield(viewMat, projMat, cameraCtrl.currentEye);
+    renderer.renderStarfield(viewMat, projMat, eyePos);
 
     renderer.renderSun(viewMat, projMat, (float)simTime, solarUI.sunIntensity, sunWorldPosition, cameraCtrl, solarUI);
     if (particleSys) {
@@ -796,7 +789,7 @@ void Engine::renderFrame(float deltaTime) {
     if (solarUI.showOrbits) {
         for (const auto &planet : planets) {
             if (!solarUI.showDwarfPlanets && planet.isDwarf) continue;
-            bool isSel = (cameraCtrl.focusedBodyName == planet.name || solarUI.selectedPlanetName == planet.name);
+            bool isSel = (ctx.passType == RenderPassType::Main) && (cameraCtrl.focusedBodyName == planet.name || solarUI.selectedPlanetName == planet.name);
             renderer.renderOrbit(planet.orbitRadius, isSel, cameraCtrl, viewMat, projMat);
         }
     }
@@ -804,12 +797,62 @@ void Engine::renderFrame(float deltaTime) {
     // Pre-lens background celestial elements: Asteroids render into HDR_A
     if (asteroidBelt && solarUI.showAsteroids) {
         float focusFade = 1.0f;
-        if (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || (cameraCtrl.tourActive && cameraCtrl.focusedPlanetIndex >= 0)) {
+        if (ctx.passType == RenderPassType::Main && (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || (cameraCtrl.tourActive && cameraCtrl.focusedPlanetIndex >= 0))) {
             focusFade = 0.20f;
         }
         asteroidBelt->render(focusFade, renderer.asteroidProgram != 0 ? renderer.asteroidProgram : renderer.planetProgram,
-                             viewMat, projMat, sunEyePos, cameraCtrl.currentEye, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
+                             viewMat, projMat, sunEyePos, eyePos, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
     }
+}
+
+void Engine::renderFrame(float deltaTime) {
+    RenderProfiler::instance().beginFrame();
+
+    float currentFOV = cameraCtrl.fieldOfView + (spaceship.active ? spaceship.warpSystem.fovOffset : 0.0f);
+    glm::mat4 projMat = glm::perspective(glm::radians(currentFOV),
+                                         (float)windowWidth / (float)windowHeight, 0.1f, 600.0f);
+
+    glm::mat4 viewMat = cameraCtrl.getViewMatrix();
+    if (spaceship.active && spaceship.warpSystem.cameraShakeIntensity > 0.001f) {
+        viewMat = glm::translate(viewMat, spaceship.warpSystem.cameraShakeOffset);
+    }
+
+    lod::LODManager::instance().beginFrame();
+
+    // 1. Build Main Scene Context
+    SceneRenderContext mainCtx;
+    mainCtx.camera.eyeD = glm::dvec3(cameraCtrl.currentEye);
+    mainCtx.camera.eye = cameraCtrl.currentEye;
+    mainCtx.camera.target = cameraCtrl.currentTarget;
+    mainCtx.camera.up = cameraCtrl.currentUp;
+    mainCtx.camera.forward = -glm::vec3(viewMat[0][2], viewMat[1][2], viewMat[2][2]);
+    mainCtx.camera.viewMatrix = viewMat;
+    mainCtx.camera.projMatrix = projMat;
+    mainCtx.camera.viewProjMatrix = projMat * viewMat;
+    mainCtx.camera.fov = currentFOV;
+    mainCtx.camera.aspectRatio = (float)windowWidth / (float)windowHeight;
+    mainCtx.camera.nearPlane = 0.1f;
+    mainCtx.camera.farPlane = 600.0f;
+    mainCtx.passType = RenderPassType::Main;
+    mainCtx.portalDepth = 0;
+    mainCtx.maxPortalDepth = 1;
+    mainCtx.renderWormholePortal = true;
+    mainCtx.renderUI = true;
+    mainCtx.renderPostFX = true;
+    mainCtx.viewportWidth = windowWidth;
+    mainCtx.viewportHeight = windowHeight;
+    mainCtx.targetFBO = postPipeline.sceneFBO;
+
+    // 2. Checkpoint C3.5: Wormhole Portal Destination Pass (Dedicated 512x512 Portal FBO)
+    // Non-recursive, executes only if wormhole is active, inside frustum, and within 150 units.
+    wormholePortalRenderer.renderPortalDestination(mainCtx, wormhole, [this](const SceneRenderContext& pCtx) {
+        renderWorldBackground(pCtx);
+    });
+
+    // 3. Begin Main Scene Pass (HDR_A: sceneFBO)
+    postPipeline.beginScene();
+
+    renderWorldBackground(mainCtx);
 
     // Checkpoint C3.3: Dual-HDR Pre-Lens Transition (HDR_A -> HDR_B full copy, bind HDR_B)
     // Copies complete pre-lens scene from sceneFBO to lensedFBO with zero feedback loop.

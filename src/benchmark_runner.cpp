@@ -109,6 +109,10 @@ bool BenchmarkRunner::initFromArgs(int argc, char** argv) {
             config.bypassCopy = true;
         } else if (strcmp(argv[i], "--disable-lensing") == 0 || strcmp(argv[i], "--lensing-off") == 0) {
             config.disableLensing = true;
+        } else if (strcmp(argv[i], "--disable-portal") == 0 || strcmp(argv[i], "--portal-off") == 0) {
+            config.disablePortal = true;
+        } else if (strcmp(argv[i], "--enable-portal") == 0 || strcmp(argv[i], "--portal-on") == 0) {
+            config.disablePortal = false;
         }
     }
     
@@ -126,6 +130,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
     gpuTimer.init();
     engine->postPipeline.bypassPreLensCopy = config.bypassCopy;
     engine->blackHole.enableLensingPass = !config.disableLensing;
+    engine->wormholePortalRenderer.forceDisable = config.disablePortal;
 
     // Bypass cinematic startup fade (guarantee 100% visible 3D scene)
     engine->postPipeline.skipStartup();
@@ -508,12 +513,39 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
         engine->blackHole.enableLensingPass = false;
-    } else if (scene == "wormhole") {
-        engine->cameraCtrl.mode = CAM_FREE;
-        engine->cameraCtrl.freePos = glm::vec3(0.0f, 10.0f, 40.0f);
-        engine->cameraCtrl.freePitch = -8.0f;
-        engine->cameraCtrl.freeYaw = -90.0f;
+    } else if (scene == "wormhole" || scene == "Wormhole" || scene == "wormhole_portal" || scene == "Wormhole_Portal" || scene == "wormhole_portal_on" || scene == "Wormhole_Portal_ON") {
+        engine->cameraCtrl.mode = CAM_WORMHOLE;
+        engine->cameraCtrl.focusedBodyName = "Wormhole";
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 65.0f;
+        engine->cameraCtrl.focusDistance = 30.0f;
+        engine->cameraCtrl.currentTarget = engine->wormhole.position;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(30.0f, 25.0f, 65.0f, engine->wormhole.position);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
+        if (!config.disablePortal) engine->wormholePortalRenderer.forceDisable = false;
+    } else if (scene == "wormhole_portal_off" || scene == "Wormhole_Portal_OFF") {
+        engine->cameraCtrl.mode = CAM_WORMHOLE;
+        engine->cameraCtrl.focusedBodyName = "Wormhole";
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 65.0f;
+        engine->cameraCtrl.focusDistance = 30.0f;
+        engine->cameraCtrl.currentTarget = engine->wormhole.position;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(30.0f, 25.0f, 65.0f, engine->wormhole.position);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->wormholePortalRenderer.forceDisable = true;
+    } else if (scene == "wormhole_culled" || scene == "Wormhole_Culled") {
+        engine->cameraCtrl.mode = CAM_WORMHOLE;
+        engine->cameraCtrl.focusedBodyName = "Wormhole";
+        engine->cameraCtrl.focusAngleX = 25.0f;
+        engine->cameraCtrl.focusAngleY = 65.0f;
+        engine->cameraCtrl.focusDistance = 220.0f; // > 150 culling threshold
+        engine->cameraCtrl.currentTarget = engine->wormhole.position;
+        engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(220.0f, 25.0f, 65.0f, engine->wormhole.position);
+        engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
+        engine->cameraCtrl.transitionProgress = 1.0f;
+        engine->wormholePortalRenderer.forceDisable = false;
     } else if (scene == "spaceship") {
         engine->spaceship.active = true;
         engine->spaceship.cameraView = SHIP_CAM_CHASE;
@@ -560,6 +592,22 @@ void BenchmarkRunner::onFrameEnd(int drawCalls, int triangles, double gpuTimeMs,
                 }
                 engine->postPipeline.captureScreenshot(config.goldenOutputPath.c_str());
                 std::cout << "[BenchmarkRunner] Captured golden frame: " << config.goldenOutputPath << std::endl;
+
+                std::string currentScene = config.goldenScene;
+                if (currentScene == "wormhole" || currentScene == "Wormhole" ||
+                    currentScene == "wormhole_portal" || currentScene == "Wormhole_Portal" ||
+                    currentScene == "wormhole_portal_on" || currentScene == "Wormhole_Portal_ON") {
+                    std::string fboPath = "Screenshots/Verification/Wormhole_Portal_Destination_FBO.bmp";
+                    engine->wormholePortalRenderer.portalTarget.captureToBMP(fboPath.c_str());
+                    std::cout << "[BenchmarkRunner] Captured portal destination FBO: " << fboPath << std::endl;
+                    std::cout << "[BenchmarkRunner] Portal Telemetry -> Execution Count: " 
+                              << engine->wormholePortalRenderer.portalPassExecutionCount
+                              << " | Draw Calls: " << engine->wormholePortalRenderer.portalDrawCallCount << std::endl;
+                } else if (currentScene == "wormhole_culled" || currentScene == "Wormhole_Culled") {
+                    std::cout << "[BenchmarkRunner] Culled Telemetry -> Execution Count: " 
+                              << engine->wormholePortalRenderer.portalPassExecutionCount
+                              << " | Draw Calls: " << engine->wormholePortalRenderer.portalDrawCallCount << std::endl;
+                }
             }
             exitRequested = true;
         }

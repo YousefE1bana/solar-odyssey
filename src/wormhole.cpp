@@ -223,6 +223,79 @@ void Wormhole::update(float dt) {
     }
 }
 
+Wormhole::CullingResult Wormhole::evaluateVisibility(const glm::dvec3& cameraWorldD,
+                                                     const glm::mat4& viewMat,
+                                                     const glm::mat4& projMat,
+                                                     float maxDist) const {
+    CullingResult res;
+    res.isActive = active;
+    if (!active) {
+        res.shouldRender = false;
+        return res;
+    }
+
+    // 1. Authoritative double-precision distance threshold check
+    res.distance = glm::length(cameraWorldD - entranceWorldD);
+    res.isWithinDistance = (res.distance < (double)maxDist);
+    if (!res.isWithinDistance) {
+        res.shouldRender = false;
+        return res;
+    }
+
+    // 2. View-frustum sphere intersection test (Gribb & Hartmann plane extraction)
+    glm::mat4 clipMatrix = projMat * viewMat;
+    glm::vec4 planes[6];
+    // Left plane
+    planes[0] = glm::vec4(clipMatrix[0][3] + clipMatrix[0][0],
+                          clipMatrix[1][3] + clipMatrix[1][0],
+                          clipMatrix[2][3] + clipMatrix[2][0],
+                          clipMatrix[3][3] + clipMatrix[3][0]);
+    // Right plane
+    planes[1] = glm::vec4(clipMatrix[0][3] - clipMatrix[0][0],
+                          clipMatrix[1][3] - clipMatrix[1][0],
+                          clipMatrix[2][3] - clipMatrix[2][0],
+                          clipMatrix[3][3] - clipMatrix[3][0]);
+    // Bottom plane
+    planes[2] = glm::vec4(clipMatrix[0][3] + clipMatrix[0][1],
+                          clipMatrix[1][3] + clipMatrix[1][1],
+                          clipMatrix[2][3] + clipMatrix[2][1],
+                          clipMatrix[3][3] + clipMatrix[3][1]);
+    // Top plane
+    planes[3] = glm::vec4(clipMatrix[0][3] - clipMatrix[0][1],
+                          clipMatrix[1][3] - clipMatrix[1][1],
+                          clipMatrix[2][3] - clipMatrix[2][1],
+                          clipMatrix[3][3] - clipMatrix[3][1]);
+    // Near plane
+    planes[4] = glm::vec4(clipMatrix[0][3] + clipMatrix[0][2],
+                          clipMatrix[1][3] + clipMatrix[1][2],
+                          clipMatrix[2][3] + clipMatrix[2][2],
+                          clipMatrix[3][3] + clipMatrix[3][2]);
+    // Far plane
+    planes[5] = glm::vec4(clipMatrix[0][3] - clipMatrix[0][2],
+                          clipMatrix[1][3] - clipMatrix[1][2],
+                          clipMatrix[2][3] - clipMatrix[2][2],
+                          clipMatrix[3][3] - clipMatrix[3][2]);
+
+    glm::vec3 center = glm::vec3(entranceWorldD);
+    bool insideFrustum = true;
+
+    for (int i = 0; i < 6; ++i) {
+        float len = glm::length(glm::vec3(planes[i]));
+        if (len > 1e-6f) {
+            planes[i] /= len;
+        }
+        float d = glm::dot(glm::vec3(planes[i]), center) + planes[i].w;
+        if (d < -boundingRadius) {
+            insideFrustum = false;
+            break;
+        }
+    }
+
+    res.isInFrustum = insideFrustum;
+    res.shouldRender = res.isActive && res.isWithinDistance && res.isInFrustum;
+    return res;
+}
+
 bool Wormhole::checkTraversal(const glm::vec3& shipPos, float threshold) {
     float dist = glm::length(shipPos - position);
     if (dist <= threshold && !isTransitioning) {
@@ -231,8 +304,10 @@ bool Wormhole::checkTraversal(const glm::vec3& shipPos, float threshold) {
         
         if (shipPos.z > position.z) {
             exitDestination = glm::vec3(0.0f, 0.0f, -150.0f);
+            destinationWorldD = glm::dvec3(0.0, 0.0, -150.0);
         } else {
             exitDestination = glm::vec3(0.0f, 6.0f, 22.0f);
+            destinationWorldD = glm::dvec3(0.0, 6.0, 22.0);
         }
         return true;
     }

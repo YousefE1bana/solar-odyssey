@@ -1,0 +1,18 @@
+{
+  "scene": "wormhole_portal_off",
+  "type": "SMOKE_TEST",
+  "warmup_frames": 60,
+  "measured_frames": 300,
+  "bypass_copy": false,
+  "median_fps": 777.1819,
+  "median_cpu_ms": 1.2867,
+  "median_gpu_ms": 1.1991,
+  "gpu_time_available": true,
+  "p1_low_fps": 435.2747,
+  "p01_low_fps": 297.1150,
+  "p1_low_cpu_ms": 2.2974,
+  "p01_low_cpu_ms": 3.3657,
+  "median_draw_calls": 39,
+  "median_triangles": 65856,
+  "passed": true
+}

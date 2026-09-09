@@ -23,6 +23,7 @@ struct BenchmarkConfig {
     bool c31Baseline = false;
     bool bypassCopy = false;
     bool disableLensing = false;
+    bool disablePortal = false;
 };
 
 struct FrameMetric {

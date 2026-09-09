@@ -21,6 +21,8 @@ add_executable(SolarOdyssey
   src/asteroid_belt.cpp
   src/black_hole.cpp
   src/wormhole.cpp
+  src/portal_render_target.cpp
+  src/wormhole_portal_renderer.cpp
   src/camera_controller.cpp
   src/planet_pov.cpp
   src/warp_system.cpp
@@ -150,8 +152,12 @@ add_executable(SolarOdysseyTests
   tests/test_earth_surface.cpp
   tests/test_black_hole_pipeline.cpp
   tests/test_black_hole_lensing.cpp
+  tests/test_wormhole_portal.cpp
   src/post_processing.cpp
   src/black_hole.cpp
+  src/wormhole.cpp
+  src/portal_render_target.cpp
+  src/wormhole_portal_renderer.cpp
   src/planet_data.cpp
   src/canonical_inventory.cpp
   src/picking.cpp
