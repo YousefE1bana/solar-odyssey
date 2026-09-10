@@ -13,6 +13,7 @@
 #include <string>
 #include <map>
 #include <memory>
+#include <optional>
 
 // Subsystems
 #include "settings_persistence.h"
@@ -41,6 +42,7 @@
 #include "input_manager.h"
 #include "game_context.h"
 #include "benchmark_runner.h"
+#include "presentation_controller.h"
 
 class Engine {
 public:
@@ -95,6 +97,20 @@ public:
     // Input Subsystem
     std::unique_ptr<InputManager> inputMgr;
 
+    // PSM.1: semantic presentation/navigation state (no GL/sim/save ownership).
+    PresentationController presenter;
+
+    // PSM.1: same-body double-click edge recognizer (scene picks only).
+    // Owns no presentation or camera state — just the last pick + timestamp.
+    static constexpr double kSceneDoubleClickIntervalSec = 0.5;
+    std::string lastPickName;
+    double lastPickTimeSec = -1.0;
+
+    // R02: pending presentation adoption recorded by the load path inside
+    // updateSimulation WITHOUT calling PresentationController; consumed by
+    // updatePresentation(). Keeps the strict frame-lifecycle gate intact.
+    std::optional<std::string> pendingSelectionAdopt;
+
     // Per-frame GameContext Snapshot and FrameEvents
     GameContext gameContext;
     FrameEvents frameEvents;
@@ -131,6 +147,21 @@ public:
     void focusPlanetByName(const std::string& name);
     void focusPlanetTourByName(const std::string& name);
     void explorePlanetPOVByName(const std::string& name);
+
+    // PSM.1: single selection adapter — the only runtime writer of the
+    // authoritative presenter selection (+ its UI mirror). All selection
+    // paths (UI combo/buttons, scene picks, focus/numeric entry, harness)
+    // must route through here. openCard mirrors the previous showPlanetCard
+    // behavior of each call site exactly.
+    void selectBody(const std::string& name);
+    void setSelectedBody(const std::string& name, bool openCard);
+    // PSM.1: EXPLORER <-> SYSTEM transitions (existing camera paths only).
+    void enterSystemView();
+    void exitSystemView();
+    void toggleSystemView();
+    // PSM.1: post-sim presentation step. Runs after updateSimulation and
+    // before renderFrame; never from inside updateSimulation.
+    void updatePresentation();
 
     void processInput(float deltaTime);
     void updateSimulation(float deltaTime);

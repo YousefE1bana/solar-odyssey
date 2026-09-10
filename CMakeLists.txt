@@ -41,6 +41,7 @@ add_executable(SolarOdyssey
   src/canonical_inventory.cpp
   src/benchmark_runner.cpp
   src/engine.cpp
+  src/presentation_controller.cpp
   app_icon.rc
   imgui/imgui.cpp
   imgui/imgui_draw.cpp
@@ -154,6 +155,7 @@ add_executable(SolarOdysseyTests
   tests/test_black_hole_lensing.cpp
   tests/test_wormhole_portal.cpp
   tests/test_quality_tiers.cpp
+  tests/test_presentation_controller.cpp
   src/post_processing.cpp
   src/black_hole.cpp
   src/wormhole.cpp
@@ -174,6 +176,7 @@ add_executable(SolarOdysseyTests
   src/particle_system.cpp
   src/input_manager.cpp
   src/simulation_controller.cpp
+  src/presentation_controller.cpp
   src/lod_manager.cpp
   src/save_state.cpp
   src/atmosphere_effects.cpp

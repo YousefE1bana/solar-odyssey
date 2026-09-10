@@ -204,7 +204,8 @@ void Engine::initPlanetsAndMoons() {
 }
 
 void Engine::focusPlanetByName(const std::string& name) {
-    solarUI.selectedPlanetName = name;
+    presenter.forceExplorer();
+    selectBody(name);
     solarUI.showPlanetCard = true;
     if (audioMgr) audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
 
@@ -225,7 +226,8 @@ void Engine::focusPlanetByName(const std::string& name) {
 }
 
 void Engine::focusPlanetTourByName(const std::string& name) {
-    solarUI.selectedPlanetName = name;
+    presenter.forceExplorer();
+    selectBody(name);
     solarUI.showPlanetCard = true;
     if (audioMgr) audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
 
@@ -245,7 +247,8 @@ void Engine::focusPlanetTourByName(const std::string& name) {
 }
 
 void Engine::explorePlanetPOVByName(const std::string& name) {
-    solarUI.selectedPlanetName = name;
+    presenter.forceExplorer();
+    selectBody(name);
     if (audioMgr) {
         audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
         audioMgr->startPOVAmbientSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
@@ -266,6 +269,65 @@ void Engine::explorePlanetPOVByName(const std::string& name) {
             }
         }
     }
+}
+
+// PSM.1: single selection adapter — the only runtime writer of the
+// authoritative presenter selection. The UI mirror is synced synchronously
+// so QA/self-test paths asserting UI state keep passing.
+void Engine::selectBody(const std::string& name) {
+    presenter.selectBody(name);
+    solarUI.selectedPlanetName = presenter.selectedBodyName();
+}
+
+void Engine::setSelectedBody(const std::string& name, bool openCard) {
+    selectBody(name);
+    solarUI.showPlanetCard = openCard;
+}
+
+void Engine::enterSystemView() {
+    // R01: authoritative guard — SYSTEM must never be entered while flying.
+    // Refuse: state stays EXPLORER, no camera transition starts.
+    if (!PresentationController::isSystemEntryAllowed(spaceship.active)) return;
+    if (!presenter.enterSystem()) return;
+    if (cameraCtrl.tourActive) cameraCtrl.stopTour();
+    // Clear body-focus camera tracking so the SYSTEM-bound transition keeps
+    // a fixed system/orbital destination (selection is preserved separately).
+    cameraCtrl.focusedPlanetIndex = -1;
+    cameraCtrl.focusedBodyName.clear();
+    cameraCtrl.orbitDistance = PresentationController::kSystemViewDistance;
+    const glm::vec3 systemTarget(0.0f);
+    const glm::vec3 systemEye = cameraCtrl.calculateOrbitalEye(
+        cameraCtrl.orbitDistance, cameraCtrl.orbitAngleX, cameraCtrl.orbitAngleY, systemTarget);
+    cameraCtrl.startTransition(cameraCtrl.currentEye, cameraCtrl.currentTarget,
+                               systemEye, systemTarget, 1.6f, CAM_ORBITAL);
+    updateCursorCapture();
+}
+
+void Engine::exitSystemView() {
+    if (!presenter.exitSystem()) return;
+    // Existing default/reset orbital behavior; selection preserved (no clear).
+    cameraCtrl.resetToDefault();
+    updateCursorCapture();
+}
+
+void Engine::toggleSystemView() {
+    if (presenter.isSystem()) exitSystemView();
+    else enterSystemView();
+}
+
+// PSM.1: post-sim presentation step. Sequenced by Engine::run after
+// updateSimulation and before renderFrame — never inside updateSimulation.
+void Engine::updatePresentation() {
+    // R02: consume the pending restore adoption recorded by the load path.
+    if (pendingSelectionAdopt.has_value()) {
+        presenter.selectBody(*pendingSelectionAdopt);
+        pendingSelectionAdopt.reset();
+    }
+    // No BODY consumer exists yet: drain any EnterBody intent safely.
+    // Deferred to PSM.2; a drained intent never fakes a transition.
+    std::string deferredBody;
+    presenter.consumeEnterBodyIntent(deferredBody);
+    (void)deferredBody;
 }
 
 bool Engine::init(int width, int height, const char* title) {
@@ -401,6 +463,10 @@ bool Engine::init(int width, int height, const char* title) {
     // C3.8: route Settings-UI tier changes through the authoritative applier.
     // Applies the persisted preset from solar_odyssey_settings.ini (default High).
     solarUI.onQualityChanged = [this](GraphicsQuality q) { applyQualityTier(static_cast<int>(q)); };
+    // PSM.1: route UI identity writes through the single selection adapter;
+    // the System View button invokes the same semantic action as Y.
+    solarUI.onSelectBody = [this](const std::string& n) { selectBody(n); };
+    solarUI.onToggleSystemView = [this]() { toggleSystemView(); };
     applyQualityTier(static_cast<int>(solarUI.qualityPreset));
 
     return true;
@@ -526,7 +592,8 @@ void Engine::processInput(float deltaTime) {
                 updateCursorCapture();
             }
         } else {
-            if (inputMgr) inputMgr->setContext(InputContext::Explorer);
+            // PSM.1: SYSTEM gets its own explicit context (never silent Explorer).
+            if (inputMgr) inputMgr->setContext(presenter.isSystem() ? InputContext::System : InputContext::Explorer);
             if (uiReleaseCursorHeld) {
                 uiReleaseCursorHeld = false;
                 if (inputMgr) inputMgr->setCursorReleaseHeld(false);
@@ -781,6 +848,9 @@ void Engine::updateSimulation(float deltaTime) {
             SaveStateManager::instance().restoreState(loadState, loadedTime, solarUI.timeMultiplier,
                                                       solarUI.isPaused, solarUI.physicsMode,
                                                       cameraCtrl, missionSystem, spaceship, solarUI);
+            // R02: record only — updatePresentation() performs the adoption.
+            // No PresentationController call may occur inside updateSimulation.
+            pendingSelectionAdopt = solarUI.selectedPlanetName;
             simTime = loadedTime;
             updateCursorCapture();
             solarUI.saveStatusToast = "Simulation state loaded from save_state.json";
@@ -944,7 +1014,7 @@ void Engine::renderFrame(float deltaTime) {
                                 (float)windowWidth, (float)windowHeight, cameraCtrl);
 
     std::vector<std::pair<std::string, int>> dummyMap;
-    solarUI.renderTopNavBar((float)windowWidth, cameraCtrl, celestialDb, dummyMap);
+    solarUI.renderTopNavBar((float)windowWidth, cameraCtrl, celestialDb, dummyMap, presenter);
     solarUI.renderBottomControlBar((float)windowWidth, (float)windowHeight, cameraCtrl);
     solarUI.renderPlanetInfoCard((float)windowWidth, (float)windowHeight, celestialDb, cameraCtrl,
                                 [this](const std::string& name) { focusPlanetByName(name); },
@@ -979,8 +1049,7 @@ void Engine::runQACaptureSequence(int qaCount) {
     } else if (qaCount == 15) {
         postPipeline.captureScreenshot("Screenshots/Polish/overview.bmp");
         postPipeline.captureScreenshot("Screenshots/Regression/explorer_normal.bmp");
-        solarUI.selectedPlanetName = "Earth";
-        solarUI.showPlanetCard = true;
+        setSelectedBody("Earth", true);
     } else if (qaCount == 22) {
         postPipeline.captureScreenshot("Screenshots/Polish/planet_dossier.bmp");
         solarUI.showPlanetCard = false;
@@ -1092,7 +1161,7 @@ void Engine::runQACaptureSequence(int qaCount) {
     } else if (qaCount == 264) {
         cameraCtrl.mode = CAM_FREE;
         updateCursorCapture();
-        solarUI.selectedPlanetName = "Mars";
+        selectBody("Mars");
         onKey(GLFW_KEY_R, 0, GLFW_PRESS, 0);
         updateCursorCapture();
         bool resetActive = (cameraCtrl.mode == CAM_ORBITAL || (cameraCtrl.mode == CAM_TRANSITION && cameraCtrl.postTransitionMode == CAM_ORBITAL));
@@ -1129,13 +1198,13 @@ void Engine::runQACaptureSequence(int qaCount) {
         spaceship.warpSystem.cancelWarp();
         spaceship.active = false;
         cameraCtrl.resetToDefault();
-        solarUI.selectedPlanetName = "";
+        selectBody("");
     } else if (qaCount == 445) {
         postPipeline.captureScreenshot("Screenshots/Regression/post_warp_explorer.bmp");
         focusPlanetByName("Wormhole");
     } else if (qaCount == 475) {
         cameraCtrl.resetToDefault();
-        solarUI.selectedPlanetName = "";
+        selectBody("");
     } else if (qaCount == 505) {
         postPipeline.captureScreenshot("Screenshots/Regression/post_wormhole_explorer.bmp");
     } else if (qaCount == 508) {
@@ -1278,67 +1347,87 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
             } else if (key == GLFW_KEY_H) {
                 spaceship.toggleOrbitAssist();
             } else if (key == GLFW_KEY_0) {
-                solarUI.selectedPlanetName = "Sun";
+                selectBody("Sun");
                 spaceship.setTargetPlanet("Sun", sunWorldPosition, 2.0f);
             } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_8) {
                 int pIdx = key - GLFW_KEY_1;
                 if (pIdx < (int)planets.size()) {
-                    solarUI.selectedPlanetName = planets[pIdx].name;
+                    selectBody(planets[pIdx].name);
                     spaceship.setTargetPlanet(planets[pIdx].name, planets[pIdx].currentPosition, planets[pIdx].size);
                 }
             } else if (key == GLFW_KEY_B) {
-                solarUI.selectedPlanetName = "Black Hole";
+                selectBody("Black Hole");
                 spaceship.setTargetPlanet("Black Hole", blackHole.position, blackHole.shadowRadius);
             } else if (key == GLFW_KEY_K) {
-                solarUI.selectedPlanetName = "Wormhole";
+                selectBody("Wormhole");
                 spaceship.setTargetPlanet("Wormhole", wormhole.position, wormhole.throatRadius);
             }
         } else {
             if (key == GLFW_KEY_X) {
+                presenter.forceExplorer();
                 solarUI.showPlanetCard = false;
                 spaceship.toggleActive();
                 cameraCtrl.setSpaceshipMode(spaceship.active, spaceship.getCameraEye(), spaceship.getCameraTarget(), spaceship.smoothCameraUp);
                 updateCursorCapture();
             } else if (key == GLFW_KEY_R) {
+                presenter.forceExplorer();
                 cameraCtrl.resetToDefault();
-                solarUI.selectedPlanetName = "";
+                selectBody("");
                 if (audioMgr) audioMgr->stopPOVAmbientSound();
                 updateCursorCapture();
             } else if (key == GLFW_KEY_F) {
+                presenter.forceExplorer();
                 cameraCtrl.toggleFreeCam();
                 updateCursorCapture();
             } else if (key == GLFW_KEY_T) {
                 if (cameraCtrl.tourActive) {
                     cameraCtrl.stopTour();
                 } else {
+                    presenter.forceExplorer();
                     cameraCtrl.startTour();
                     focusPlanetTourByName(cameraCtrl.tourSequence[0]);
                 }
                 updateCursorCapture();
             } else if (key == GLFW_KEY_B) {
-                if (cameraCtrl.mode == CAM_BLACK_HOLE || solarUI.selectedPlanetName == "Black Hole") {
+                if (cameraCtrl.mode == CAM_BLACK_HOLE || presenter.selectedBodyName() == "Black Hole") {
+                    presenter.forceExplorer();
                     cameraCtrl.resetToDefault();
-                    solarUI.selectedPlanetName = "";
+                    selectBody("");
                 } else {
                     focusPlanetByName("Black Hole");
                 }
                 updateCursorCapture();
             } else if (key == GLFW_KEY_K) {
-                if (cameraCtrl.mode == CAM_WORMHOLE || solarUI.selectedPlanetName == "Wormhole") {
+                if (cameraCtrl.mode == CAM_WORMHOLE || presenter.selectedBodyName() == "Wormhole") {
+                    presenter.forceExplorer();
                     cameraCtrl.resetToDefault();
-                    solarUI.selectedPlanetName = "";
+                    selectBody("");
                 } else {
                     focusPlanetByName("Wormhole");
                 }
                 updateCursorCapture();
+            } else if (key == GLFW_KEY_Y) {
+                // PSM.1: the single EXPLORER <-> SYSTEM entry action (M stays Missions).
+                toggleSystemView();
+            } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+                // PSM.1: semantic EnterBody intent only (PSM.2 consumer).
+                if (presenter.isSystem() && !presenter.selectedBodyName().empty()) {
+                    presenter.requestEnterBody(presenter.selectedBodyName());
+                }
             } else if (key == GLFW_KEY_0) {
-                focusPlanetByName("Sun");
-                updateCursorCapture();
-            } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_8) {
-                int pIdx = key - GLFW_KEY_1;
-                if (pIdx < (int)planets.size()) {
-                    focusPlanetByName(planets[pIdx].name);
+                // PSM.1: planet-focus numerics are inactive while SYSTEM.
+                if (!presenter.isSystem()) {
+                    focusPlanetByName("Sun");
                     updateCursorCapture();
+                }
+            } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_8) {
+                // PSM.1: planet-focus numerics are inactive while SYSTEM.
+                if (!presenter.isSystem()) {
+                    int pIdx = key - GLFW_KEY_1;
+                    if (pIdx < (int)planets.size()) {
+                        focusPlanetByName(planets[pIdx].name);
+                        updateCursorCapture();
+                    }
                 }
             } else if (key == GLFW_KEY_ESCAPE) {
                 if (solarUI.showMissionModal) {
@@ -1347,11 +1436,15 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                     cameraCtrl.setPhotoMode(false);
                 } else if (cameraCtrl.tourActive) {
                     cameraCtrl.stopTour();
+                } else if (presenter.isSystem()) {
+                    // PSM.1: SYSTEM -> EXPLORER (selection preserved).
+                    exitSystemView();
                 } else if (solarUI.showPlanetCard) {
                     solarUI.showPlanetCard = false;
                 } else if (cameraCtrl.mode == CAM_FREE || cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || cameraCtrl.mode == CAM_BLACK_HOLE || cameraCtrl.mode == CAM_WORMHOLE) {
+                    presenter.forceExplorer();
                     cameraCtrl.resetToDefault();
-                    solarUI.selectedPlanetName = "";
+                    selectBody("");
                     if (audioMgr) audioMgr->stopPOVAmbientSound();
                     updateCursorCapture();
                 }
@@ -1366,7 +1459,12 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
 
 void Engine::onMouseButton(int button, int action, int mods) {
     if (inputMgr) inputMgr->onMouseButton(button, action, mods);
-    if (ImGui::GetIO().WantCaptureMouse) return;
+    if (ImGui::GetIO().WantCaptureMouse) {
+        // ImGui-captured clicks never feed the scene double-click recognizer.
+        lastPickName.clear();
+        lastPickTimeSec = -1.0;
+        return;
+    }
 
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
@@ -1395,7 +1493,29 @@ void Engine::onMouseButton(int button, int action, int mods) {
                 float hitDist;
                 int hitIdx = RaycastPicker::pickClosestBody(ray, pickables, hitName, hitDist);
                 if (hitIdx != -999) {
-                    focusPlanetByName(hitName);
+                    if (presenter.isSystem()) {
+                        // PSM.1 SYSTEM: select only — never focus or move the camera.
+                        setSelectedBody(hitName, true);
+                        const double now = glfwGetTime();
+                        if (!lastPickName.empty() && hitName == lastPickName && lastPickTimeSec >= 0.0 &&
+                            (now - lastPickTimeSec) <= kSceneDoubleClickIntervalSec) {
+                            // Same-body double-click: semantic intent only (PSM.2 consumer).
+                            presenter.requestEnterBody(hitName);
+                            lastPickName.clear();
+                            lastPickTimeSec = -1.0;
+                        } else {
+                            lastPickName = hitName;
+                            lastPickTimeSec = now;
+                        }
+                    } else {
+                        focusPlanetByName(hitName);
+                        lastPickName.clear();
+                        lastPickTimeSec = -1.0;
+                    }
+                } else {
+                    // Empty-space click: never an EnterBody trigger.
+                    lastPickName.clear();
+                    lastPickTimeSec = -1.0;
                 }
             }
         } else if (action == GLFW_RELEASE) {
@@ -1498,6 +1618,7 @@ int Engine::run(int argc, char** argv) {
 
         processInput(deltaTime);
         updateSimulation(deltaTime);
+        updatePresentation();
         renderFrame(deltaTime);
 
         if (hasBenchmark) {

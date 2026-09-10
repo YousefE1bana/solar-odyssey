@@ -188,7 +188,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(120.0f, 25.0f, 45.0f, glm::vec3(0.0f));
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Sun";
+        engine->selectBody("Sun");
         engine->cameraCtrl.focusedPlanetIndex = -1;
         engine->cameraCtrl.focusedBodyName = "Sun";
     } else if (scene == "earth" || scene == "Earth" || scene == "earth_c31" || scene == "Earth_C31") {
@@ -204,7 +204,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.5f, 25.0f, 65.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         if (config.c31Baseline || scene == "earth_c31" || scene == "Earth_C31") {
             engine->renderer.surfaceOverrides.enableCloudShadows = false;
             engine->renderer.surfaceOverrides.enableOceanSpecular = false;
@@ -222,7 +222,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.2f, 30.0f, 75.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
     } else if (scene == "earth_terminator" || scene == "Earth_Terminator") {
         float earthAngle = 210.0f;
         float earthRad = 10.0f;
@@ -236,7 +236,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.2f, 120.0f, 75.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
     } else if (scene == "earth_night" || scene == "Earth_Night") {
         glm::vec3 earthPos = engine->simCtrl.getBodyPosition("Earth");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -248,7 +248,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.8f, 100.0f, 50.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
     } else if (scene == "earth_cloud_shadow" || scene == "Earth_CloudShadow") {
         float earthAngle = 210.0f;
         float earthRad = 10.0f;
@@ -262,7 +262,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.4f, 45.0f, 65.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
     } else if (scene == "earth_ocean_specular" || scene == "Earth_OceanSpecular") {
         glm::vec3 earthPos = engine->simCtrl.getBodyPosition("Earth");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -274,7 +274,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.8f, 330.0f, 75.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
     } else if (scene == "earth_cloud_shadow_on" || scene == "Earth_CloudShadow_ON") {
         float earthAngle = 210.0f;
         float earthRad = 10.0f;
@@ -288,7 +288,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.4f, 45.0f, 65.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->renderer.surfaceOverrides.enableCloudShadows = true;
     } else if (scene == "earth_cloud_shadow_off" || scene == "Earth_CloudShadow_OFF") {
         float earthAngle = 210.0f;
@@ -303,7 +303,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.4f, 45.0f, 65.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->renderer.surfaceOverrides.enableCloudShadows = false;
     } else if (scene == "earth_ocean_specular_on" || scene == "Earth_OceanSpecular_ON") {
         glm::vec3 earthPos = engine->simCtrl.getBodyPosition("Earth");
@@ -316,7 +316,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.8f, 330.0f, 75.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->renderer.surfaceOverrides.enableOceanSpecular = true;
     } else if (scene == "earth_ocean_specular_off" || scene == "Earth_OceanSpecular_OFF") {
         glm::vec3 earthPos = engine->simCtrl.getBodyPosition("Earth");
@@ -329,7 +329,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.8f, 330.0f, 75.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->renderer.surfaceOverrides.enableOceanSpecular = false;
     } else if (scene == "earth_night_lights_on" || scene == "Earth_NightLights_ON") {
         glm::vec3 earthPos = engine->simCtrl.getBodyPosition("Earth");
@@ -342,7 +342,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.8f, 100.0f, 50.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->renderer.surfaceOverrides.enableNightLights = true;
     } else if (scene == "earth_night_lights_off" || scene == "Earth_NightLights_OFF") {
         glm::vec3 earthPos = engine->simCtrl.getBodyPosition("Earth");
@@ -355,7 +355,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.8f, 100.0f, 50.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->renderer.surfaceOverrides.enableNightLights = false;
     } else if (scene == "venus") {
         float venusAngle = 135.0f;
@@ -370,7 +370,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.0f, 20.0f, 50.0f, venusPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Venus";
+        engine->selectBody("Venus");
     } else if (scene == "mars") {
         float marsAngle = 330.0f;
         float marsRad = 12.5f;
@@ -384,7 +384,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(2.5f, 20.0f, 45.0f, marsPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Mars";
+        engine->selectBody("Mars");
     } else if (scene == "asteroid_belt") {
         engine->cameraCtrl.mode = CAM_FREE;
         engine->cameraCtrl.freePos = glm::vec3(0.0f, 6.0f, 16.5f);
@@ -405,7 +405,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(6.0f, 10.0f, 120.0f, jupPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Jupiter";
+        engine->selectBody("Jupiter");
     } else if (scene == "saturn") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -417,7 +417,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.0f, 25.0f, 125.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "saturn_rings_litside" || scene == "Saturn_Rings_LitSide") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -429,7 +429,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.0f, 25.0f, 125.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "saturn_rings_transmissionside" || scene == "Saturn_Rings_TransmissionSide") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -441,7 +441,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.0f, 170.0f, 55.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "saturn_ring_shadow" || scene == "Saturn_Ring_Shadow") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -453,7 +453,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.2f, 15.0f, 115.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "saturn_planet_shadow_on_rings" || scene == "Saturn_Planet_Shadow_On_Rings") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -465,7 +465,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(7.5f, 175.0f, 135.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "saturn_eclipse" || scene == "Saturn_Eclipse") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         glm::vec3 dirToSun = glm::normalize(-satPos);
@@ -483,7 +483,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(3.5f, 355.0f, 95.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "saturn_oblique" || scene == "Saturn_Oblique") {
         glm::vec3 satPos = engine->simCtrl.getBodyPosition("Saturn");
         engine->cameraCtrl.mode = CAM_FOCUS;
@@ -495,7 +495,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(8.5f, 45.0f, 50.0f, satPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Saturn";
+        engine->selectBody("Saturn");
     } else if (scene == "earth_orbit_oblique" || scene == "Earth_Orbit_Oblique") {
         float earthAngle = 210.0f;
         float earthRad = 10.0f;
@@ -509,7 +509,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->solarUI.showOrbits = true;
     } else if (scene == "earth_orbit_oblique_off") {
         float earthAngle = 210.0f;
@@ -524,7 +524,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, earthPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Earth";
+        engine->selectBody("Earth");
         engine->solarUI.showOrbits = false;
     } else if (scene == "mars_orbit_oblique" || scene == "Mars_Orbit_Oblique") {
         float marsAngle = 330.0f;
@@ -539,7 +539,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, marsPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Mars";
+        engine->selectBody("Mars");
         engine->solarUI.showOrbits = true;
     } else if (scene == "mars_orbit_oblique_off") {
         float marsAngle = 330.0f;
@@ -554,7 +554,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.currentEye = engine->cameraCtrl.calculateOrbitalEye(4.5f, 40.0f, 30.0f, marsPos);
         engine->cameraCtrl.currentUp = glm::vec3(0.0f, 1.0f, 0.0f);
         engine->cameraCtrl.transitionProgress = 1.0f;
-        engine->solarUI.selectedPlanetName = "Mars";
+        engine->selectBody("Mars");
         engine->solarUI.showOrbits = false;
     } else if (scene == "black_hole") {
         engine->cameraCtrl.mode = CAM_FREE;

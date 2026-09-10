@@ -160,7 +160,8 @@ void SolarOdysseyUI::renderFloatingLabels(const std::vector<PickableBody>& bodie
 
     // Top Navigation & Quick Select Bar
 void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, const CelestialDatabase& db,
-                                     std::vector<std::pair<std::string, int>>& planetIndexMap) {
+                                     std::vector<std::pair<std::string, int>>& planetIndexMap,
+                                     const PresentationController& psm) {
         (void)planetIndexMap;
         if (cam.photoModeActive) return;
 
@@ -199,7 +200,9 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                     }
                     bool isSelected = (cam.focusedBodyName == name);
                     if (ImGui::Selectable(name.c_str(), isSelected)) {
-                        selectedPlanetName = name;
+                        // PSM.1: selection routes to the single source of truth.
+                        if (onSelectBody) onSelectBody(name);
+                        else selectedPlanetName = name;
                         showPlanetCard = true;
                     }
                     if (isSelected) {
@@ -207,6 +210,20 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                     }
                 }
                 ImGui::EndCombo();
+            }
+
+            // PSM.1: presentation mode chip (read-only) + System View action.
+            // Same semantic action as the Y key; M stays Missions.
+            ImGui::SameLine(0, 12);
+            ImGui::TextDisabled("|");
+            ImGui::SameLine(0, 8);
+            const char* psmModeLabel = "EXPLORER";
+            if (psm.state() == PresentationState::SYSTEM) psmModeLabel = "SYSTEM";
+            else if (psm.state() == PresentationState::BODY) psmModeLabel = "BODY";
+            ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), "%s", psmModeLabel);
+            ImGui::SameLine(0, 8);
+            if (ImGui::Button(" System View (Y) ")) {
+                if (onToggleSystemView) onToggleSystemView();
             }
 
             // Dynamically calculate the precise pixel width of all right-aligned action buttons
@@ -266,12 +283,14 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.75f, 0.95f, 0.95f));
                 if (ImGui::Button(" Wormhole (K) ")) {
                     cam.resetToDefault();
-                    selectedPlanetName = "";
+                    if (onSelectBody) onSelectBody("");
+                    else selectedPlanetName = "";
                 }
                 ImGui::PopStyleColor();
             } else {
                 if (ImGui::Button(" Wormhole (K) ")) {
-                    selectedPlanetName = "Wormhole";
+                    if (onSelectBody) onSelectBody("Wormhole");
+                    else selectedPlanetName = "Wormhole";
                     showPlanetCard = true;
                 }
             }
@@ -282,12 +301,14 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.85f, 0.95f));
                 if (ImGui::Button(" Black Hole (B) ")) {
                     cam.resetToDefault();
-                    selectedPlanetName = "";
+                    if (onSelectBody) onSelectBody("");
+                    else selectedPlanetName = "";
                 }
                 ImGui::PopStyleColor();
             } else {
                 if (ImGui::Button(" Black Hole (B) ")) {
-                    selectedPlanetName = "Black Hole";
+                    if (onSelectBody) onSelectBody("Black Hole");
+                    else selectedPlanetName = "Black Hole";
                     showPlanetCard = true;
                 }
             }
@@ -323,7 +344,8 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
             ImGui::SameLine(0, btnSpacing);
             if (ImGui::Button(" Reset ")) {
                 cam.resetToDefault();
-                selectedPlanetName = "";
+                if (onSelectBody) onSelectBody("");
+                else selectedPlanetName = "";
             }
 
             ImGui::SameLine(0, btnSpacing);
@@ -1118,11 +1140,13 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
             // Quick Target Selectors
             ImGui::Spacing();
             if (ImGui::Button("Target Black Hole", ImVec2(165, 22))) {
-                selectedPlanetName = "Black Hole";
+                if (onSelectBody) onSelectBody("Black Hole");
+                else selectedPlanetName = "Black Hole";
             }
             ImGui::SameLine(0, 8);
             if (ImGui::Button("Target Earth", ImVec2(165, 22))) {
-                selectedPlanetName = "Earth";
+                if (onSelectBody) onSelectBody("Earth");
+                else selectedPlanetName = "Earth";
             }
         }
         ImGui::End();
@@ -1273,7 +1297,8 @@ void SolarOdysseyUI::renderMissionModal(float screenWidth, float screenHeight, M
 
                 ImGui::SameLine(0, 12);
                 if (ImGui::Button("Target Destination", ImVec2(140, 22))) {
-                    selectedPlanetName = m.targetName;
+                    if (onSelectBody) onSelectBody(m.targetName);
+                    else selectedPlanetName = m.targetName;
                     if (ship.active || cam.mode == CAM_SPACESHIP) {
                         ship.targetPlanetName = m.targetName;
                     }

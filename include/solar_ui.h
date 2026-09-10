@@ -14,6 +14,7 @@
 #include "picking.h"
 #include "asteroid_belt.h"
 #include "atmosphere_effects.h"
+#include "presentation_controller.h"
 
 enum GraphicsQuality {
     QUALITY_LOW,
@@ -82,7 +83,15 @@ public:
     bool audioMuted = false;
 
     // Selected planet name
+    // PSM.1: READ-ONLY MIRROR of PresentationController::selectedBodyName.
+    // Do not assign this field from UI code; route identity writes through
+    // onSelectBody (wired by Engine to the single selection adapter) and
+    // keep each call site's explicit showPlanetCard line unchanged.
     std::string selectedPlanetName = "";
+
+    // PSM.1: selection/mode action seams (wired by Engine::init).
+    std::function<void(const std::string&)> onSelectBody;
+    std::function<void()> onToggleSystemView;
 
     SolarOdysseyUI() = default;
 
@@ -97,7 +106,8 @@ public:
                               float screenWidth, float screenHeight, CameraController& cam);
 
     void renderTopNavBar(float screenWidth, CameraController& cam, const CelestialDatabase& db,
-                         std::vector<std::pair<std::string, int>>& planetIndexMap);
+                         std::vector<std::pair<std::string, int>>& planetIndexMap,
+                         const PresentationController& psm);
 
     void renderBottomControlBar(float screenWidth, float screenHeight, CameraController& cam);
 
