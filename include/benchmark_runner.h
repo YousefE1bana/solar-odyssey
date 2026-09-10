@@ -25,6 +25,7 @@ struct BenchmarkConfig {
     bool disableLensing = false;
     bool disablePortal = false;
     bool disableC37 = false;
+    int qualityTier = 2; // C3.8: 0=Low..3=Ultra (default High reference tier)
 };
 
 struct FrameMetric {

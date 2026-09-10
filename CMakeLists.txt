@@ -153,6 +153,7 @@ add_executable(SolarOdysseyTests
   tests/test_black_hole_pipeline.cpp
   tests/test_black_hole_lensing.cpp
   tests/test_wormhole_portal.cpp
+  tests/test_quality_tiers.cpp
   src/post_processing.cpp
   src/black_hole.cpp
   src/wormhole.cpp

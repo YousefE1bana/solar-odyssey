@@ -46,6 +46,16 @@ public:
     float lensingInfluenceRadius = 24.0f;
     bool enableLensingPass = true; // Activated in C3.4 for relativistic deflection
 
+    // C3.8: canonical bounded lensing steps from QualityTierSettings (default High = 24).
+    // Low (8) stays bounded and safe: same loop, event capture, and escape guards.
+    int lensingSteps = 24;
+    void setLensingSteps(int steps) {
+        if (steps < 4) steps = 4;   // matches lensing-shader finite floor
+        if (steps > 64) steps = 64; // hard upper bound against runaway cost
+        lensingSteps = steps;
+    }
+    int getLensingSteps() const { return lensingSteps; }
+
     float simTime = 0.0f;
     bool active = true;
     bool showJets = true;

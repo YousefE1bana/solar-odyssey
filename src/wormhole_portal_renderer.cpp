@@ -1,4 +1,5 @@
 #include "wormhole_portal_renderer.h"
+#include "quality_tiers.h"
 #include "render_profiler.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
@@ -104,11 +105,26 @@ WormholePortalRenderer::~WormholePortalRenderer() {
 }
 
 bool WormholePortalRenderer::init(int w, int h) {
+    portalEligibleFrameIndex = 0;
+    portalContentValid = false;
     return portalTarget.init(w, h);
+}
+
+void WormholePortalRenderer::setPortalResolution(int w, int h) {
+    if (w <= 0 || h <= 0) return;
+    if (portalTarget.isInitialized && w == portalTarget.width && h == portalTarget.height) {
+        return; // no-op: recreate only when required
+    }
+    portalTarget.resize(w, h); // safe lifecycle: cleanup-then-recreate, idempotent
+    portalResizeCount++;
+    portalEligibleFrameIndex = 0;
+    portalContentValid = false; // fresh storage must be populated before display
 }
 
 void WormholePortalRenderer::cleanup() {
     portalTarget.cleanup();
+    portalEligibleFrameIndex = 0;
+    portalContentValid = false;
 }
 
 CameraRenderState WormholePortalRenderer::computePortalCameraState(const CameraRenderState& mainCam,
@@ -192,8 +208,9 @@ CameraRenderState WormholePortalRenderer::computePortalCameraState(const CameraR
 
 void WormholePortalRenderer::renderPortalDestination(const SceneRenderContext& parentCtx,
                                                      const Wormhole& wormhole,
-                                                     const std::function<void(const SceneRenderContext&)>& renderWorldBg) {
+                                                      const std::function<void(const SceneRenderContext&)>& renderWorldBg) {
     lastPassExecuted = false;
+    lastPassSkippedByCadence = false;
     if (forceDisable) return;
 
     // Hard Non-Recursion Guard: maximum depth is 1
@@ -220,11 +237,21 @@ void WormholePortalRenderer::renderPortalDestination(const SceneRenderContext& p
         return;
     }
 
+    // C3.8: canonical Low-tier half-rate schedule. Only eligible frames (past all
+    // culling/completeness gates) advance the cadence; skipped frames reuse the
+    // previous valid texture via portalContentValid (see engine portalReady).
+    portalEligibleFrameIndex++;
+    if (QualityTiers::shouldSkipPortalFrame(portalEligibleFrameIndex, portalUpdateDivisor, portalContentValid)) {
+        lastPassSkippedByCadence = true;
+        return;
+    }
+
     // Full RAII OpenGL state snapshot
     GLStateGuard stateGuard;
 
     portalPassExecutionCount++;
     lastPassExecuted = true;
+    portalContentValid = true;
 
     // Bind dedicated Portal FBO
     glBindFramebuffer(GL_FRAMEBUFFER, portalTarget.fbo);

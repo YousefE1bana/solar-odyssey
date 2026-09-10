@@ -21,6 +21,23 @@ public:
     float lastGpuTimeMs = 0.0f;
     bool forceDisable = false; // For balanced A/B performance auditing (Portal OFF vs ON)
     bool lastPassExecuted = false; // True if the portal pass executed on the current frame
+    // C3.8: true when this frame was skipped ONLY by the Low-tier half-rate
+    // cadence (culling/force-disable skips leave this false so no stale reuse).
+    bool lastPassSkippedByCadence = false;
+
+    // C3.8: canonical portal update cadence from QualityTierSettings.
+    // divisor 1 = full-rate; 2 = destination FBO refreshed every other eligible
+    // frame with the previous valid texture reused on skipped frames.
+    int portalUpdateDivisor = 1;
+    uint64_t portalEligibleFrameIndex = 0;
+    bool portalContentValid = false; // True once a real pass has populated the target
+    uint64_t portalResizeCount = 0;  // Telemetry: real target recreations (no-op resizes excluded)
+    void setPortalUpdateDivisor(int divisor) {
+        portalUpdateDivisor = (divisor >= 1) ? divisor : 1;
+    }
+    // Resize/recreate ONLY through the existing safe PortalRenderTarget lifecycle.
+    // Any real resize invalidates content so stale data is never displayed.
+    void setPortalResolution(int w, int h);
 
     WormholePortalRenderer();
     ~WormholePortalRenderer();

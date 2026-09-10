@@ -145,6 +145,7 @@ public:
     GLint uCloudHeightLoc = -1, uCloudShadowIntensityLoc = -1;
     GLint uRingTexLoc = -1, uRingOpacityLoc = -1, uSunAngularRadiusLoc = -1, uC37ActiveLoc = -1;
     GLint uEclipseCountLoc = -1, uEclipseSpheresLoc = -1;
+    GLint uShadowSamplesLoc = -1; // C3.8: canonical soft-shadow filter taps (1/2/4/8)
 
     // Diagnostic / Verification Overrides (controlled feature ON/OFF comparisons)
     struct SurfaceFeatureOverrides {
@@ -164,6 +165,9 @@ public:
     };
     BenchmarkSyntheticOccluder benchmarkOccluder;
     bool c37Active = true;
+
+    // C3.8: canonical shadow-filter tap count from QualityTierSettings (default High).
+    int shadowSamples = 4;
 
     // Uniform locations for Starfield
     GLint uStarTexLoc = -1, uStarModelViewLoc = -1, uStarProjectionLoc = -1;

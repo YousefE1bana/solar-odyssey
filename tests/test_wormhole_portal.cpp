@@ -768,3 +768,54 @@ TEST_CASE("Wormhole - Wormhole Render GL State Restoration", "[wormhole_portal]"
     // Restore standard C PRNG seed so other test suites are isolated
     srand(1);
 }
+
+TEST_CASE("Wormhole - C3.8 Portal Resolution Lifecycle (no leaks, no double-delete)", "[wormhole_portal]") {
+    OffscreenPortalGLContext ctx;
+    if (!ctx.valid) {
+        WARN("Headless OpenGL context unavailable; skipping GL FBO test.");
+        return;
+    }
+
+    WormholePortalRenderer pr;
+    REQUIRE(pr.init(512, 512));
+    REQUIRE(pr.portalTarget.width == 512);
+    REQUIRE(pr.portalTarget.isComplete());
+    REQUIRE(pr.portalContentValid == false);
+
+    // Canonical tier resolutions via the safe lifecycle path.
+    pr.setPortalResolution(256, 256); // Low
+    REQUIRE(pr.portalTarget.width == 256);
+    REQUIRE(pr.portalTarget.height == 256);
+    REQUIRE(pr.portalTarget.isComplete());
+    REQUIRE(pr.portalContentValid == false);
+
+    pr.setPortalResolution(256, 256); // no-op: same size must not recreate
+    REQUIRE(pr.portalTarget.width == 256);
+    REQUIRE(pr.portalResizeCount == 1);
+    REQUIRE(pr.portalTarget.isComplete());
+
+    pr.setPortalResolution(384, 384); // Medium
+    REQUIRE(pr.portalTarget.width == 384);
+    REQUIRE(pr.portalTarget.height == 384);
+    REQUIRE(pr.portalResizeCount == 2); // recreated exactly once on real change
+    REQUIRE(pr.portalTarget.isComplete());
+
+    pr.setPortalResolution(512, 512); // High/Ultra
+    REQUIRE(pr.portalTarget.width == 512);
+    REQUIRE(pr.portalTarget.isComplete());
+
+    // Degenerate input is ignored, never destroys the valid target.
+    GLuint texBefore = pr.portalTarget.colorTex;
+    pr.setPortalResolution(0, 0);
+    pr.setPortalResolution(-64, 128);
+    REQUIRE(pr.portalTarget.colorTex == texBefore);
+    REQUIRE(pr.portalTarget.isComplete());
+
+    // Cleanup is idempotent: repeated calls must not double-delete.
+    pr.cleanup();
+    REQUIRE(pr.portalTarget.fbo == 0);
+    REQUIRE(pr.portalTarget.colorTex == 0);
+    REQUIRE(pr.portalTarget.depthRbo == 0);
+    pr.cleanup();
+    REQUIRE(glGetError() == GL_NO_ERROR);
+}

@@ -763,28 +763,42 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
                     int currPreset = (int)qualityPreset;
                     if (ImGui::Combo("Preset", &currPreset, presets, 4)) {
                         qualityPreset = (GraphicsQuality)currPreset;
-                        applyQualityPreset(qualityPreset, postProc, asteroidBelt);
+                        // C3.8: authoritative fan-out (atmo/BH/portal/shadow + legacy).
+                        if (onQualityChanged) onQualityChanged(qualityPreset);
+                        else applyQualityPreset(qualityPreset, postProc, asteroidBelt);
                     }
 
                     ImGui::Spacing();
                     ImGui::Separator();
-                    ImGui::TextDisabled("Preset Details:");
+                    ImGui::TextDisabled("Preset Details (C3.8 canonical matrix):");
                     if (qualityPreset == QUALITY_LOW) {
                         ImGui::BulletText("Asteroids: 150 count");
                         ImGui::BulletText("Bloom: Disabled");
-                        ImGui::BulletText("Atmosphere: Low Tessellation");
+                        ImGui::BulletText("Atmosphere: 6 samples");
+                        ImGui::BulletText("Black Hole: <=8 bounded steps");
+                        ImGui::BulletText("Portal: 256px half-rate");
+                        ImGui::BulletText("Shadows: 1 sample");
                     } else if (qualityPreset == QUALITY_MEDIUM) {
                         ImGui::BulletText("Asteroids: 400 count");
                         ImGui::BulletText("Bloom: Standard 2-pass");
-                        ImGui::BulletText("Atmosphere: Standard Multi-layer");
+                        ImGui::BulletText("Atmosphere: 8 samples");
+                        ImGui::BulletText("Black Hole: 16 steps");
+                        ImGui::BulletText("Portal: 384px full-rate");
+                        ImGui::BulletText("Shadows: 2 samples");
                     } else if (qualityPreset == QUALITY_HIGH) {
                         ImGui::BulletText("Asteroids: 800 count");
                         ImGui::BulletText("Bloom: High-Precision HDR");
-                        ImGui::BulletText("Atmosphere: Full Rayleigh Scattering");
+                        ImGui::BulletText("Atmosphere: 12 samples (reference)");
+                        ImGui::BulletText("Black Hole: 24 steps (reference)");
+                        ImGui::BulletText("Portal: 512px full-rate (reference)");
+                        ImGui::BulletText("Shadows: 4 samples (reference)");
                     } else if (qualityPreset == QUALITY_ULTRA) {
                         ImGui::BulletText("Asteroids: 1400 count");
                         ImGui::BulletText("Bloom: Multi-pass Ultra");
-                        ImGui::BulletText("Atmosphere: Enhanced Limb & Specular");
+                        ImGui::BulletText("Atmosphere: 16 samples");
+                        ImGui::BulletText("Black Hole: 32 steps");
+                        ImGui::BulletText("Portal: 512px full-rate");
+                        ImGui::BulletText("Shadows: 8 samples");
                     }
                     ImGui::EndTabItem();
                 }

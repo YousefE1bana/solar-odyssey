@@ -388,7 +388,7 @@ void BlackHole::renderLensingPass(GLuint preLensTex, GLuint lensedFBO,
     if (uLensViewMatrixLoc != -1) glUniformMatrix4fv(uLensViewMatrixLoc, 1, GL_FALSE, glm::value_ptr(viewMat));
     if (uLensInvViewMatrixLoc != -1) glUniformMatrix4fv(uLensInvViewMatrixLoc, 1, GL_FALSE, glm::value_ptr(invView));
     if (uLensScreenResolutionLoc != -1) glUniform2f(uLensScreenResolutionLoc, (float)screenWidth, (float)screenHeight);
-    if (uLensMaxStepsLoc != -1) glUniform1i(uLensMaxStepsLoc, 24);
+    if (uLensMaxStepsLoc != -1) glUniform1i(uLensMaxStepsLoc, lensingSteps);
 
     // Depth and blending state for screen-space bounded overwrite
     glDisable(GL_DEPTH_TEST);

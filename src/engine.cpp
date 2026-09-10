@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "quality_tiers.h"
 #include "gl_primitives.h"
 #include "picking.h"
 #include "render_profiler.h"
@@ -47,6 +48,9 @@ void Engine::applyLoadedSettings() {
     solarUI.timeMultiplier      = appSettings.timeScale;
     cameraCtrl.fieldOfView      = appSettings.fieldOfView;
     solarUI.isFullscreen        = isFullscreen;
+    if (QualityTiers::isValidTier(appSettings.qualityPreset)) {
+        solarUI.qualityPreset = static_cast<GraphicsQuality>(appSettings.qualityPreset);
+    }
 }
 
 void Engine::captureCurrentSettings() {
@@ -69,6 +73,23 @@ void Engine::captureCurrentSettings() {
     appSettings.timeScale           = solarUI.timeMultiplier;
     appSettings.fieldOfView         = cameraCtrl.fieldOfView;
     appSettings.fullscreen          = isFullscreen;
+    appSettings.qualityPreset       = static_cast<int>(solarUI.qualityPreset);
+}
+
+// C3.8: single authoritative fan-out for runtime tier switching.
+void Engine::applyQualityTier(int tier) {
+    const QualityTierSettings q = QualityTiers::get(tier);
+    const int appliedTier = QualityTiers::isValidTier(tier) ? tier : QualityTiers::kHigh;
+    solarUI.qualityPreset = static_cast<GraphicsQuality>(appliedTier);
+
+    if (atmosphereEffects) atmosphereEffects->setQualitySamples(q.atmosphereSamples);
+    blackHole.setLensingSteps(q.blackHoleSteps);
+    wormholePortalRenderer.setPortalResolution(q.portalResolution, q.portalResolution);
+    wormholePortalRenderer.setPortalUpdateDivisor(q.portalUpdateDivisor);
+    renderer.shadowSamples = q.shadowSamples;
+
+    // Legacy asteroid/bloom behavior preserved per preset.
+    solarUI.applyQualityPreset(solarUI.qualityPreset, postPipeline, asteroidBelt);
 }
 
 void Engine::updateCursorCapture() {
@@ -377,7 +398,10 @@ bool Engine::init(int width, int height, const char* title) {
     wormholePortalRenderer.init(512, 512);
     lod::LODManager::instance().init();
 
-    solarUI.applyQualityPreset(QUALITY_HIGH, postPipeline, asteroidBelt);
+    // C3.8: route Settings-UI tier changes through the authoritative applier.
+    // Applies the persisted preset from solar_odyssey_settings.ini (default High).
+    solarUI.onQualityChanged = [this](GraphicsQuality q) { applyQualityTier(static_cast<int>(q)); };
+    applyQualityTier(static_cast<int>(solarUI.qualityPreset));
 
     return true;
 }
@@ -871,9 +895,13 @@ void Engine::renderFrame(float deltaTime) {
     // Composite Black Hole primary components and foreground entities into HDR_B (lensedFBO)
     renderer.renderBlackHole(blackHole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
 
-    bool portalReady = wormholePortalRenderer.lastPassExecuted &&
-                       !wormholePortalRenderer.forceDisable &&
-                       (wormholePortalRenderer.portalTarget.colorTex != 0);
+    // C3.8: on Low-tier cadence-skipped frames the previous VALID portal texture
+    // is reused; culled/disabled frames still fall back (never stale-invalid).
+    bool portalReady = !wormholePortalRenderer.forceDisable &&
+                       (wormholePortalRenderer.portalTarget.colorTex != 0) &&
+                       (wormholePortalRenderer.lastPassExecuted ||
+                        (wormholePortalRenderer.lastPassSkippedByCadence &&
+                         wormholePortalRenderer.portalContentValid));
     GLuint portalTex = portalReady ? wormholePortalRenderer.portalTarget.colorTex : 0;
     renderer.renderWormhole(wormhole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime,
                             portalTex, portalReady, cameraCtrl.currentUp);

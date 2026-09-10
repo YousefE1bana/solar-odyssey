@@ -26,6 +26,7 @@ std::string AppSettings::serialize() const {
     ss << "fieldOfView=" << fieldOfView << "\n";
     ss << "vsyncEnabled=" << (vsyncEnabled ? 1 : 0) << "\n";
     ss << "fullscreen=" << (fullscreen ? 1 : 0) << "\n";
+    ss << "qualityPreset=" << qualityPreset << "\n";
     return ss.str();
 }
 
@@ -59,6 +60,13 @@ void AppSettings::apply(const std::unordered_map<std::string, std::string>& kv) 
     getF("fieldOfView", fieldOfView);
     getB("vsyncEnabled", vsyncEnabled);
     getB("fullscreen", fullscreen);
+    {
+        // Integer tier with deterministic fallback to High on garbage.
+        auto it = kv.find("qualityPreset");
+        if (it != kv.end()) {
+            try { qualityPreset = std::stoi(it->second); } catch (...) { qualityPreset = 2; }
+        }
+    }
 
     masterVolume = std::clamp(masterVolume, 0.0f, 1.0f);
     musicVolume  = std::clamp(musicVolume, 0.0f, 1.0f);
@@ -71,6 +79,7 @@ void AppSettings::apply(const std::unordered_map<std::string, std::string>& kv) 
     atmosphereGlowScale = std::clamp(atmosphereGlowScale, 0.0f, 5.0f);
     ringOpacity  = std::clamp(ringOpacity, 0.0f, 1.0f);
     fieldOfView  = std::clamp(fieldOfView, 20.0f, 120.0f);
+    qualityPreset = std::clamp(qualityPreset, 0, 3);
 }
 
 bool saveSettings(const std::string& path, const AppSettings& s) {

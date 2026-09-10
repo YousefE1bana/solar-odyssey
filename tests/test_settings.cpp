@@ -15,6 +15,7 @@ TEST_CASE("Settings Persistence INI Round-Trip", "[settings]") {
     original.sunIntensity = 1.45f;
     original.ringOpacity  = 0.72f;
     original.fullscreen   = true;
+    original.qualityPreset = 0; // Low tier persists through the INI round-trip
 
     saveSettings(testPath, original);
 
@@ -30,8 +31,39 @@ TEST_CASE("Settings Persistence INI Round-Trip", "[settings]") {
     REQUIRE(loaded.sunIntensity == Approx(1.45f));
     REQUIRE(loaded.ringOpacity  == Approx(0.72f));
     REQUIRE(loaded.fullscreen   == true);
+    REQUIRE(loaded.qualityPreset == 0);
 
     std::remove(testPath);
+}
+
+TEST_CASE("C3.8 Quality Preset INI Persistence and Deterministic Fallback", "[settings]") {
+    // Serialize pantheon: default is High (2), every valid tier round-trips.
+    AppSettings def;
+    REQUIRE(def.qualityPreset == 2);
+    REQUIRE(def.serialize().find("qualityPreset=2") != std::string::npos);
+
+    for (int tier = 0; tier <= 3; ++tier) {
+        AppSettings s;
+        s.qualityPreset = tier;
+        AppSettings back;
+        std::unordered_map<std::string, std::string> kv;
+        kv["qualityPreset"] = std::to_string(tier);
+        back.apply(kv);
+        REQUIRE(back.qualityPreset == tier);
+    }
+
+    // Garbage / out-of-range input deterministically clamps into [0, 3].
+    AppSettings weird;
+    std::unordered_map<std::string, std::string> kvBad;
+    kvBad["qualityPreset"] = "99";
+    weird.apply(kvBad);
+    REQUIRE(weird.qualityPreset == 3);
+    kvBad["qualityPreset"] = "-5";
+    weird.apply(kvBad);
+    REQUIRE(weird.qualityPreset == 0);
+    kvBad["qualityPreset"] = "ultra??";
+    weird.apply(kvBad);
+    REQUIRE(weird.qualityPreset == 2); // stoi failure -> High default
 }
 
 TEST_CASE("Fullscreen Settings and State Synchronization", "[settings]") {

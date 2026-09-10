@@ -152,10 +152,10 @@ void main() {
         }
     }
 
-    // 4. Numerical Integration Loop (24 steps default)
+    // 4. Numerical Integration Loop (tier-controlled; Low = 8-step fast bounded mode)
     vec4 secondaryDiskAcc = vec4(0.0);
     bool captured = false;
-    int steps = max(uMaxSteps, 12);
+    int steps = max(uMaxSteps, 4);
     float dtBase = (2.0 * rInfl) / float(steps);
 
     for (int i = 0; i < steps; ++i) {

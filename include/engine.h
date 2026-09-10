@@ -119,6 +119,12 @@ public:
     void applyLoadedSettings();
     void captureCurrentSettings();
 
+    // C3.8: push the authoritative QualityTierSettings for `tier` into every
+    // relevant render system (atmo/BH/portal/shadow + legacy asteroid/bloom).
+    // Safe at runtime: no sim reset, no SaveState impact; portal FBO is
+    // resized/recreated only when the tier resolution actually changes.
+    void applyQualityTier(int tier);
+
     void updateCursorCapture();
     void toggleFullscreen();
 

@@ -71,6 +71,9 @@ public:
 
     // Graphics Preset
     GraphicsQuality qualityPreset = QUALITY_HIGH;
+    // C3.8: Engine wires this to Engine::applyQualityTier so the Settings UI
+    // drives the authoritative QualityTierSettings fan-out (no parallel system).
+    std::function<void(GraphicsQuality)> onQualityChanged;
 
     // Audio controls
     float masterVolume = 0.8f;

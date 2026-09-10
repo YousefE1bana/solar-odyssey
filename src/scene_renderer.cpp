@@ -295,6 +295,7 @@ bool SceneRenderer::init() {
         uC37ActiveLoc = glGetUniformLocation(planetProgram, "uC37Active");
         uEclipseCountLoc = glGetUniformLocation(planetProgram, "uEclipseCount");
         uEclipseSpheresLoc = glGetUniformLocation(planetProgram, "uEclipseSpheres[0]");
+        uShadowSamplesLoc = glGetUniformLocation(planetProgram, "uShadowSamples");
     }
 
     initStarfield();
@@ -636,6 +637,8 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             if (uSunAngularRadiusLoc >= 0) glUniform1f(uSunAngularRadiusLoc, tanSun);
             if (uC37ActiveLoc >= 0) glUniform1i(uC37ActiveLoc, c37Active ? 1 : 0);
+            // C3.8: canonical soft-shadow taps (1/2/4/8); shader clamps defensively.
+            if (uShadowSamplesLoc >= 0) glUniform1i(uShadowSamplesLoc, shadowSamples);
 
             if (planet.hasRings) {
                 glUniform1i(uHasRingsLoc, 1);

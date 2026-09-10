@@ -32,6 +32,10 @@ struct AppSettings {
     bool  vsyncEnabled = true;
     bool  fullscreen   = false;
 
+    // C3.8: rendering quality tier 0=Low..3=Ultra (default High = reference tier).
+    // Persisted in solar_odyssey_settings.ini only; SaveState v2 untouched.
+    int   qualityPreset = 2;
+
     std::string serialize() const;
     void apply(const std::unordered_map<std::string, std::string>& kv);
 };

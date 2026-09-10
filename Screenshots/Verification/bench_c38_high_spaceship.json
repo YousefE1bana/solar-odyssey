@@ -1,0 +1,18 @@
+{
+  "scene": "spaceship",
+  "type": "OFFICIAL_BASELINE",
+  "warmup_frames": 300,
+  "measured_frames": 1000,
+  "bypass_copy": false,
+  "median_fps": 784.2522,
+  "median_cpu_ms": 1.2751,
+  "median_gpu_ms": 1.0680,
+  "gpu_time_available": true,
+  "p1_low_fps": 509.1131,
+  "p01_low_fps": 443.6951,
+  "p1_low_cpu_ms": 1.9642,
+  "p01_low_cpu_ms": 2.2538,
+  "median_draw_calls": 81,
+  "median_triangles": 296792,
+  "passed": true
+}

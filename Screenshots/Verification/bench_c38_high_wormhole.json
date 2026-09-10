@@ -1,0 +1,18 @@
+{
+  "scene": "wormhole",
+  "type": "OFFICIAL_BASELINE",
+  "warmup_frames": 300,
+  "measured_frames": 1000,
+  "bypass_copy": false,
+  "median_fps": 917.6838,
+  "median_cpu_ms": 1.0897,
+  "median_gpu_ms": 1.4131,
+  "gpu_time_available": true,
+  "p1_low_fps": 586.5447,
+  "p01_low_fps": 414.5421,
+  "p1_low_cpu_ms": 1.7049,
+  "p01_low_cpu_ms": 2.4123,
+  "median_draw_calls": 63,
+  "median_triangles": 136320,
+  "passed": true
+}

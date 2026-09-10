@@ -117,6 +117,14 @@ bool BenchmarkRunner::initFromArgs(int argc, char** argv) {
             config.disableC37 = true;
         } else if (strcmp(argv[i], "--c37-on") == 0 || strcmp(argv[i], "--enable-c37") == 0) {
             config.disableC37 = false;
+        } else if (strcmp(argv[i], "--quality-tier") == 0 && i + 1 < argc) {
+            // C3.8: low|medium|high|ultra (or 0..3); invalid falls back to High.
+            const char* v = argv[++i];
+            if (strcmp(v, "low") == 0 || strcmp(v, "0") == 0) config.qualityTier = 0;
+            else if (strcmp(v, "medium") == 0 || strcmp(v, "med") == 0 || strcmp(v, "1") == 0) config.qualityTier = 1;
+            else if (strcmp(v, "high") == 0 || strcmp(v, "2") == 0) config.qualityTier = 2;
+            else if (strcmp(v, "ultra") == 0 || strcmp(v, "3") == 0) config.qualityTier = 3;
+            else config.qualityTier = 2;
         }
     }
     
@@ -165,6 +173,8 @@ void BenchmarkRunner::onSetup(Engine* engine) {
     engine->renderer.surfaceOverrides = SceneRenderer::SurfaceFeatureOverrides{};
     engine->renderer.c37Active = !config.disableC37;
     engine->renderer.benchmarkOccluder.active = false;
+    // C3.8: authoritative tier fan-out (atmo/BH/portal/shadow + legacy preset).
+    engine->applyQualityTier(config.qualityTier);
 
     // 3. Setup Scene-Specific Deterministic Viewpoints
     std::string scene = config.captureGolden ? config.goldenScene : config.sceneName;

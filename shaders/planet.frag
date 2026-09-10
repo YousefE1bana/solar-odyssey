@@ -39,6 +39,7 @@ uniform int uIsRing;               // 1 if rendering ring geometry (planet casts
 uniform float uPlanetRadius;       // Planet sphere radius in local ring units
 uniform float uSunAngularRadius;   // Physical apparent solar angular radius: tan(theta_sun) = Rsun / Dsun
 uniform int uC37Active;            // 1 for C3.7 upgraded math, 0 for C3.6 legacy control
+uniform int uShadowSamples;        // C3.8 canonical soft-shadow taps: 1/2/4/8 (High = 4)
 
 #define MAX_ECLIPSES 4
 uniform int uEclipseCount;                 // Number of active occluders (0 .. 4)
@@ -74,14 +75,39 @@ float calculateRingShadowOnPlanet(vec3 localPos, vec3 sunDir) {
             return 1.0 - ringDensity * edgeFade;
         }
 
-        // C3.7 Authentic texture sampling with finite-source penumbra filtering
+        // C3.8 tier-controlled finite-source penumbra filtering (canonical 1/2/4/8).
+        // High (4 taps) spans the same +-0.75wu footprint as the approved C3.7 kernel.
         float safeTan = max(0.005, uSunAngularRadius);
         float wu = max(0.002, (t * safeTan * 0.15) / ringSpan);
+        int taps = clamp(uShadowSamples, 1, 8);
 
-        float a0 = texture(uRingTex, vec2(clamp(normDist, 0.0, 1.0), 0.5)).a;
-        float aMinus = texture(uRingTex, vec2(clamp(normDist - 0.75 * wu, 0.0, 1.0), 0.5)).a;
-        float aPlus = texture(uRingTex, vec2(clamp(normDist + 0.75 * wu, 0.0, 1.0), 0.5)).a;
-        float effAlpha = 0.50 * a0 + 0.25 * (aMinus + aPlus);
+        float effAlpha;
+        if (taps <= 1) {
+            // Low: hard low-cost single sample
+            effAlpha = texture(uRingTex, vec2(clamp(normDist, 0.0, 1.0), 0.5)).a;
+        } else if (taps == 2) {
+            float aA = texture(uRingTex, vec2(clamp(normDist - 0.5 * wu, 0.0, 1.0), 0.5)).a;
+            float aB = texture(uRingTex, vec2(clamp(normDist + 0.5 * wu, 0.0, 1.0), 0.5)).a;
+            effAlpha = 0.5 * (aA + aB);
+        } else if (taps <= 4) {
+            float aA = texture(uRingTex, vec2(clamp(normDist - 0.75 * wu, 0.0, 1.0), 0.5)).a;
+            float aB = texture(uRingTex, vec2(clamp(normDist - 0.25 * wu, 0.0, 1.0), 0.5)).a;
+            float aC = texture(uRingTex, vec2(clamp(normDist + 0.25 * wu, 0.0, 1.0), 0.5)).a;
+            float aD = texture(uRingTex, vec2(clamp(normDist + 0.75 * wu, 0.0, 1.0), 0.5)).a;
+            effAlpha = 0.25 * (aA + aB + aC + aD);
+        } else {
+            // Ultra: 8-tap smooth kernel over the same bounded footprint
+            float acc = 0.0;
+            acc += texture(uRingTex, vec2(clamp(normDist - 0.875 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist - 0.625 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist - 0.375 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist - 0.125 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist + 0.125 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist + 0.375 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist + 0.625 * wu, 0.0, 1.0), 0.5)).a;
+            acc += texture(uRingTex, vec2(clamp(normDist + 0.875 * wu, 0.0, 1.0), 0.5)).a;
+            effAlpha = acc * 0.125;
+        }
 
         float edgeInner = smoothstep(0.0, wu * 2.0, normDist);
         float edgeOuter = 1.0 - smoothstep(1.0 - wu * 2.0, 1.0, normDist);
