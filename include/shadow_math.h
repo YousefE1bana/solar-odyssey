@@ -43,8 +43,9 @@ inline float calculateRingScattering(const glm::vec3& N, const glm::vec3& L, con
     float R = (1.0f - std::exp(-2.5f * clampedAlpha / absMu0)) * absMu0;
 
     // Unlit face (transmission / forward scattering through particles)
-    // Thin rings (Cassini division, C-ring) transmit light; dense B-ring absorbs
-    float T = clampedAlpha * std::exp(-1.8f * clampedAlpha / absMu0) * absMu0 + 0.06f * clampedAlpha;
+    // Thin rings (Cassini division, C-ring) transmit light; dense B-ring absorbs.
+    // Readability floor 0.16 mirrors shaders/planet.frag (C3.7 shape unchanged).
+    float T = clampedAlpha * std::exp(-1.8f * clampedAlpha / absMu0) * absMu0 + 0.16f * clampedAlpha;
 
     // Continuous face blend across s = 0
     float faceBlend = smoothstep(-0.05f, 0.05f, s);

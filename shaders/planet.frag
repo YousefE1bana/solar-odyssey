@@ -337,16 +337,20 @@ void main() {
             float R = (1.0 - exp(-2.5 * ringAlpha / absMu0)) * absMu0;
 
             // Unlit face (transmission / forward scattering through particles)
-            float T = ringAlpha * exp(-1.8 * ringAlpha / absMu0) * absMu0 + 0.06 * ringAlpha;
+            // Runtime readability floor (0.16): dense rings stay legible from the
+            // unlit side instead of vanishing; model shape unchanged (C3.7).
+            float T = ringAlpha * exp(-1.8 * ringAlpha / absMu0) * absMu0 + 0.16 * ringAlpha;
 
             // Smooth face transition
             float faceBlend = smoothstep(-0.05, 0.05, s);
             float directScattering = (faceBlend * R + (1.0 - faceBlend) * T) * phase;
 
             vec3 litRing = dayColor.rgb * (directScattering * vec3(1.20, 1.15, 1.05) * uSunIntensity * totalShadow);
-            vec3 ambientRing = dayColor.rgb * vec3(0.08, 0.08, 0.10);
+            // Face-aware ambient floor: unlit side keeps readability (legacy sat
+            // near 0.18), lit side stays close to the C3.7 response.
+            vec3 ambientRing = dayColor.rgb * mix(vec3(0.16, 0.16, 0.18), vec3(0.09, 0.09, 0.11), faceBlend);
             surfaceColor = litRing + ambientRing;
-            alpha = clamp(dayColor.a * (0.6 + 0.4 * faceBlend), 0.0, 1.0);
+            alpha = clamp(dayColor.a * (0.85 + 0.15 * faceBlend), 0.0, 1.0);
         }
     } else {
         // Direct solar irradiance with Atmosphere 2.0 physical wavelength extinction near terminator
