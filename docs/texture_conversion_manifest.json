@@ -1,0 +1,451 @@
+{
+ "generated": "2026-09-10",
+ "scope": "LOCAL-ONLY derived-asset preparation pass. Masters in Textures/Textures_Source untouched. No production rendering code, CelestialDatabase, runtime roster, SaveState, shaders, or C3.8 artifacts modified. No internet used.",
+ "masters_untouched": {
+  "verified": true,
+  "method": "size+mtime_ns snapshot of all 34 masters before conversion, re-compared after; zero differences, zero additions",
+  "master_count": 34
+ },
+ "conversion_defaults": {
+  "tool": "Pillow 12.2.0 (local)",
+  "direct_transcode": "native resolution, no resize, no crop, no filters, no tonal change; baseline JPEG, optimize=True, progressive=False",
+  "lanczos_resample": "PIL Resampling.LANCZOS only; no sharpening; no AI upscaling; no invented terrain",
+  "jpeg_quality_grayscale": 92,
+  "jpeg_quality_color": 95,
+  "jpeg_subsampling_color": "4:4:4 (Pillow subsampling=0)",
+  "grayscale_policy": "mode L preserved end-to-end; neutral; not colorized",
+  "color_policy": "assumed sRGB pipeline input; no ICC transform applied",
+  "mipmaps": "not baked; runtime loader generates via glGenerateMipmap (verified read-only in prior audit)"
+ },
+ "output_directory": "Textures/Derived",
+ "assets": [
+  {
+   "output": "Textures/Derived/enceladus_albedo_4096.jpg",
+   "source": "Textures/Textures_Source/Enceladus_Cassini_mosaic_global_110m.tif",
+   "source_sha256": "c9d29292141dd986e52b2a24b692df34701d1dabaee69bcb9fb64ebc6baba335",
+   "output_sha256": "57116e1cfa74d4cc78aed42b67b201a8d50e410363519b2a1d642933dd122d8d",
+   "source_dimensions": [
+    14401,
+    7201
+   ],
+   "output_dimensions": [
+    4096,
+    2048
+   ],
+   "output_mode": "L",
+   "output_bytes": 2914643,
+   "conversion_method": "Lanczos resample 14401x7201 -> 4096x2048; no crop; no sharpening; no tonal change",
+   "jpeg_quality": 92,
+   "jpeg_subsampling": "n/a (grayscale)",
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 7.91,
+    "max": 88,
+    "mean_left": 100.02,
+    "mean_right": 100.36
+   },
+   "identity": "Enceladus",
+   "role": "new-moon albedo standard",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 0.0,
+    "out_col_mae": 7.91,
+    "verdict": "mild resample edge effect; source edge columns pixel-identical (mosaic padding); visually continuous"
+   }
+  },
+  {
+   "output": "Textures/Derived/enceladus_albedo_2048.jpg",
+   "source": "Textures/Textures_Source/Enceladus_Cassini_mosaic_global_110m.tif",
+   "source_sha256": "c9d29292141dd986e52b2a24b692df34701d1dabaee69bcb9fb64ebc6baba335",
+   "output_sha256": "7078abd0a37ae79a1472430ae8e6859e17438441f5436cba6a5d7ce2262e34d1",
+   "source_dimensions": [
+    14401,
+    7201
+   ],
+   "output_dimensions": [
+    2048,
+    1024
+   ],
+   "output_mode": "L",
+   "output_bytes": 916867,
+   "conversion_method": "Lanczos resample 14401x7201 -> 2048x1024; no crop; no sharpening; no tonal change",
+   "jpeg_quality": 92,
+   "jpeg_subsampling": "n/a (grayscale)",
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 13.261,
+    "max": 135,
+    "mean_left": 99.68,
+    "mean_right": 100.31
+   },
+   "identity": "Enceladus",
+   "role": "new-moon albedo lite",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 0.0,
+    "out_col_mae": 13.261,
+    "verdict": "mild resample edge effect; visually continuous"
+   }
+  },
+  {
+   "output": "Textures/Derived/europa_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/jup2vss2.tif",
+   "source_sha256": "e91274a5ed606eb046598e2d297cffcbdb10f58595ce742e437a39c3d9eed559",
+   "output_sha256": "d080b86eff69f7b381762370cdc0ca4668e48484574d6a51ed0586cd1f375265",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "L",
+   "output_bytes": 273725,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 92,
+   "jpeg_subsampling": "n/a (grayscale)",
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 6.179,
+    "max": 59,
+    "mean_left": 152.87,
+    "mean_right": 152.03
+   },
+   "identity": "Europa (jup2)",
+   "role": "moon albedo, grayscale neutral",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 5.16,
+    "out_col_mae": 6.18,
+    "verdict": "inherited from master (delta +1.02 = JPEG noise)"
+   }
+  },
+  {
+   "output": "Textures/Derived/ganymede_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/jup3vss2.tif",
+   "source_sha256": "97a02ed72dc0b377e17ddd50b72ea348c05fc670d27327e754d1910ad9cda142",
+   "output_sha256": "59462cb97d67a5da3c6a171f4a3ea4dc35b0c4b5383413918321d856ccfbeea0",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "L",
+   "output_bytes": 356344,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 92,
+   "jpeg_subsampling": "n/a (grayscale)",
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 20.232,
+    "max": 104,
+    "mean_left": 163.94,
+    "mean_right": 157.11
+   },
+   "identity": "Ganymede (jup3)",
+   "role": "moon albedo, grayscale neutral",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 20.1,
+    "out_col_mae": 20.23,
+    "verdict": "inherited JPL mosaic edge (delta +0.13); visible seam pre-exists in master"
+   }
+  },
+  {
+   "output": "Textures/Derived/callisto_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/jup4vss2.tif",
+   "source_sha256": "32c9e290f3326ac63eb597ead6858f0bdf86cbfaaafe4d57d763db02f58b774b",
+   "output_sha256": "7b6bfaa6c558fff4a458d4900a9a12c26265009add08322234c4dd61742ee8dc",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "L",
+   "output_bytes": 417384,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 92,
+   "jpeg_subsampling": "n/a (grayscale)",
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 11.339,
+    "max": 95,
+    "mean_left": 134.58,
+    "mean_right": 132.08
+   },
+   "identity": "Callisto (jup4)",
+   "role": "moon albedo, grayscale neutral, polar-gap caveat inherited from master",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 10.84,
+    "out_col_mae": 11.34,
+    "verdict": "inherited from master (delta +0.49)"
+   }
+  },
+  {
+   "output": "Textures/Derived/tethys_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/sat3vss2.tif",
+   "source_sha256": "674c65e8cbb64c8e240f06b9ce11b8690e4e8acd953c27656e8540117d4700e3",
+   "output_sha256": "5389a0f748cae22bf9f8bf05db882966c1d0af27fa79943f641373ea144e9b6e",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "L",
+   "output_bytes": 269059,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 92,
+   "jpeg_subsampling": "n/a (grayscale)",
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 6.19,
+    "max": 46,
+    "mean_left": 196.4,
+    "mean_right": 193.67
+   },
+   "identity": "Tethys (sat3)",
+   "role": "moon albedo, grayscale neutral",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 5.93,
+    "out_col_mae": 6.19,
+    "verdict": "inherited from master (delta +0.26)"
+   }
+  },
+  {
+   "output": "Textures/Derived/earth_relief_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/ear0xuu2.tif",
+   "source_sha256": "11d7c79c9e1277faceb59b071dfe09e1847141f54719aa9684d23e7cd1ed8caa",
+   "output_sha256": "f8b504b89962acb1d42ce1e1f442edaadf0f40d0ef3e9fdb55ef81b6c0f3acfe",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "RGB",
+   "output_bytes": 826272,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 95,
+   "jpeg_subsampling": 0,
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 24.923,
+    "max": 156,
+    "mean_left": 83.63,
+    "mean_right": 79.77
+   },
+   "identity": "Earth (science/alternate only)",
+   "role": "future Science/Surface Mode asset, NOT wired",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 24.613,
+    "out_col_mae": 24.923,
+    "verdict": "inherited JPL mosaic edge; visible seam pre-exists in master"
+   }
+  },
+  {
+   "output": "Textures/Derived/mars_viking_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/mar0kuu2.tif",
+   "source_sha256": "1dcad8bb108f4b6ea25ec56ff03e76fa7b3808636efa583b237e081b1a6d8e64",
+   "output_sha256": "7bbf15a781047977d1880324426cab22fb7dd6e18d445b06c43f0e54609d8013",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "RGB",
+   "output_bytes": 521189,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 95,
+   "jpeg_subsampling": 0,
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 7.975,
+    "max": 51,
+    "mean_left": 109.32,
+    "mean_right": 102.86
+   },
+   "identity": "Mars (science/alternate only)",
+   "role": "future Science/Surface Mode asset, NOT wired",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 7.542,
+    "out_col_mae": 7.975,
+    "verdict": "inherited from master (JPEG-noise-level delta)"
+   }
+  },
+  {
+   "output": "Textures/Derived/venus_radar_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/ven0aaa2.tif",
+   "source_sha256": "4b3a187bdf462523daf3d0e0fce3e53fb6eb8f65aff2381d30532effb9bfc3db",
+   "output_sha256": "d73f30c209b97fd2b0f105ee9975ca7d720dee0499ebb049acff99e6d4517316",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "RGB",
+   "output_bytes": 636528,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 95,
+   "jpeg_subsampling": 0,
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 5.475,
+    "max": 64,
+    "mean_left": 90.14,
+    "mean_right": 90.29
+   },
+   "identity": "Venus surface (science/alternate only)",
+   "role": "future Science/Surface Mode asset, NOT wired",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 4.609,
+    "out_col_mae": 5.475,
+    "verdict": "inherited from master (JPEG-noise-level delta)"
+   }
+  },
+  {
+   "output": "Textures/Derived/venus_clouds_jpl_1440.jpg",
+   "source": "Textures/Textures_Source/ven0mss2.tif",
+   "source_sha256": "d21fc5198a6607a6d061e92179d9aca41a65a71dc2977dcac61667da4c54a64f",
+   "output_sha256": "16870b94d5d8ffa05cc958eff811f97e5565e84676d76018bc7390067acb0409",
+   "source_dimensions": [
+    1440,
+    720
+   ],
+   "output_dimensions": [
+    1440,
+    720
+   ],
+   "output_mode": "RGB",
+   "output_bytes": 158983,
+   "conversion_method": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+   "jpeg_quality": 95,
+   "jpeg_subsampling": 0,
+   "ratio_2_1_ok": true,
+   "reload_ok": true,
+   "no_crop": true,
+   "no_aspect_distortion": true,
+   "seam": {
+    "mae": 1.008,
+    "max": 11,
+    "mean_left": 169.61,
+    "mean_right": 169.61
+   },
+   "identity": "Venus atmosphere (science/alternate only)",
+   "role": "future Science/Surface Mode asset, NOT wired",
+   "runtime_wired": false,
+   "seam_source_comparison": {
+    "src_col_mae": 0.894,
+    "out_col_mae": 1.008,
+    "verdict": "cleanest seam in set; effectively seamless"
+   }
+  }
+ ],
+ "deferred": [
+  {
+   "files": [
+    "sat1vss2 (Mimas)",
+    "sat2vss2/sat2vuu2 (Enceladus-Voyager)",
+    "sat4vss2/sat4vuu2 (Dione)",
+    "sat5vss2 (Rhea)"
+   ],
+   "reason": "partial/gapped coverage per approved pass section 4"
+  },
+  {
+   "files": [
+    "ura1vuu2 (Ariel)",
+    "ura2vuu2 (Umbriel)",
+    "ura3vuu2 (Titania)",
+    "ura4vuu2 (Oberon)",
+    "ura5vuu2 (Miranda)"
+   ],
+   "reason": "band-only partials, poles missing"
+  },
+  {
+   "files": [
+    "nep1vuu2 (Triton)"
+   ],
+   "reason": "fragment on black background"
+  },
+  {
+   "files": [
+    "sat8vss2/sat8vuu2 (Iapetus)"
+   ],
+   "reason": "black-region semantics unresolved"
+  },
+  {
+   "files": [
+    "hipp8 (Hipparcos)",
+    "tycho8 (Tycho)",
+    "yale8 (Yale Bright Star)"
+   ],
+   "reason": "star-map projection unverified"
+  },
+  {
+   "files": [
+    "all *vuu alternates",
+    "ven0ajj2",
+    "ven0auu1"
+   ],
+   "reason": "alternate processing copies deferred"
+  },
+  {
+   "files": [
+    "mar1kuu2 (Phobos)",
+    "mar2kuu2 (Deimos)"
+   ],
+   "reason": "no conversion requested in this pass"
+  }
+ ],
+ "naming_note": "Section 2 of the approved pass specified no filenames for the four moon derivatives; names europa/ganymede/callisto/tethys_jpl_1440.jpg follow the section-3 <body>_<role>_jpl_1440 pattern using the verified identities.",
+ "correction_2026_09_10": "Review correction: Pillow subsampling=1 is 4:2:2, not 4:4:4. The 4 RGB derivatives were regenerated with quality=95, subsampling=0 (true 4:4:4); all other settings unchanged. Grayscale derivatives untouched. Hashes/sizes/seams re-measured."
+}
