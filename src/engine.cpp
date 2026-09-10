@@ -435,6 +435,32 @@ BodyLayerId Engine::effectiveBodyLayer() const {
     return requested;
 }
 
+// PSM.7: runtime-roster relationship queries. Pairs come from the live moons
+// vector (child + parentPlanet); the existence set is Sun + planets + moons.
+// PSM.8 grows these vectors — the helpers need no change.
+std::string Engine::bodyParentOf(const std::string& body) const {
+    std::vector<BodyRelationPair> pairs;
+    pairs.reserve(moons.size());
+    for (const auto& m : moons) pairs.push_back({m.name, m.parentPlanet});
+    std::vector<std::string> existing;
+    existing.reserve(1 + planets.size() + moons.size());
+    existing.push_back("Sun");
+    for (const auto& p : planets) existing.push_back(p.name);
+    for (const auto& m : moons) existing.push_back(m.name);
+    return parentOfBody(body, pairs, existing);
+}
+
+std::vector<std::string> Engine::bodyChildrenOf(const std::string& body) const {
+    std::vector<BodyRelationPair> pairs;
+    pairs.reserve(moons.size());
+    for (const auto& m : moons) pairs.push_back({m.name, m.parentPlanet});
+    std::vector<std::string> existing;
+    existing.reserve(1 + planets.size() + moons.size());
+    existing.push_back("Sun");
+    for (const auto& p : planets) existing.push_back(p.name);
+    for (const auto& m : moons) existing.push_back(m.name);
+    return childrenOfBody(body, pairs, existing);
+}
 // PSM.4 (R02): dossier Layers tab and BODY-only 1..5 keys share this single
 // gate. The presenter is written only when the layer is effectively
 // available (declared AND resource-ready on the current BODY), so the UI can
@@ -665,6 +691,9 @@ bool Engine::init(int width, int height, const char* title) {
     // PSM.4: the dossier Layers tab writes through the single authoritative
     // layer-selection path (Engine-side declared+resource gate included).
     solarUI.onSelectLayer = [this](BodyLayerId id) { requestBodyLayer(id); };
+    // PSM.7: dossier navigation queries over the current runtime roster.
+    solarUI.onQueryParent = [this](const std::string& b) { return bodyParentOf(b); };
+    solarUI.onQueryChildren = [this](const std::string& b) { return bodyChildrenOf(b); };
     applyQualityTier(static_cast<int>(solarUI.qualityPreset));
 
     return true;

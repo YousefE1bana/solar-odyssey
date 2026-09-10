@@ -465,6 +465,21 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), " [BODY MODE]");
             }
+            // PSM.7: parent breadcrumb on a moon BODY (e.g. "Earth > Moon").
+            // Clicking the parent transfers through the SAME authoritative
+            // BODY-entry intent path — no camera manipulation from UI.
+            if (showingBody && onQueryParent) {
+                const std::string navParent = onQueryParent(dossierName);
+                if (!navParent.empty()) {
+                    if (ImGui::Button(navParent.c_str(), ImVec2(0, 0))) {
+                        if (onEnterBodyMode) onEnterBodyMode(navParent);
+                    }
+                    ImGui::SameLine(0, 6);
+                    ImGui::TextDisabled(">");
+                    ImGui::SameLine(0, 6);
+                    ImGui::Text("%s", data->name.c_str());
+                }
+            }
             ImGui::Separator();
 
             // Quick Actions: Focus Camera & Explore POV
@@ -486,6 +501,22 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                 // enters through enterBodyView.
                 if (ImGui::Button(" Enter Body Mode", ImVec2(380, 32))) {
                     if (onEnterBodyMode) onEnterBodyMode(data->name);
+                }
+            }
+            // PSM.7: compact Satellites list on a parent BODY. Each child
+            // button records intent through the EXISTING authoritative funnel
+            // (same as Enter/V/dossier action) — the PSM.2 cinematic transfer
+            // path handles the rest. BODY-only; previews stay unchanged.
+            if (showingBody && onQueryChildren) {
+                const std::vector<std::string> navChildren = onQueryChildren(dossierName);
+                if (!navChildren.empty()) {
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Satellites:");
+                    for (const auto& child : navChildren) {
+                        if (ImGui::Button(child.c_str(), ImVec2(380, 26))) {
+                            if (onEnterBodyMode) onEnterBodyMode(child);
+                        }
+                    }
                 }
             }
 

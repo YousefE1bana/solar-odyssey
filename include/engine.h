@@ -43,6 +43,7 @@
 #include "game_context.h"
 #include "benchmark_runner.h"
 #include "presentation_controller.h"
+#include "body_relationships.h"
 
 class Engine {
 public:
@@ -185,6 +186,11 @@ public:
     // before the presenter is touched, so a requested layer is always
     // effectively available. Unavailable requests no-op with a toast.
     void requestBodyLayer(BodyLayerId id);
+    // PSM.7: parent/moon navigation queries over the CURRENT runtime roster
+    // (planets + moons vectors + Sun). Only existing bodies participate;
+    // derived-only assets never appear. Pure-helper backed (body_relationships.h).
+    std::string bodyParentOf(const std::string& body) const;
+    std::vector<std::string> bodyChildrenOf(const std::string& body) const;
     // PSM.2: resolves a body name to its focus target. Sun -> index -1 at the
     // origin (canonical radius 2.0); planets -> vector index; moons -> 100+i
     // (pickable-list convention). Black Hole/Wormhole/unknown/empty -> false

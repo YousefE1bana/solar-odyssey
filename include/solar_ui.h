@@ -102,6 +102,11 @@ public:
     // PSM.4: dossier Layers-tab seam (wired by Engine::init to the single
     // authoritative layer-selection path: PresentationController::requestLayer).
     std::function<void(BodyLayerId)> onSelectLayer;
+    // PSM.7: relationship query seams (wired by Engine::init to the runtime
+    // roster queries). Read-only navigation aids; selection/camera still flow
+    // through onEnterBodyMode into the authoritative BODY funnel.
+    std::function<std::string(const std::string&)> onQueryParent;
+    std::function<std::vector<std::string>(const std::string&)> onQueryChildren;
 
     SolarOdysseyUI() = default;
 
