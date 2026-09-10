@@ -1,4 +1,4 @@
-// PSM.1 — PresentationController implementation. Pure semantic state;
+// PSM.2 — PresentationController implementation. Pure semantic state;
 // no GL, no sim, no renderer, no save interaction.
 
 #include "presentation_controller.h"
@@ -23,6 +23,29 @@ bool PresentationController::toggleSystem() {
 bool PresentationController::forceExplorer() {
     if (state_ == PresentationState::EXPLORER) return false;
     state_ = PresentationState::EXPLORER;
+    return true;
+}
+
+bool PresentationController::enterBody() {
+    if (state_ == PresentationState::BODY) return false;
+    state_ = PresentationState::BODY;
+    return true;
+}
+
+bool PresentationController::exitBody() {
+    if (state_ != PresentationState::BODY) return false;
+    state_ = PresentationState::SYSTEM;
+    return true;
+}
+
+bool PresentationController::toggleBody() {
+    if (state_ == PresentationState::BODY) return exitBody();
+    return enterBody();
+}
+
+bool PresentationController::resetLayerToDefault() {
+    if (requestedLayer_ == BodyLayerId::Natural) return false;
+    requestedLayer_ = BodyLayerId::Natural;
     return true;
 }
 

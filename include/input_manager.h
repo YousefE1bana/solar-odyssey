@@ -10,7 +10,8 @@ enum class InputContext {
     FreeCamera,
     Spaceship,
     UI,
-    System // PSM.1: system-presentation context (select-only picking, no planet-focus numerics)
+    System, // PSM.1: system-presentation context (select-only picking, no planet-focus numerics)
+    Body // PSM.2: focused-body presentation context (orbit/zoom around body, no selection numerics)
 };
 
 struct SpaceshipFlightInput {

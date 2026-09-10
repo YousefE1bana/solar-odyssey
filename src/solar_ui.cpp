@@ -200,9 +200,10 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                     }
                     bool isSelected = (cam.focusedBodyName == name);
                     if (ImGui::Selectable(name.c_str(), isSelected)) {
-                        // PSM.1: selection routes to the single source of truth.
+                        // PSM.2: selection routes to the single source of
+                        // truth (Engine::selectBody). No mirror fallback: a
+                        // direct write here would fork a second owner.
                         if (onSelectBody) onSelectBody(name);
-                        else selectedPlanetName = name;
                         showPlanetCard = true;
                     }
                     if (isSelected) {
@@ -218,8 +219,15 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
             ImGui::TextDisabled("|");
             ImGui::SameLine(0, 8);
             const char* psmModeLabel = "EXPLORER";
+            std::string bodyModeLabel;
             if (psm.state() == PresentationState::SYSTEM) psmModeLabel = "SYSTEM";
-            else if (psm.state() == PresentationState::BODY) psmModeLabel = "BODY";
+            else if (psm.state() == PresentationState::BODY) {
+                // PSM.2: the chip names the presented body; selection is the
+                // authoritative identity and is always set while in BODY.
+                bodyModeLabel = psm.selectedBodyName().empty()
+                    ? "BODY" : "BODY: " + psm.selectedBodyName();
+                psmModeLabel = bodyModeLabel.c_str();
+            }
             ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), "%s", psmModeLabel);
             ImGui::SameLine(0, 8);
             if (ImGui::Button(" System View (Y) ")) {
@@ -284,13 +292,11 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                 if (ImGui::Button(" Wormhole (K) ")) {
                     cam.resetToDefault();
                     if (onSelectBody) onSelectBody("");
-                    else selectedPlanetName = "";
                 }
                 ImGui::PopStyleColor();
             } else {
                 if (ImGui::Button(" Wormhole (K) ")) {
                     if (onSelectBody) onSelectBody("Wormhole");
-                    else selectedPlanetName = "Wormhole";
                     showPlanetCard = true;
                 }
             }
@@ -302,13 +308,11 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
                 if (ImGui::Button(" Black Hole (B) ")) {
                     cam.resetToDefault();
                     if (onSelectBody) onSelectBody("");
-                    else selectedPlanetName = "";
                 }
                 ImGui::PopStyleColor();
             } else {
                 if (ImGui::Button(" Black Hole (B) ")) {
                     if (onSelectBody) onSelectBody("Black Hole");
-                    else selectedPlanetName = "Black Hole";
                     showPlanetCard = true;
                 }
             }
@@ -345,7 +349,6 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
             if (ImGui::Button(" Reset ")) {
                 cam.resetToDefault();
                 if (onSelectBody) onSelectBody("");
-                else selectedPlanetName = "";
             }
 
             ImGui::SameLine(0, btnSpacing);
@@ -422,10 +425,19 @@ void SolarOdysseyUI::renderBottomControlBar(float screenWidth, float screenHeigh
 void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, const CelestialDatabase& db,
                                       CameraController& cam,
                                       std::function<void(const std::string&)> onFocus,
-                                      std::function<void(const std::string&)> onExplorePOV) {
+                                      std::function<void(const std::string&)> onExplorePOV,
+                                      std::function<void(const std::string&)> onEnterBodyMode,
+                                      std::function<void()> onExitBodyMode,
+                                      const PresentationController& psm,
+                                      BodyLayerId effectiveLayer) {
         if (!showPlanetCard || selectedPlanetName.empty() || cam.photoModeActive || cam.mode == CAM_SPACESHIP) return;
 
-        const CelestialBodyData* data = db.getBody(selectedPlanetName);
+        // PSM.3: in BODY mode the dossier shows the BODY owned by the
+        // PresentationController (single selection state — never a second
+        // identity). Outside BODY the existing preview/card behavior applies.
+        const bool showingBody = psm.isBody() && !psm.selectedBodyName().empty();
+        const std::string& dossierName = showingBody ? psm.selectedBodyName() : selectedPlanetName;
+        const CelestialBodyData* data = db.getBody(dossierName);
         if (!data) return;
 
         ImGui::SetNextWindowPos(ImVec2(screenWidth - 440.0f, 85.0f), ImGuiCond_FirstUseEver);
@@ -447,6 +459,12 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
             ImGui::TextDisabled("|  %s", data->type.c_str());
 
             ImGui::TextColored(ImVec4(0.75f, 0.85f, 0.95f, 1.0f), "%s", data->subtitle.c_str());
+            // PSM.3: BODY-mode badge — the dossier is the primary body
+            // information panel while presenting this BODY.
+            if (showingBody) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), " [BODY MODE]");
+            }
             ImGui::Separator();
 
             // Quick Actions: Focus Camera & Explore POV
@@ -457,10 +475,25 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
             if (ImGui::Button(" Explore POV", ImVec2(185, 32))) {
                 if (onExplorePOV) onExplorePOV(data->name);
             }
+            // PSM.3: no duplicated BODY control — when this dossier already
+            // shows the active BODY, offer the exit instead of re-entry.
+            if (showingBody) {
+                if (ImGui::Button(" Exit Body Mode (F)", ImVec2(380, 32))) {
+                    if (onExitBodyMode) onExitBodyMode();
+                }
+            } else {
+                // PSM.2: records intent only; the updatePresentation() drain
+                // enters through enterBodyView.
+                if (ImGui::Button(" Enter Body Mode", ImVec2(380, 32))) {
+                    if (onEnterBodyMode) onEnterBodyMode(data->name);
+                }
+            }
 
             ImGui::Spacing();
             if (ImGui::BeginTabBar("PlanetInfoTabs")) {
-                // Tab 1: Overview & Metrics
+                // Tab 1: Overview — lightweight summary only. Detail lives in
+                // the Environment / Orbit / Key Facts tabs (PSM.3 progressive
+                // disclosure; the card is not a full-screen dashboard).
                 if (ImGui::BeginTabItem("Overview")) {
                     ImGui::Spacing();
                     ImGui::TextWrapped("%s", data->description.c_str());
@@ -470,6 +503,11 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     ImGui::Columns(2, "MetricColumns", false);
                     ImGui::SetColumnWidth(0, 180);
 
+                    ImGui::TextDisabled("Type:");
+                    ImGui::NextColumn();
+                    ImGui::TextWrapped("%s", data->type.c_str());
+                    ImGui::NextColumn();
+
                     ImGui::TextDisabled("Physical Diameter:");
                     ImGui::NextColumn();
                     ImGui::Text("%.1f km (%.2fx Earth)", data->realDiameterKm, data->relativeSizeToEarth);
@@ -477,27 +515,11 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 
                     ImGui::TextDisabled("Distance from Sun:");
                     ImGui::NextColumn();
-                    ImGui::Text("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Orbital Period:");
-                    ImGui::NextColumn();
-                    ImGui::Text("%.1f Earth days", data->orbitalPeriodDays);
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Rotation Period:");
-                    ImGui::NextColumn();
-                    ImGui::Text("%.2f hours", data->rotationPeriodHours);
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Confirmed Moons:");
-                    ImGui::NextColumn();
-                    ImGui::Text("%d", data->knownMoons);
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Surface Gravity:");
-                    ImGui::NextColumn();
-                    ImGui::Text("%.2f m/s^2", data->surfaceGravityMs2);
+                    if (data->name == "Sun") {
+                        ImGui::Text("Central star");
+                    } else {
+                        ImGui::Text("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
+                    }
                     ImGui::NextColumn();
 
                     ImGui::TextDisabled("Mean Temperature:");
@@ -509,7 +531,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     ImGui::EndTabItem();
                 }
 
-                // Tab 2: Atmosphere & Geology
+                // Tab 2: Environment — atmosphere, surface, gravity, range.
                 if (ImGui::BeginTabItem("Environment")) {
                     ImGui::Spacing();
                     ImGui::TextColored(themeCol, "Atmospheric Composition:");
@@ -522,12 +544,74 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 
                     ImGui::Spacing();
                     ImGui::Separator();
-                    ImGui::TextColored(themeCol, "Historical Discovery:");
-                    ImGui::TextWrapped("%s", data->discoveryInfo.c_str());
+                    ImGui::Columns(2, "EnvMetricColumns", false);
+                    ImGui::SetColumnWidth(0, 180);
+
+                    ImGui::TextDisabled("Surface Gravity:");
+                    ImGui::NextColumn();
+                    ImGui::Text("%.2f m/s^2", data->surfaceGravityMs2);
+                    ImGui::NextColumn();
+
+                    ImGui::TextDisabled("Temperature Range:");
+                    ImGui::NextColumn();
+                    ImGui::Text("%.1f .. %.1f deg C", data->minTemperatureC, data->maxTemperatureC);
+                    ImGui::NextColumn();
+
+                    ImGui::Columns(1);
                     ImGui::EndTabItem();
                 }
 
-                // Tab 3: Key Scientific Facts
+                // Tab 3: Orbit / Motion (PSM.3) — all motion fields, one place.
+                if (ImGui::BeginTabItem("Orbit / Motion")) {
+                    ImGui::Spacing();
+                    ImGui::Columns(2, "OrbitMetricColumns", false);
+                    ImGui::SetColumnWidth(0, 180);
+
+                    ImGui::TextDisabled("Distance from Sun:");
+                    ImGui::NextColumn();
+                    if (data->name == "Sun") {
+                        ImGui::Text("Central star (system barycenter)");
+                    } else {
+                        ImGui::Text("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
+                    }
+                    ImGui::NextColumn();
+
+                    ImGui::TextDisabled("Orbital Period:");
+                    ImGui::NextColumn();
+                    if (data->orbitalPeriodDays > 0.0f) {
+                        ImGui::Text("%.1f Earth days (~%.2f yrs)",
+                                    data->orbitalPeriodDays, data->orbitalPeriodDays / 365.25f);
+                    } else {
+                        ImGui::Text("N/A");
+                    }
+                    ImGui::NextColumn();
+
+                    ImGui::TextDisabled("Rotation Period:");
+                    ImGui::NextColumn();
+                    if (data->rotationPeriodHours < 0.0f) {
+                        ImGui::Text("%.2f hours (retrograde)", -data->rotationPeriodHours);
+                    } else {
+                        ImGui::Text("%.2f hours", data->rotationPeriodHours);
+                    }
+                    ImGui::NextColumn();
+
+                    ImGui::TextDisabled("Axial Tilt:");
+                    ImGui::NextColumn();
+                    ImGui::Text("%.2f deg", data->axialTiltDeg);
+                    ImGui::NextColumn();
+
+                    // PSM.3 Sun guard: knownMoons holds the major-planet count
+                    // for the Sun — never render it as "Confirmed Moons: 8".
+                    ImGui::TextDisabled("%s", dossierMoonsRowLabel(*data));
+                    ImGui::NextColumn();
+                    ImGui::Text("%d", data->knownMoons);
+                    ImGui::NextColumn();
+
+                    ImGui::Columns(1);
+                    ImGui::EndTabItem();
+                }
+
+                // Tab 4: Key Scientific Facts (+ discovery note).
                 if (ImGui::BeginTabItem("Key Facts")) {
                     ImGui::Spacing();
                     for (size_t i = 0; i < data->keyFacts.size(); ++i) {
@@ -535,6 +619,54 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                         ImGui::TextWrapped("%s", data->keyFacts[i].c_str());
                         ImGui::Spacing();
                     }
+                    ImGui::Separator();
+                    ImGui::TextColored(themeCol, "Discovery:");
+                    ImGui::TextWrapped("%s", data->discoveryInfo.c_str());
+                    ImGui::EndTabItem();
+                }
+
+                // Tab 5: Layers (PSM.4) — semantic availability only. The
+                // displayed active layer is the EFFECTIVE layer computed
+                // Engine-side (declared AND resource-ready); this tab never
+                // stores layer state and can never present a resource-missing
+                // layer as Active. Unavailable layers render disabled with a
+                // reason; selecting an available one calls the single
+                // authoritative selection path (Engine-side gate included).
+                if (ImGui::BeginTabItem("Layers")) {
+                    ImGui::Spacing();
+                    const BodyLayerCapabilities caps = declaredBodyLayerCapabilities(data->name);
+                    const BodyLayerId current = effectiveLayer;
+                    for (int li = 0; li <= static_cast<int>(BodyLayerId::Scientific); ++li) {
+                        const BodyLayerId id = static_cast<BodyLayerId>(li);
+                        const bool available = isLayerDeclaredAvailable(id, caps);
+                        const bool isCurrent = (id == current);
+                        // PSM.5/PSM.6: short truthful context for science
+                        // datasets (Venus/Earth/Mars only, helper-owned).
+                        const char* sliceNote = bodyLayerContextNote(data->name, id);
+                        const char* sliceSep = (sliceNote[0] != '\0') ? " — " : "";
+                        if (!available || isCurrent) {
+                            ImGui::BeginDisabled();
+                            ImGui::Button(isCurrent ? "Active" : bodyLayerLabel(id), ImVec2(150, 26));
+                            ImGui::EndDisabled();
+                        } else {
+                            if (ImGui::Button(bodyLayerLabel(id), ImVec2(150, 26))) {
+                                if (onSelectLayer) onSelectLayer(id);
+                            }
+                        }
+                        ImGui::SameLine(0, 8);
+                        if (isCurrent) {
+                            ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), "%s (active)%s%s",
+                                               bodyLayerLabel(id), sliceSep, sliceNote);
+                        } else if (!available) {
+                            ImGui::TextDisabled("%s (%s)", bodyLayerLabel(id),
+                                               layerUnavailableReason(id));
+                        } else {
+                            ImGui::TextDisabled("%s%s%s", bodyLayerLabel(id), sliceSep, sliceNote);
+                        }
+                    }
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Keys 1-5 select layers while in BODY.");
                     ImGui::EndTabItem();
                 }
 
@@ -547,8 +679,12 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 void SolarOdysseyUI::renderPlanetInfoCard(float screenWidth, float screenHeight, const CelestialDatabase& db,
                                           CameraController& cam,
                                           std::function<void(const std::string&)> onFocus,
-                                          std::function<void(const std::string&)> onExplorePOV) {
-        renderPlanetCard(screenWidth, screenHeight, db, cam, onFocus, onExplorePOV);
+                                          std::function<void(const std::string&)> onExplorePOV,
+                                          std::function<void(const std::string&)> onEnterBodyMode,
+                                          std::function<void()> onExitBodyMode,
+                                          const PresentationController& psm,
+                                          BodyLayerId effectiveLayer) {
+        renderPlanetCard(screenWidth, screenHeight, db, cam, onFocus, onExplorePOV, onEnterBodyMode, onExitBodyMode, psm, effectiveLayer);
     }
 
     // Settings & Display Layers Modal / Panel
@@ -1141,12 +1277,10 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
             ImGui::Spacing();
             if (ImGui::Button("Target Black Hole", ImVec2(165, 22))) {
                 if (onSelectBody) onSelectBody("Black Hole");
-                else selectedPlanetName = "Black Hole";
             }
             ImGui::SameLine(0, 8);
             if (ImGui::Button("Target Earth", ImVec2(165, 22))) {
                 if (onSelectBody) onSelectBody("Earth");
-                else selectedPlanetName = "Earth";
             }
         }
         ImGui::End();
@@ -1298,7 +1432,6 @@ void SolarOdysseyUI::renderMissionModal(float screenWidth, float screenHeight, M
                 ImGui::SameLine(0, 12);
                 if (ImGui::Button("Target Destination", ImVec2(140, 22))) {
                     if (onSelectBody) onSelectBody(m.targetName);
-                    else selectedPlanetName = m.targetName;
                     if (ship.active || cam.mode == CAM_SPACESHIP) {
                         ship.targetPlanetName = m.targetName;
                     }

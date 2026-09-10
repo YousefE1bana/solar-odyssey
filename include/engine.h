@@ -159,6 +159,43 @@ public:
     void enterSystemView();
     void exitSystemView();
     void toggleSystemView();
+    // PSM.2: BODY entry/exit (existing CAM_TRANSITION -> CAM_FOCUS path only).
+    // enterBodyView is the single authoritative BODY entry: every intent
+    // source (Enter/dbl-click drain, dossier action, V key, BODY-transfer
+    // click) funnels through it. Refuses while the ship is active and for
+    // ineligible names; re-entry on the same body is a no-op. Selection is
+    // preserved on both entry and exit; exit lands in SYSTEM (never EXPLORER).
+    void enterBodyView(const std::string& name);
+    void exitBodyView();
+    // PSM.2: BODY exit for external camera takeovers (X/T/POV paths).
+    // Selection preserved; BODY entry guarantees no tour/POV artifacts can
+    // exist, so the state exit is the complete handoff.
+    void exitBodyForTakeover();
+    // PSM.4: resource leg of the layer-availability conjunction, read from
+    // renderer-side state (never fabricated): Night = Planet caps && loaded
+    // texture; Atmosphere = AtmosphereEffects shell exists; Surface = false
+    // (no alternate source wired in PSM.4); Natural/Scientific need no GL.
+    bool isBodyLayerResourceReady(BodyLayerId id, const std::string& body) const;
+    // PSM.4: the effective BODY layer — requested validated against declared
+    // caps AND resources, Natural fallback otherwise. Non-BODY => Natural, so
+    // no override can leak outside BODY (applied per frame, see below).
+    BodyLayerId effectiveBodyLayer() const;
+    // PSM.4 (R02): the single authoritative layer-request path. Dossier tab
+    // and BODY-only 1..5 keys funnel here; declared AND resource validated
+    // before the presenter is touched, so a requested layer is always
+    // effectively available. Unavailable requests no-op with a toast.
+    void requestBodyLayer(BodyLayerId id);
+    // PSM.2: resolves a body name to its focus target. Sun -> index -1 at the
+    // origin (canonical radius 2.0); planets -> vector index; moons -> 100+i
+    // (pickable-list convention). Black Hole/Wormhole/unknown/empty -> false
+    // (they own dedicated cinematic modes, never CAM_FOCUS BODY). Outputs are
+    // canonical (unscaled); the caller applies planetScale at the focus call.
+    bool resolveBodyFocusTarget(const std::string& name, int& outIndex,
+                                glm::vec3& outPos, float& outRadius) const;
+    // PSM.2: shared SYSTEM-pose transition (enterSystemView + exitBodyView).
+    // Clears camera body-focus tracking so the destination stays the fixed
+    // system target; selection is preserved separately by the caller.
+    void transitionToSystemPose();
     // PSM.1: post-sim presentation step. Runs after updateSimulation and
     // before renderFrame; never from inside updateSimulation.
     void updatePresentation();

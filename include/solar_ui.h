@@ -15,6 +15,7 @@
 #include "asteroid_belt.h"
 #include "atmosphere_effects.h"
 #include "presentation_controller.h"
+#include "body_layers.h"
 
 enum GraphicsQuality {
     QUALITY_LOW,
@@ -92,6 +93,15 @@ public:
     // PSM.1: selection/mode action seams (wired by Engine::init).
     std::function<void(const std::string&)> onSelectBody;
     std::function<void()> onToggleSystemView;
+    // PSM.2: dossier "Enter Body Mode" seam (wired by Engine::init to the
+    // EnterBody intent drain — the same authoritative path as Enter/V).
+    std::function<void(const std::string&)> onEnterBodyMode;
+    // PSM.3: dossier "Exit Body Mode" seam (wired by Engine::init to the
+    // authoritative BODY -> SYSTEM exit).
+    std::function<void()> onExitBodyMode;
+    // PSM.4: dossier Layers-tab seam (wired by Engine::init to the single
+    // authoritative layer-selection path: PresentationController::requestLayer).
+    std::function<void(BodyLayerId)> onSelectLayer;
 
     SolarOdysseyUI() = default;
 
@@ -114,12 +124,20 @@ public:
     void renderPlanetCard(float screenWidth, float screenHeight, const CelestialDatabase& db,
                           CameraController& cam,
                           std::function<void(const std::string&)> onFocus,
-                          std::function<void(const std::string&)> onExplorePOV);
+                          std::function<void(const std::string&)> onExplorePOV,
+                          std::function<void(const std::string&)> onEnterBodyMode,
+                          std::function<void()> onExitBodyMode,
+                          const PresentationController& psm,
+                          BodyLayerId effectiveLayer);
 
     void renderPlanetInfoCard(float screenWidth, float screenHeight, const CelestialDatabase& db,
                               CameraController& cam,
                               std::function<void(const std::string&)> onFocus,
-                              std::function<void(const std::string&)> onExplorePOV);
+                              std::function<void(const std::string&)> onExplorePOV,
+                              std::function<void(const std::string&)> onEnterBodyMode,
+                              std::function<void()> onExitBodyMode,
+                              const PresentationController& psm,
+                              BodyLayerId effectiveLayer);
 
     void renderSettingsPanel(PostProcessingPipeline& postProc, AsteroidBelt* asteroidBelt,
                              AtmosphereEffects* atmoEffects, CameraController& cam);
@@ -146,3 +164,11 @@ public:
 
     void renderSaveStatusToast(float screenWidth, float screenHeight);
 };
+
+// PSM.3 Sun presentation guard. Local data proves CelestialBodyData::knownMoons
+// counts the 8 major planets for the Sun, not moons — the Orbit / Motion tab
+// must never label those 8 objects "Confirmed Moons". Pure inline helper so
+// [psm3] can pin the semantics without GL/ImGui.
+inline const char* dossierMoonsRowLabel(const CelestialBodyData& data) {
+    return (data.name == "Sun") ? "Major Planets:" : "Confirmed Moons:";
+}

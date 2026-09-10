@@ -6,6 +6,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <string>
 #include <vector>
+#include <map>
+#include <utility>
+#include "body_layers.h"
 #include "immediate_batch.h"
 #include "planet_data.h"
 #include "camera_controller.h"
@@ -31,6 +34,24 @@ struct C37TextureUnits {
 
 // Maximum simultaneous eclipse occluders (must match MAX_ECLIPSES in planet.frag).
 static constexpr GLint kMaxEclipses = 4;
+
+// PSM.6 generic scientific-layer resource mapping (renderer-owned).
+// Replaces the PSM.5 Venus-only texture members: body identity + semantic
+// layer -> optional texture resource. Only successfully loaded (non-zero)
+// handles are stored, so a missing asset is simply absent — never a silent
+// substitute. GL deletion stays with the owning SceneRenderer::cleanup.
+// Pure map logic (lookup/has) is headlessly unit-testable; GL calls happen
+// only in the owner's init/cleanup.
+struct ScientificLayerResources {
+    std::map<std::pair<std::string, BodyLayerId>, GLuint> textures;
+    GLuint lookup(const std::string& body, BodyLayerId layer) const {
+        auto it = textures.find({body, layer});
+        return (it != textures.end()) ? it->second : 0;
+    }
+    bool has(const std::string& body, BodyLayerId layer) const {
+        return textures.find({body, layer}) != textures.end();
+    }
+};
 
 // Material resources owned by the renderer
 struct PlanetMaterialResources {
@@ -120,6 +141,9 @@ public:
     GLuint earthNightTexture = 0;
     GLuint earthCloudsTexture = 0;
     GLuint venusAtmosphereTexture = 0;
+    // PSM.6: generic scientific-layer datasets (Venus radar/clouds, Earth
+    // relief, Mars Viking, ...). No per-body renderer members.
+    ScientificLayerResources scienceLayers;
     GLuint earthOceanMaskTexture = 0;
 
     // VAOs & VBOs
@@ -154,6 +178,17 @@ public:
         bool enableNightLights = true;
     };
     SurfaceFeatureOverrides surfaceOverrides;
+
+    // PSM.4 BODY layer override (semantic only — no GL resources here).
+    // Engine sets this per frame from the effective layer; the renderer only
+    // ever reads it. Empty bodyName or Natural == canonical presentation for
+    // every body (byte/behavior-equivalent to the pre-PSM.4 path).
+    std::string bodyLayerBody;
+    BodyLayerId activeBodyLayer = BodyLayerId::Natural;
+    void setBodyLayer(const std::string& body, BodyLayerId layer) {
+        bodyLayerBody = body;
+        activeBodyLayer = layer;
+    }
 
     // Benchmark-only synthetic occluder for deterministic eclipse verification
     // (zero mutation of canonical inventory, simulation state, or save state)

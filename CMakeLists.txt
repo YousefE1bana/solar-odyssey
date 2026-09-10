@@ -156,6 +156,11 @@ add_executable(SolarOdysseyTests
   tests/test_wormhole_portal.cpp
   tests/test_quality_tiers.cpp
   tests/test_presentation_controller.cpp
+  tests/test_body_framing.cpp
+  tests/test_body_dossier.cpp
+  tests/test_body_layers.cpp
+  tests/test_venus_layers.cpp
+  tests/test_science_layers.cpp
   src/post_processing.cpp
   src/black_hole.cpp
   src/wormhole.cpp

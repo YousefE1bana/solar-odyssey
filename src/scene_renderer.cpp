@@ -244,6 +244,20 @@ bool SceneRenderer::init() {
     earthNightTexture = loadTextureOrFallback("Textures/earth_nightmap.jpg", "Textures/earth_daymap.jpg");
     earthCloudsTexture = loadTextureOrFallback("Textures/earth_clouds.jpg", "Textures/venus_atmosphere.jpg");
     venusAtmosphereTexture = loadTextureOrFallback("Textures/venus_atmosphere.jpg", "Textures/venus_surface.jpg");
+    // PSM.6 scientific-layer datasets: strict loads (empty fallback) into the
+    // generic body+layer map. A missing file stores nothing, so has()/lookup
+    // report absence and the layer is unavailable — never silently
+    // substituted. Same Venus assets/paths as PSM.5, plus Earth relief and
+    // Mars Viking. Inherited JPL mosaic seam in the Earth asset is a known
+    // source limitation (see PSM.6 report); the file is loaded unaltered.
+    auto loadScienceLayer = [&](const char* body, BodyLayerId layer, const char* path) {
+        GLuint tex = loadTextureOrFallback(path, "");
+        if (tex != 0) scienceLayers.textures[{body, layer}] = tex;
+    };
+    loadScienceLayer("Venus", BodyLayerId::Surface, "Textures/Derived/venus_radar_jpl_1440.jpg");
+    loadScienceLayer("Venus", BodyLayerId::Atmosphere, "Textures/Derived/venus_clouds_jpl_1440.jpg");
+    loadScienceLayer("Earth", BodyLayerId::Surface, "Textures/Derived/earth_relief_jpl_1440.jpg");
+    loadScienceLayer("Mars", BodyLayerId::Surface, "Textures/Derived/mars_viking_jpl_1440.jpg");
     earthOceanMaskTexture = loadTextureOrFallback("Textures/earth_specular.png", "");
 
     // Cache Sun Uniforms
@@ -314,6 +328,11 @@ void SceneRenderer::cleanup() {
     safeDeleteTex(earthNightTexture);
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
+    // PSM.6: deterministic teardown of every registered science dataset.
+    for (auto& entry : scienceLayers.textures) {
+        if (entry.second != 0) { glDeleteTextures(1, &entry.second); entry.second = 0; }
+    }
+    scienceLayers.textures.clear();
     safeDeleteTex(earthOceanMaskTexture);
 
     if (starfieldVAO) { glDeleteVertexArrays(1, &starfieldVAO); starfieldVAO = 0; }
@@ -571,9 +590,27 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         glm::mat4 model = glm::translate(glm::mat4(1.0f), planet.currentPosition) * rotModel;
         glm::mat4 planetMV = viewMat * glm::scale(model, glm::vec3(effectiveSize));
 
+        // PSM.4 BODY layer override flag: true solely for the BODY carrying
+        // a non-Natural active layer. Function scope so both the uniform
+        // emphasis below and the atmosphere gate honor it.
+        const bool layerOverrideActive =
+            (activeBodyLayer != BodyLayerId::Natural && planet.name == bodyLayerBody);
+
         if (planetProgram) {
+            // PSM.6 unit-0 semantic swap (generic): the override BODY's
+            // day/albedo binding is replaced by its registered layer dataset
+            // on the SAME sampler (uDayTex, unit 0). No new sampler, no shader
+            // change, no body names here — lookup is semantic by body+layer.
+            // The availability gate guarantees a registered handle whenever an
+            // override is active, so no silent substitute can masquerade.
+            GLuint dayBinding = planet.materials.diffuseTexture ? planet.materials.diffuseTexture : planet.texture;
+            if (layerOverrideActive &&
+                (activeBodyLayer == BodyLayerId::Surface || activeBodyLayer == BodyLayerId::Atmosphere)) {
+                GLuint scienceTex = scienceLayers.lookup(planet.name, activeBodyLayer);
+                if (scienceTex != 0) dayBinding = scienceTex;
+            }
             glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kDay);
-            glBindTexture(GL_TEXTURE_2D, planet.materials.diffuseTexture ? planet.materials.diffuseTexture : planet.texture);
+            glBindTexture(GL_TEXTURE_2D, dayBinding);
             glUniform1i(uDayTexLoc, C37TextureUnits::kDay);
 
             // Night texture binding (requires declared capability && successfully loaded resource)
@@ -588,7 +625,13 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
             }
 
             // Clouds texture binding (requires declared capability && successfully loaded resource)
-            if (planet.isCloudsActive()) {
+            // PSM.5: suppressed for Surface/Atmosphere overrides — the unit-0
+            // layer dataset IS the presentation; the legacy overlay would veil
+            // the radar or double up the clouds. Natural/Night paths untouched.
+            const bool suppressLegacyMaps =
+                layerOverrideActive && (activeBodyLayer == BodyLayerId::Surface ||
+                                        activeBodyLayer == BodyLayerId::Atmosphere);
+            if (planet.isCloudsActive() && !suppressLegacyMaps) {
                 glActiveTexture(GL_TEXTURE0 + C37TextureUnits::kClouds);
                 GLuint cloudTex = planet.materials.cloudTexture ? planet.materials.cloudTexture : planet.cloudsTexture;
                 glBindTexture(GL_TEXTURE_2D, cloudTex);
@@ -628,6 +671,12 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
             // Solar intensity
             float bodySunMult = (planet.name == "Jupiter" || planet.name == "Saturn") ? 1.35f : 1.25f;
+            // PSM.4 Night layer: dayside emphasis dimmed (uniform-only) so the
+            // real night-lights texture dominates. Applies solely to the BODY
+            // carrying the active override; every other path is untouched.
+            if (layerOverrideActive && activeBodyLayer == BodyLayerId::Night) {
+                bodySunMult *= 0.3f;
+            }
             glUniform1f(uSunIntensityLoc, bodySunMult);
 
             // Fast Analytical Shadow Sun Vector transformed into object/local space
@@ -711,7 +760,15 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
 
         // Atmosphere Glow rendering
         bool bodyHasAtmo = (atmo != nullptr && atmo->getAtmosphereProperties(planet.name).hasAtmosphere);
-        if (bodyHasAtmo && solarUI.showAtmospheres) {
+        // PSM.4 Atmosphere layer: the existing shell renders for the BODY
+        // carrying the override even when the global toggle is off. No new
+        // atmosphere model, no new samplers — same renderAtmosphere call.
+        // PSM.5: a Surface override suppresses the shell for readability (the
+        // radar globe must not be veiled); the global toggle is never touched.
+        const bool suppressShell =
+            layerOverrideActive && activeBodyLayer == BodyLayerId::Surface;
+        if (bodyHasAtmo && !suppressShell && (solarUI.showAtmospheres ||
+                            (layerOverrideActive && activeBodyLayer == BodyLayerId::Atmosphere))) {
             glm::mat4 atmoMV = viewMat * glm::translate(glm::mat4(1.0f), planet.currentPosition);
             atmo->renderAtmosphere(planet.name, effectiveSize, time, sunEyePos, atmoMV, projMat);
             if (planetProgram) glUseProgram(planetProgram);

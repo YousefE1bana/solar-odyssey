@@ -96,7 +96,12 @@ void CameraController::focusOnBody(int planetIdx, const std::string& name, float
     focusedBodyName = name;
     
     float idealDist = std::max(bodyRadius * 3.8f, 1.2f);
-    if (name == "Sun") idealDist = 7.0f;
+    // PSM.2 correction: the Sun framing factor is derived from the passed
+    // (effective) radius — 3.5x, i.e. exactly the legacy 7.0 at the canonical
+    // 2.0 radius — instead of a fixed constant, so BODY presentation framing
+    // stays planetScale-aware. Legacy Explorer passes 2.0f and still gets
+    // exactly 7.0f; BODY passes size x planetScale and scales appropriately.
+    if (name == "Sun") idealDist = bodyRadius * 3.5f;
     else if (name == "Saturn") idealDist = bodyRadius * 5.0f;
     
     focusDistance = idealDist;

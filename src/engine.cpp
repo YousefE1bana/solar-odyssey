@@ -247,7 +247,7 @@ void Engine::focusPlanetTourByName(const std::string& name) {
 }
 
 void Engine::explorePlanetPOVByName(const std::string& name) {
-    presenter.forceExplorer();
+    exitBodyForTakeover();
     selectBody(name);
     if (audioMgr) {
         audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
@@ -290,6 +290,13 @@ void Engine::enterSystemView() {
     if (!PresentationController::isSystemEntryAllowed(spaceship.active)) return;
     if (!presenter.enterSystem()) return;
     if (cameraCtrl.tourActive) cameraCtrl.stopTour();
+    transitionToSystemPose();
+    updateCursorCapture();
+}
+
+// PSM.2: the fixed SYSTEM presentation pose, shared by EXPLORER -> SYSTEM
+// entry and BODY -> SYSTEM exit. Direction-specific next mode CAM_ORBITAL.
+void Engine::transitionToSystemPose() {
     // Clear body-focus camera tracking so the SYSTEM-bound transition keeps
     // a fixed system/orbital destination (selection is preserved separately).
     cameraCtrl.focusedPlanetIndex = -1;
@@ -300,7 +307,6 @@ void Engine::enterSystemView() {
         cameraCtrl.orbitDistance, cameraCtrl.orbitAngleX, cameraCtrl.orbitAngleY, systemTarget);
     cameraCtrl.startTransition(cameraCtrl.currentEye, cameraCtrl.currentTarget,
                                systemEye, systemTarget, 1.6f, CAM_ORBITAL);
-    updateCursorCapture();
 }
 
 void Engine::exitSystemView() {
@@ -315,7 +321,7 @@ void Engine::toggleSystemView() {
     else enterSystemView();
 }
 
-// PSM.1: post-sim presentation step. Sequenced by Engine::run after
+// PSM.2: post-sim presentation step. Sequenced by Engine::run after
 // updateSimulation and before renderFrame — never inside updateSimulation.
 void Engine::updatePresentation() {
     // R02: consume the pending restore adoption recorded by the load path.
@@ -323,11 +329,193 @@ void Engine::updatePresentation() {
         presenter.selectBody(*pendingSelectionAdopt);
         pendingSelectionAdopt.reset();
     }
-    // No BODY consumer exists yet: drain any EnterBody intent safely.
-    // Deferred to PSM.2; a drained intent never fakes a transition.
-    std::string deferredBody;
-    presenter.consumeEnterBodyIntent(deferredBody);
-    (void)deferredBody;
+    // PSM.2: the single EnterBody consume-and-act site. Exactly one consume
+    // per frame; the intent funnels into the authoritative entry path, which
+    // validates (ship/eligibility) and no-ops when there is nothing to do.
+    // A consumer placed later in the frame would observe nothing.
+    std::string enterBodyName;
+    if (presenter.consumeEnterBodyIntent(enterBodyName)) {
+        enterBodyView(enterBodyName);
+    }
+    // PSM.4: single renderer-override application point, every frame before
+    // renderFrame. BODY validates the request (transfer safety net) and
+    // applies the effective layer; non-BODY always clears to canonical, so
+    // no surface/scientific override can leak outside BODY. The net resets
+    // any request that is not effectively available, keeping requested ==
+    // effective while BODY (R02: UI and renderer share one semantic value).
+    if (presenter.isBody()) {
+        const BodyLayerId eff = effectiveBodyLayer();
+        if (eff == BodyLayerId::Natural) {
+            presenter.resetLayerToDefault();
+        }
+        renderer.setBodyLayer(presenter.selectedBodyName(), eff);
+    } else {
+        renderer.setBodyLayer("", BodyLayerId::Natural);
+    }
+}
+
+// PSM.2: BODY-eligible focus resolution. Sun/planets/moons resolve to the
+// existing focusOnBody index conventions; everything else is ineligible.
+bool Engine::resolveBodyFocusTarget(const std::string& name, int& outIndex,
+                                    glm::vec3& outPos, float& outRadius) const {
+    if (name.empty()) return false;
+    if (name == "Sun") {
+        outIndex = -1;
+        outPos = sunWorldPosition;
+        outRadius = 2.0f;
+        return true;
+    }
+    for (size_t i = 0; i < planets.size(); ++i) {
+        if (planets[i].name == name) {
+            outIndex = (int)i;
+            outPos = planets[i].currentPosition;
+            outRadius = planets[i].size;
+            return true;
+        }
+    }
+    for (size_t i = 0; i < moons.size(); ++i) {
+        if (moons[i].name == name) {
+            outIndex = 100 + (int)i;
+            outPos = moons[i].currentPosition;
+            outRadius = moons[i].size;
+            return true;
+        }
+    }
+    // Black Hole / Wormhole own dedicated cinematic camera modes and never
+    // enter CAM_FOCUS BODY; unknown names resolve nowhere.
+    return false;
+}
+
+// PSM.4: resource leg of the effective-availability conjunction. Reads only
+// renderer-side state; the presenter never sees handles or units.
+// PSM.6: fully generic — Surface/Atmosphere dataset readiness is a semantic
+// body+layer lookup (no body names here). Missing asset => absent entry =>
+// unavailable, never a silent canonical substitute.
+bool Engine::isBodyLayerResourceReady(BodyLayerId id, const std::string& body) const {
+    switch (id) {
+        case BodyLayerId::Natural:
+        case BodyLayerId::Scientific:
+            return true; // No GL resource required.
+        case BodyLayerId::Surface:
+            return renderer.scienceLayers.lookup(body, BodyLayerId::Surface) != 0;
+        case BodyLayerId::Atmosphere: {
+            if (atmosphereEffects == nullptr ||
+                !atmosphereEffects->getAtmosphereProperties(body).hasAtmosphere) {
+                return false;
+            }
+            // Bodies with a registered atmosphere dataset (Venus clouds) also
+            // require it loaded; others use the existing shell alone.
+            if (renderer.scienceLayers.has(body, BodyLayerId::Atmosphere)) {
+                return renderer.scienceLayers.lookup(body, BodyLayerId::Atmosphere) != 0;
+            }
+            return true;
+        }
+        case BodyLayerId::Night:
+            for (const auto& planet : planets) {
+                if (planet.name == body) return planet.isNightLightsActive();
+            }
+            return false;
+        default:
+            return false;
+    }
+}
+
+// PSM.4: requested validated against declared caps AND resources; any failure
+// (or non-BODY) deterministically yields Natural.
+BodyLayerId Engine::effectiveBodyLayer() const {
+    if (!presenter.isBody()) return BodyLayerId::Natural;
+    const BodyLayerId requested = presenter.requestedLayer();
+    const BodyLayerCapabilities caps = declaredBodyLayerCapabilities(presenter.selectedBodyName());
+    if (!isLayerDeclaredAvailable(requested, caps)) return BodyLayerId::Natural;
+    if (!isLayerEffectivelyAvailable(requested, caps,
+                                     isBodyLayerResourceReady(requested, presenter.selectedBodyName()),
+                                     true)) {
+        return BodyLayerId::Natural;
+    }
+    return requested;
+}
+
+// PSM.4 (R02): dossier Layers tab and BODY-only 1..5 keys share this single
+// gate. The presenter is written only when the layer is effectively
+// available (declared AND resource-ready on the current BODY), so the UI can
+// never present a resource-missing layer as Active. No GL crosses here —
+// the resource leg arrives as a plain bool from renderer-side state.
+void Engine::requestBodyLayer(BodyLayerId id) {
+    if (!presenter.isBody()) return;
+    const BodyLayerCapabilities caps = declaredBodyLayerCapabilities(presenter.selectedBodyName());
+    if (isLayerEffectivelyAvailable(id, caps,
+                                    isBodyLayerResourceReady(id, presenter.selectedBodyName()),
+                                    true)) {
+        presenter.requestLayer(id);
+    } else {
+        missionSystem.showToast("LAYER UNAVAILABLE",
+            std::string(bodyLayerLabel(id)) + " is not available for " +
+            presenter.selectedBodyName());
+    }
+}
+
+// PSM.2: the single authoritative BODY entry path. SYSTEM -> BODY and
+// EXPLORER -> BODY both land here; final state BODY + CAM_FOCUS via the
+// existing cinematic transition (no hard cut). Presentation-only: reads sim
+// mirrors, never mutates simulation state; SaveState v2 untouched.
+void Engine::enterBodyView(const std::string& name) {
+    // No BODY while the spaceship is active — refuse, state untouched.
+    if (!PresentationController::isBodyEntryAllowed(spaceship.active)) return;
+    int bodyIndex = -1;
+    glm::vec3 bodyPos(0.0f);
+    float canonicalRadius = 0.0f;
+    if (!resolveBodyFocusTarget(name, bodyIndex, bodyPos, canonicalRadius)) return;
+    // Already presenting this body: never restart the transition.
+    if (presenter.isBody() && presenter.selectedBodyName() == name) return;
+    // R01: fresh non-BODY -> BODY defaults to Natural; BODY A -> BODY B
+    // transfer preserves A's requested layer only when effectively available
+    // on B, else deterministically Natural. No persistence: SYSTEM re-entry
+    // always starts Natural.
+    const bool isTransfer = presenter.isBody();
+    const BodyLayerId carriedLayer = presenter.requestedLayer();
+    // Stop incompatible state cleanly: tour ends, POV artifacts unwind.
+    if (cameraCtrl.tourActive) cameraCtrl.stopTour();
+    if (cameraCtrl.mode == CAM_POV) {
+        if (planetPov) planetPov->deactivatePOV();
+        if (audioMgr) audioMgr->stopPOVAmbientSound();
+    }
+    // Preserve the selected body identity; the dossier stays open on it.
+    selectBody(name);
+    presenter.enterBody();
+    if (!isTransfer) {
+        // Fresh non-BODY -> BODY: default layer, every time.
+        presenter.resetLayerToDefault();
+    } else {
+        // Transfer: keep A's layer only if effectively available on B.
+        const BodyLayerCapabilities capsB = declaredBodyLayerCapabilities(name);
+        presenter.requestLayer(transferLayerResult(
+            carriedLayer, capsB, isBodyLayerResourceReady(carriedLayer, name)));
+    }
+    solarUI.showPlanetCard = true;
+    if (audioMgr) audioMgr->playPlanetSound(name, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+    // R3 fix (scoped to this path): frame from the planetScale-aware
+    // effective radius so initial framing AND the internally derived
+    // min/max zoom clamps follow the rendered size. Canonical radius kept.
+    const float effectiveRadius =
+        PresentationController::effectivePresentationRadius(canonicalRadius, solarUI.planetScale);
+    cameraCtrl.focusOnBody(bodyIndex, name, effectiveRadius, bodyPos);
+    updateCursorCapture();
+}
+
+// PSM.2: BODY -> SYSTEM. Selection preserved (never reset); the dossier card
+// stays open on the selected body; camera returns to the fixed SYSTEM pose.
+void Engine::exitBodyView() {
+    if (!presenter.exitBody()) return;
+    transitionToSystemPose();
+    updateCursorCapture();
+}
+
+// PSM.2: BODY exit for X/T/POV takeovers. BODY entry guarantees no
+// tour/POV/ship artifacts can exist (tour stopped, POV unwound, ship
+// refused), so exiting presentation state is the complete handoff — the
+// takeover path then drives the camera exactly as before.
+void Engine::exitBodyForTakeover() {
+    presenter.forceExplorer();
 }
 
 bool Engine::init(int width, int height, const char* title) {
@@ -467,6 +655,16 @@ bool Engine::init(int width, int height, const char* title) {
     // the System View button invokes the same semantic action as Y.
     solarUI.onSelectBody = [this](const std::string& n) { selectBody(n); };
     solarUI.onToggleSystemView = [this]() { toggleSystemView(); };
+    // PSM.2: the dossier "Enter Body Mode" action records intent only — the
+    // updatePresentation() drain funnels it through enterBodyView, the same
+    // authoritative path as Enter/double-click/V.
+    solarUI.onEnterBodyMode = [this](const std::string& n) { presenter.requestEnterBody(n); };
+    // PSM.3: the dossier "Exit Body Mode" action uses the authoritative
+    // BODY -> SYSTEM exit (same as F/ESC).
+    solarUI.onExitBodyMode = [this]() { exitBodyView(); };
+    // PSM.4: the dossier Layers tab writes through the single authoritative
+    // layer-selection path (Engine-side declared+resource gate included).
+    solarUI.onSelectLayer = [this](BodyLayerId id) { requestBodyLayer(id); };
     applyQualityTier(static_cast<int>(solarUI.qualityPreset));
 
     return true;
@@ -592,8 +790,8 @@ void Engine::processInput(float deltaTime) {
                 updateCursorCapture();
             }
         } else {
-            // PSM.1: SYSTEM gets its own explicit context (never silent Explorer).
-            if (inputMgr) inputMgr->setContext(presenter.isSystem() ? InputContext::System : InputContext::Explorer);
+            // PSM.2: BODY gets its own explicit context (never silent Explorer).
+            if (inputMgr) inputMgr->setContext(presenter.isBody() ? InputContext::Body : (presenter.isSystem() ? InputContext::System : InputContext::Explorer));
             if (uiReleaseCursorHeld) {
                 uiReleaseCursorHeld = false;
                 if (inputMgr) inputMgr->setCursorReleaseHeld(false);
@@ -679,6 +877,15 @@ void Engine::updateSimulation(float deltaTime) {
             if (p.name == cameraCtrl.focusedBodyName) {
                 focusedPos = p.currentPosition;
                 focusedRadius = p.size;
+                break;
+            }
+        }
+        // PSM.2: BODY tracks moons too (moving-body tracking continues
+        // through the existing CameraController::update arguments).
+        for (const auto& m : moons) {
+            if (m.name == cameraCtrl.focusedBodyName) {
+                focusedPos = m.currentPosition;
+                focusedRadius = m.size;
                 break;
             }
         }
@@ -1018,7 +1225,13 @@ void Engine::renderFrame(float deltaTime) {
     solarUI.renderBottomControlBar((float)windowWidth, (float)windowHeight, cameraCtrl);
     solarUI.renderPlanetInfoCard((float)windowWidth, (float)windowHeight, celestialDb, cameraCtrl,
                                 [this](const std::string& name) { focusPlanetByName(name); },
-                                [this](const std::string& name) { explorePlanetPOVByName(name); });
+                                [this](const std::string& name) { explorePlanetPOVByName(name); },
+                                [this](const std::string& name) { presenter.requestEnterBody(name); },
+                                [this]() { exitBodyView(); },
+                                presenter,
+                                // R02: the dossier displays the EFFECTIVE active
+                                // layer — the same value handed to the renderer.
+                                effectiveBodyLayer());
     solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
     solarUI.renderDiagnostics((float)windowWidth, asteroidBelt);
     solarUI.renderFreeCamHUD((float)windowWidth, (float)windowHeight, cameraCtrl);
@@ -1364,7 +1577,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
             }
         } else {
             if (key == GLFW_KEY_X) {
-                presenter.forceExplorer();
+                exitBodyForTakeover();
                 solarUI.showPlanetCard = false;
                 spaceship.toggleActive();
                 cameraCtrl.setSpaceshipMode(spaceship.active, spaceship.getCameraEye(), spaceship.getCameraTarget(), spaceship.smoothCameraUp);
@@ -1376,14 +1589,19 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                 if (audioMgr) audioMgr->stopPOVAmbientSound();
                 updateCursorCapture();
             } else if (key == GLFW_KEY_F) {
-                presenter.forceExplorer();
-                cameraCtrl.toggleFreeCam();
+                // PSM.2: BODY -> SYSTEM (up one level; freecam stays reachable
+                // from SYSTEM/EXPLORER as before).
+                if (presenter.isBody()) exitBodyView();
+                else {
+                    presenter.forceExplorer();
+                    cameraCtrl.toggleFreeCam();
+                }
                 updateCursorCapture();
             } else if (key == GLFW_KEY_T) {
                 if (cameraCtrl.tourActive) {
                     cameraCtrl.stopTour();
                 } else {
-                    presenter.forceExplorer();
+                    exitBodyForTakeover();
                     cameraCtrl.startTour();
                     focusPlanetTourByName(cameraCtrl.tourSequence[0]);
                 }
@@ -1409,20 +1627,49 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
             } else if (key == GLFW_KEY_Y) {
                 // PSM.1: the single EXPLORER <-> SYSTEM entry action (M stays Missions).
                 toggleSystemView();
+            } else if (key == GLFW_KEY_V) {
+                // PSM.2: toggle BODY for the selected eligible body. Routes
+                // through the intent drain so V shares the authoritative path.
+                // No-op with a toast when nothing eligible is selected.
+                if (presenter.isBody()) {
+                    exitBodyView();
+                } else if (!presenter.selectedBodyName().empty()) {
+                    int vIdx = -1;
+                    glm::vec3 vPos(0.0f);
+                    float vRadius = 0.0f;
+                    if (resolveBodyFocusTarget(presenter.selectedBodyName(), vIdx, vPos, vRadius)) {
+                        presenter.requestEnterBody(presenter.selectedBodyName());
+                    } else {
+                        missionSystem.showToast("BODY MODE UNAVAILABLE",
+                                              presenter.selectedBodyName() + " has no Body Mode view");
+                    }
+                } else {
+                    missionSystem.showToast("BODY MODE UNAVAILABLE", "Select a planet or moon first");
+                }
             } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
                 // PSM.1: semantic EnterBody intent only (PSM.2 consumer).
                 if (presenter.isSystem() && !presenter.selectedBodyName().empty()) {
                     presenter.requestEnterBody(presenter.selectedBodyName());
                 }
             } else if (key == GLFW_KEY_0) {
-                // PSM.1: planet-focus numerics are inactive while SYSTEM.
-                if (!presenter.isSystem()) {
+                // PSM.1/PSM.2: planet-focus numerics are inactive while SYSTEM
+                // or BODY (BODY exits only via ESC/F/V/transfer/takeover).
+                if (!presenter.isSystem() && !presenter.isBody()) {
                     focusPlanetByName("Sun");
                     updateCursorCapture();
                 }
             } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_8) {
-                // PSM.1: planet-focus numerics are inactive while SYSTEM.
-                if (!presenter.isSystem()) {
+                if (presenter.isBody()) {
+                    // PSM.4: 1..5 select visualization layers ONLY while BODY
+                    // (1 Natural, 2 Surface, 3 Atmosphere, 4 Night, 5
+                    // Scientific — BodyLayerId order). Planet-focus numerics
+                    // stay disabled (PSM.2); 6..8 no-op. Requests funnel
+                    // through the single Engine-side availability gate.
+                    if (key <= GLFW_KEY_5) {
+                        requestBodyLayer(static_cast<BodyLayerId>(key - GLFW_KEY_1));
+                    }
+                } else if (!presenter.isSystem()) {
+                    // PSM.1/PSM.2: planet-focus numerics are inactive while SYSTEM.
                     int pIdx = key - GLFW_KEY_1;
                     if (pIdx < (int)planets.size()) {
                         focusPlanetByName(planets[pIdx].name);
@@ -1436,6 +1683,10 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                     cameraCtrl.setPhotoMode(false);
                 } else if (cameraCtrl.tourActive) {
                     cameraCtrl.stopTour();
+                } else if (presenter.isBody()) {
+                    // PSM.2: BODY -> SYSTEM before any card dismissal — the
+                    // dossier is intrinsic to Body Mode. Selection preserved.
+                    exitBodyView();
                 } else if (presenter.isSystem()) {
                     // PSM.1: SYSTEM -> EXPLORER (selection preserved).
                     exitSystemView();
@@ -1507,6 +1758,20 @@ void Engine::onMouseButton(int button, int action, int mods) {
                             lastPickName = hitName;
                             lastPickTimeSec = now;
                         }
+                    } else if (presenter.isBody()) {
+                        // PSM.2 BODY: clicking another eligible body requests
+                        // a cinematic BODY-transfer through the authoritative
+                        // intent path — never an instant snap. Same-body and
+                        // empty-space clicks change nothing.
+                        int pickIdx = -1;
+                        glm::vec3 pickPos(0.0f);
+                        float pickRadius = 0.0f;
+                        if (resolveBodyFocusTarget(hitName, pickIdx, pickPos, pickRadius) &&
+                            hitName != presenter.selectedBodyName()) {
+                            presenter.requestEnterBody(hitName);
+                        }
+                        lastPickName.clear();
+                        lastPickTimeSec = -1.0;
                     } else {
                         focusPlanetByName(hitName);
                         lastPickName.clear();

@@ -23,7 +23,7 @@ void CelestialDatabase::initDatabase() {
         sun.orbitalPeriodDays = 0.0f;
         sun.rotationPeriodHours = 609.12f; // ~25.4 days at equator
         sun.axialTiltDeg = 7.25f;
-        sun.knownMoons = 8; // 8 planets + dwarf planets
+        sun.knownMoons = 8; // 8 planets (dwarf planets excluded from this count)
         sun.surfaceGravityMs2 = 274.0f;
         sun.meanTemperatureC = 5500.0f; // Photosphere
         sun.minTemperatureC = 5500.0f;
