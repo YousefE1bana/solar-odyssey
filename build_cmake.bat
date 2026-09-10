@@ -1,10 +1,8 @@
 @echo off
-echo === CMake Configure & Build ===
+echo === CMake Configure ^& Build ===
 setlocal
 
-if not defined VCPKG_ROOT (
-  echo (Optional) Set VCPKG_ROOT to enable vcpkg toolchain.
-)
+if not defined VCPKG_ROOT echo Note: VCPKG_ROOT not set; vcpkg toolchain disabled, using system libraries.
 
 set BUILD_DIR=build-cmake
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
@@ -26,8 +24,10 @@ cmake --build "%BUILD_DIR%" --config Release
 if errorlevel 1 goto :err
 
 echo Build complete. Binaries in %BUILD_DIR%\Release or %BUILD_DIR%.
+pause
 exit /b 0
 
 :err
 echo Build failed.
+pause
 exit /b 1
