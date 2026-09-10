@@ -162,6 +162,7 @@ add_executable(SolarOdysseyTests
   tests/test_venus_layers.cpp
   tests/test_science_layers.cpp
   tests/test_moon_navigation.cpp
+  tests/test_moon_freeze.cpp
   src/post_processing.cpp
   src/black_hole.cpp
   src/wormhole.cpp
