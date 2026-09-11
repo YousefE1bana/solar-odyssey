@@ -348,6 +348,53 @@ void CelestialDatabase::initDatabase() {
         ganymede.hasRings = false;
         bodies[ganymede.name] = ganymede;
 
+        // --- CALLISTO (Moon Expansion 1.4) ---
+        // Sourced from JPL JUP365 + NASA; full provenance in
+        // docs/MOON_EXPANSION_1_4_CALLISTO.md. Heliocentric distances are
+        // parent-derived (Jupiter's canonical dossier values, copied exactly).
+        // Axial tilt unsourced -> flag false ("N/A"). NOTE: JPL mean-elements
+        // "Tilt = 0.4 deg" is orbital/Laplace-plane geometry, NOT physical
+        // axial tilt — deliberately not used. No authorized global mean or
+        // min/max temperature set exists -> all three temperature flags false
+        // ("N/A"); stored zeros are inert. Bodies map only, NOT in `order`.
+        CelestialBodyData callisto;
+        callisto.name = "Callisto";
+        callisto.type = "Natural Satellite";
+        callisto.subtitle = "Jupiter's Ancient Cratered Moon";
+        callisto.realDiameterKm = 4820.6f; // Sourced: 2 x 2410.30 km mean radius (JUP365)
+        callisto.relativeSizeToEarth = 0.378f; // Derived: 4820.6 / 12756.2 = 0.37790 (in-repo Earth diameter)
+        callisto.distanceFromSunAU = 5.204f; // Parent-derived: Jupiter's canonical value (approximate heliocentric)
+        callisto.distanceFromSunMillionKm = 778.6f; // Parent-derived: Jupiter's canonical value
+        callisto.orbitalPeriodDays = 16.690440f; // Sourced (JUP365)
+        callisto.rotationPeriodHours = 400.5706f; // Sourced: tidally locked (16.690440 * 24 = 400.57056)
+        callisto.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        callisto.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        callisto.knownMoons = 0;
+        callisto.surfaceGravityMs2 = 1.23577f; // Derived: 7179.28340 / 2410.30^2 * 1000
+        callisto.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        callisto.hasMeanTemperatureData = false; // Generic semantic (1.3): dossier renders "N/A"
+        callisto.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        callisto.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        callisto.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        callisto.atmosphericComposition = "Very thin carbon-dioxide exosphere; observations also indicate oxygen and hydrogen are present";
+        callisto.surfaceFeatures = "Ancient dark icy-rocky surface densely covered with impact craters and multi-ring impact structures, with bright water-ice deposits on some crater peaks.";
+        callisto.discoveryInfo = "Discovered by Galileo Galilei on 7 January 1610.";
+        callisto.description = "Callisto is Jupiter's second-largest moon and one of the most heavily cratered worlds in the solar system. Its ancient surface shows little evidence of recent geologic activity. Measurements by Galileo and later modeling indicate that a salty liquid-water layer may exist deep beneath its icy surface.";
+        callisto.keyFacts = {
+            "Jupiter's second-largest moon and the third-largest moon in the solar system.",
+            "One of the oldest and most heavily cratered surfaces in the solar system.",
+            "Evidence suggests a deep salty subsurface ocean may exist beneath the ice.",
+            "Possesses an extremely thin exosphere containing carbon dioxide, with oxygen and hydrogen also detected."
+        };
+        callisto.themeColor = glm::vec3(0.62f, 0.58f, 0.52f);
+        callisto.visualSize = 0.208f; // Mirrors inventory derived size (Moon-relative true ratio)
+        callisto.visualOrbitRadius = 6.86f; // Mirrors inventory absolute-scale orbit
+        callisto.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        callisto.visualOrbitSpeed = 207.0f; // Mirrors inventory stylistic speed
+        callisto.textureFile = "Textures/Derived/callisto_jpl_1440.jpg";
+        callisto.hasRings = false;
+        bodies[callisto.name] = callisto;
+
         // --- MARS ---
         CelestialBodyData mars;
         mars.name = "Mars";
