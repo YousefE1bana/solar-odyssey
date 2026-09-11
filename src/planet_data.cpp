@@ -256,6 +256,50 @@ void CelestialDatabase::initDatabase() {
         enceladus.hasRings = false;
         bodies[enceladus.name] = enceladus;
 
+        // --- EUROPA (Moon Expansion 1.2) ---
+        // Sourced from JPL JUP365 + NASA; full provenance in
+        // docs/MOON_EXPANSION_1_2_EUROPA.md. Heliocentric distances are
+        // parent-derived (Jupiter's canonical dossier values, copied exactly).
+        // Axial tilt unsourced -> semantic flag false (dossier "N/A").
+        // Temperature range IS sourced (~-223 to ~-133 C) -> flag true.
+        // Like the Moon/Enceladus rows: bodies map only, NOT in `order`.
+        CelestialBodyData europa;
+        europa.name = "Europa";
+        europa.type = "Natural Satellite";
+        europa.subtitle = "Jupiter's Ocean World";
+        europa.realDiameterKm = 3121.6f; // Sourced: 2 x 1560.80 km mean radius (JUP365)
+        europa.relativeSizeToEarth = 0.245f; // Derived: 3121.6 / 12756.2 (in-repo Earth diameter)
+        europa.distanceFromSunAU = 5.204f; // Parent-derived: Jupiter's canonical value (approximate heliocentric)
+        europa.distanceFromSunMillionKm = 778.6f; // Parent-derived: Jupiter's canonical value
+        europa.orbitalPeriodDays = 3.525463f; // Sourced (JUP365)
+        europa.rotationPeriodHours = 84.6111f; // Sourced: synchronous (3.525463 * 24 = 84.611112)
+        europa.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        europa.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        europa.knownMoons = 0;
+        europa.surfaceGravityMs2 = 1.31469f; // Derived from JPL GM/radius: 3202.71210 / 1560.80^2 * 1000
+        europa.meanTemperatureC = -173.0f; // Sourced approx estimated mean (~100 K; always displayed)
+        europa.minTemperatureC = -223.0f; // Sourced approx range bound
+        europa.maxTemperatureC = -133.0f; // Sourced approx range bound
+        europa.hasTemperatureRangeData = true; // Range is sourced (defaults true; set explicitly for clarity)
+        europa.atmosphericComposition = "Extremely tenuous molecular-oxygen atmosphere produced by non-biological surface radiolysis";
+        europa.surfaceFeatures = "Water-ice crust crossed by reddish fractures and ridges, chaos terrain, and relatively few impact craters.";
+        europa.discoveryInfo = "Discovered by Galileo Galilei in January 1610.";
+        europa.description = "Europa is an icy moon of Jupiter with strong evidence for a global salty ocean beneath its water-ice crust. Tidal flexing from Jupiter and its orbital resonance with neighboring moons supplies internal energy, making Europa a major target in the study of potentially habitable environments.";
+        europa.keyFacts = {
+            "Strong evidence for a global salty subsurface ocean beneath the ice crust.",
+            "Surface is primarily water ice with fractures, ridges and chaos terrain.",
+            "Extremely tenuous molecular-oxygen atmosphere is non-biological in origin.",
+            "Europa participates with Io and Ganymede in the 4:2:1 Laplace resonance."
+        };
+        europa.themeColor = glm::vec3(0.82f, 0.78f, 0.70f);
+        europa.visualSize = 0.135f; // Mirrors inventory derived size (Moon-relative true ratio)
+        europa.visualOrbitRadius = 2.45f; // Mirrors inventory absolute-scale orbit
+        europa.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        europa.visualOrbitSpeed = 227.0f; // Mirrors inventory stylistic speed
+        europa.textureFile = "Textures/Derived/europa_jpl_1440.jpg";
+        europa.hasRings = false;
+        bodies[europa.name] = europa;
+
         // --- MARS ---
         CelestialBodyData mars;
         mars.name = "Mars";

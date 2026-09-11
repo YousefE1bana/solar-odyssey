@@ -40,7 +40,18 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // mass 5.4331e-11 = GM/GM_sun = 7.21037/1.32712440018e11 (Moon
         //   precedent: true solar-mass ratio). Primary texture: 4096 Cassini
         //   mosaic derivative; 2048 variant unused (no texture-LOD system).
-        CanonicalBodyDef("Enceladus", 0.022f, 2.5f, 0.0f, 240.0f, "Textures/Derived/enceladus_albedo_4096.jpg", false, 0.0f, 0.0f, false, 120.0f, 5.4331e-11f, "Saturn")
+        CanonicalBodyDef("Enceladus", 0.022f, 2.5f, 0.0f, 240.0f, "Textures/Derived/enceladus_albedo_4096.jpg", false, 0.0f, 0.0f, false, 120.0f, 5.4331e-11f, "Saturn"),
+        // Moon Expansion 1.2 — Europa (Jupiter). Derivations in
+        // docs/MOON_EXPANSION_1_2_EUROPA.md: size 0.135 = Moon-relative true
+        // ratio 0.15 * (1560.80/1737.4); orbitRadius 2.45 = Moon
+        // absolute-distance scale 671100 * (1.4/384400) (no ring-clearance
+        // conflict at Jupiter, so the absolute scale works cleanly);
+        // orbitSpeed 227 = PRESENTATION (moon stylistic ordering
+        // Enceladus 240 > Europa 227 > Moon 200, NOT physical angular
+        // velocity); initialAngle 210.0 = deterministic PRESENTATION phase
+        // (no epoch model; J2000 anomaly not applicable); mass 2.41327e-8 =
+        // GM/GM_sun = 3202.71210/1.32712440018e11.
+        CanonicalBodyDef("Europa", 0.135f, 2.45f, 0.0f, 227.0f, "Textures/Derived/europa_jpl_1440.jpg", false, 0.0f, 0.0f, false, 210.0f, 2.41327e-8f, "Jupiter")
     };
     return s_moons;
 }
@@ -59,6 +70,8 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalNBodyObject
         // Mass 5.4331e-11 solar (GM/GM_sun derivation, see moons entry above
         // and report § Source Provenance) => no stability/perf concern.
         CanonicalBodyDef("Enceladus", 0.022f, 2.5f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 5.4331e-11f, "Saturn"),
+        // Moon Expansion 1.2 — Europa N-body entry (Moon/Enceladus shape).
+        CanonicalBodyDef("Europa", 0.135f, 2.45f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 2.41327e-8f, "Jupiter"),
         CanonicalBodyDef("Mars", 0.4f, 12.5f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.00000032f),
         CanonicalBodyDef("Jupiter", 1.0f, 21.0f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.000954f),
         CanonicalBodyDef("Saturn", 0.9f, 27.0f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.000285f),
