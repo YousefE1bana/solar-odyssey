@@ -9,6 +9,33 @@ SimulationController::SimulationController() {
 SimulationController::~SimulationController() {
 }
 
+// Moon Expansion 1.1 — generic parented-moon Keplerian resolution. Replaces
+// the former Earth/Moon-only branches: any isMoon entry follows its resolved
+// parent with its own visual orbital parameters. Produces identical results
+// for the Earth/Moon pair (200.0/1.4 were the Moon inventory values), so
+// existing Moon behavior is unchanged by construction.
+glm::dvec3 SimulationController::keplerianPositionAt(const std::string& name, double t) const {
+    if (name == "Sun") return sunPosition;
+    for (const auto& b : bodies) {
+        if (b.name == name && b.isMoon) {
+            glm::dvec3 parentPos = sunPosition;
+            for (const auto& p : bodies) {
+                if (p.name == b.parentName && !p.isMoon) {
+                    parentPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, orbitSpeedScale, p.orbitRadius, p.initialAngle);
+                    break;
+                }
+            }
+            return OrbitalPhysics::computeMoonPosition(parentPos, t, b.orbitSpeed, orbitSpeedScale, b.orbitRadius);
+        }
+    }
+    for (const auto& p : bodies) {
+        if (p.name == name) {
+            return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, orbitSpeedScale, p.orbitRadius, p.initialAngle);
+        }
+    }
+    return glm::dvec3(0.0);
+}
+
 void SimulationController::init() {
     bodies.clear();
 
@@ -79,21 +106,7 @@ void SimulationController::init() {
     }
 
     auto computeBodyPos = [this](const std::string& name, double t) -> glm::dvec3 {
-        if (name == "Sun") return sunPosition;
-        if (name == "Moon") {
-            for (const auto& p : bodies) {
-                if (p.name == "Earth") {
-                    glm::dvec3 earthPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, orbitSpeedScale, p.orbitRadius, p.initialAngle);
-                    return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0, orbitSpeedScale, 1.4);
-                }
-            }
-        }
-        for (const auto& p : bodies) {
-            if (p.name == name) {
-                return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, orbitSpeedScale, p.orbitRadius, p.initialAngle);
-            }
-        }
-        return glm::dvec3(0.0);
+        return keplerianPositionAt(name, t);
     };
 
     updateKeplerianPositions();
@@ -120,21 +133,7 @@ void SimulationController::setPhysicsMode(int mode) {
 
     if (mode == PHYSICS_NBODY) {
         auto computeBodyPos = [this](const std::string& name, double t) -> glm::dvec3 {
-            if (name == "Sun") return sunPosition;
-            if (name == "Moon") {
-                for (const auto& p : bodies) {
-                    if (p.name == "Earth") {
-                        glm::dvec3 earthPos = OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, orbitSpeedScale, p.orbitRadius, p.initialAngle);
-                        return OrbitalPhysics::computeMoonPosition(earthPos, t, 200.0, orbitSpeedScale, 1.4);
-                    }
-                }
-            }
-            for (const auto& p : bodies) {
-                if (p.name == name) {
-                    return OrbitalPhysics::computePlanetPosition(t, p.orbitSpeed, orbitSpeedScale, p.orbitRadius, p.initialAngle);
-                }
-            }
-            return glm::dvec3(0.0);
+            return keplerianPositionAt(name, t);
         };
         nbodySim.initializeFromKeplerian(computeBodyPos, simTime, orbitSpeedScale);
         nbodySim.setPhysicsMode(PHYSICS_NBODY);

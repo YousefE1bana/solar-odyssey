@@ -585,7 +585,14 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 
                     ImGui::TextDisabled("Temperature Range:");
                     ImGui::NextColumn();
-                    ImGui::Text("%.1f .. %.1f deg C", data->minTemperatureC, data->maxTemperatureC);
+                    // Generic availability (Moon Expansion 1.1): CelestialBodyData
+                    // declares whether the range is sourced; unsourced ranges
+                    // render "N/A" (existing dossier style) — never a fake span.
+                    if (data->hasTemperatureRangeData) {
+                        ImGui::Text("%.1f .. %.1f deg C", data->minTemperatureC, data->maxTemperatureC);
+                    } else {
+                        ImGui::Text("N/A");
+                    }
                     ImGui::NextColumn();
 
                     ImGui::Columns(1);
@@ -628,7 +635,13 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 
                     ImGui::TextDisabled("Axial Tilt:");
                     ImGui::NextColumn();
-                    ImGui::Text("%.2f deg", data->axialTiltDeg);
+                    // Generic availability (Moon Expansion 1.1): same rule as
+                    // Temperature Range above — no body-name checks in UI.
+                    if (data->hasAxialTiltData) {
+                        ImGui::Text("%.2f deg", data->axialTiltDeg);
+                    } else {
+                        ImGui::Text("N/A");
+                    }
                     ImGui::NextColumn();
 
                     // PSM.3 Sun guard: knownMoons holds the major-planet count

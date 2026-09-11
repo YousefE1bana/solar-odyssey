@@ -71,6 +71,13 @@ private:
     void updateKeplerianPositions();
     void syncNBodyPositions();
 
+    // Moon Expansion 1.1 — generic parented-moon Keplerian resolution shared
+    // by init() and setPhysicsMode() N-body seeding. Any isMoon entry follows
+    // its resolved parent with its own visual orbital parameters; unknown
+    // parents fall back to the Sun (same rule as updateKeplerianPositions).
+    // No per-moon branches: Earth/Moon and Saturn/Enceladus share this path.
+    glm::dvec3 keplerianPositionAt(const std::string& name, double t) const;
+
     double simTime = 0.0;
     double cloudRotationAngle = 0.0;
     double elapsedSimDays = 0.0;

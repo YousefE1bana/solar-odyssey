@@ -8,8 +8,10 @@
 // data, never from a parallel table. Engine feeds the CURRENT runtime roster
 // (its planets/moons vectors, themselves built from CanonicalInventory), so
 // only bodies that actually exist at runtime can appear. Derived-only assets
-// on disk (Europa, Ganymede, Callisto, Tethys, Enceladus) are not runtime
-// bodies and therefore never surface here.
+// still on disk without runtime entries (Europa, Ganymede, Callisto, Tethys)
+// are not runtime bodies and therefore never surface here. (Moon Expansion
+// 1.1: Enceladus IS a runtime body now and flows through these helpers with
+// no code change -- Saturn > Enceladus resolves from the live moons vector.)
 //
 // Future-proofing: PSM.8 registers additional runtime moons by growing the
 // runtime vectors — these helpers take arbitrary pair lists, so the

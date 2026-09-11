@@ -27,6 +27,15 @@ struct CelestialBodyData {
     float orbitalPeriodDays = 0.0f;   // Orbital period in Earth days
     float rotationPeriodHours = 0.0f; // Rotation period around own axis (hours, negative if retrograde)
     float axialTiltDeg = 0.0f;        // Axial tilt in degrees
+    // Semantic availability of scientific fields (Moon Expansion 1.1).
+    // When false, the dossier renders the field as unavailable ("N/A")
+    // instead of presenting the numeric as a measurement. Defaults preserve
+    // every existing body's current display with no per-body rewrite; bodies
+    // with unsourced fields (e.g. Enceladus tilt/range) opt out explicitly.
+    // Mean temperature has no flag: it is always available wherever a row
+    // exists. Never a sentinel/NaN — plain bools read by SolarUI only.
+    bool hasAxialTiltData = true;
+    bool hasTemperatureRangeData = true;
     int knownMoons = 0;               // Confirmed moons count
     float surfaceGravityMs2 = 0.0f;   // Surface gravity in m/s^2 (Earth = 9.8)
     float meanTemperatureC = 0.0f;    // Mean surface/cloud-top temperature in Celsius

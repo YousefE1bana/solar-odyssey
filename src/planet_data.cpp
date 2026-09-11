@@ -209,6 +209,53 @@ void CelestialDatabase::initDatabase() {
         moon.hasRings = false;
         bodies[moon.name] = moon;
 
+        // --- ENCELADUS (Moon Expansion 1.1) ---
+        // Sourced from JPL SAT441 (physical parameters + mean elements) and
+        // NASA Enceladus science pages; full provenance in
+        // docs/MOON_EXPANSION_1_1_ENCELADUS.md § Source Provenance. Heliocentric
+        // distances are parent-derived (Saturn's canonical values): Enceladus
+        // follows Saturn around the Sun. Unsourced tilt/range are represented
+        // semantically (hasAxialTiltData/hasTemperatureRangeData = false, the
+        // generic Moon-Expansion mechanism) so the dossier renders "N/A"
+        // instead of fake measurements; the stored numerics are inert.
+        // Like the Moon row: registered in the bodies map, NOT in `order`.
+        CelestialBodyData enceladus;
+        enceladus.name = "Enceladus";
+        enceladus.type = "Natural Satellite";
+        enceladus.subtitle = "Saturn's Active Ice Moon";
+        enceladus.realDiameterKm = 504.2f; // Sourced: 2 x 252.10 km mean radius (SAT441)
+        enceladus.relativeSizeToEarth = 0.040f; // Derived: 504.2 / 12756.2 (in-repo Earth diameter)
+        enceladus.distanceFromSunAU = 9.582f; // Parent-derived: Saturn's canonical value (approximate heliocentric)
+        enceladus.distanceFromSunMillionKm = 1433.5f; // Parent-derived: Saturn's canonical value
+        enceladus.orbitalPeriodDays = 1.370218f; // Sourced (SAT441 mean elements)
+        enceladus.rotationPeriodHours = 32.8852f; // Sourced: synchronous with orbit (1.370218 d)
+        enceladus.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        enceladus.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        enceladus.knownMoons = 0;
+        enceladus.surfaceGravityMs2 = 0.113f; // Sourced (approx)
+        enceladus.meanTemperatureC = -201.0f; // Sourced (approx mean surface; always displayed)
+        enceladus.minTemperatureC = -201.0f; // Inert storage, NEVER displayed (range flag false)
+        enceladus.maxTemperatureC = -201.0f; // Inert storage, NEVER displayed (range flag false)
+        enceladus.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        enceladus.atmosphericComposition = "No conventional global atmosphere; localized water-vapor plume exosphere (predominantly water vapor, with hydrogen and trace CO2, methane, ammonia)";
+        enceladus.surfaceFeatures = "South-polar tiger-stripe fractures, active water-rich plume vents, resurfaced smooth plains, cratered northern terrains.";
+        enceladus.discoveryInfo = "Discovered by William Herschel on 28 August 1789.";
+        enceladus.description = "Enceladus is a small icy moon of Saturn with a water-ice surface. Its south-polar tiger-stripe fractures vent active water-rich plumes from a global subsurface ocean, and this material contributes to Saturn's E ring. Its plume chemistry makes it a world of astrobiological interest.";
+        enceladus.keyFacts = {
+            "A global subsurface ocean feeds active water-rich plumes at the south pole.",
+            "Tiger-stripe fractures vent geysers of predominantly water vapor with hydrogen and trace molecules.",
+            "Escaping plume material is the source of Saturn's diffuse E ring.",
+            "Synchronously rotating (1.370218 days) and locked in a 2:1 orbital resonance with Dione."
+        };
+        enceladus.themeColor = glm::vec3(0.78f, 0.88f, 0.95f);
+        enceladus.visualSize = 0.022f; // Mirrors inventory derived size (Moon-relative true ratio)
+        enceladus.visualOrbitRadius = 2.5f; // Mirrors inventory presentation choice
+        enceladus.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        enceladus.visualOrbitSpeed = 240.0f; // Mirrors inventory stylistic speed
+        enceladus.textureFile = "Textures/Derived/enceladus_albedo_4096.jpg";
+        enceladus.hasRings = false;
+        bodies[enceladus.name] = enceladus;
+
         // --- MARS ---
         CelestialBodyData mars;
         mars.name = "Mars";
