@@ -71,7 +71,17 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // NOT physical); initialAngle 60.0 = deterministic PRESENTATION phase
         // (J2000 87.4 deg recorded, NOT applied — no epoch model);
         // mass 5.40965e-8 = GM/GM_sun = 7179.28340/1.32712440018e11.
-        CanonicalBodyDef("Callisto", 0.208f, 6.86f, 0.0f, 207.0f, "Textures/Derived/callisto_jpl_1440.jpg", false, 0.0f, 0.0f, false, 60.0f, 5.40965e-8f, "Jupiter")
+        CanonicalBodyDef("Callisto", 0.208f, 6.86f, 0.0f, 207.0f, "Textures/Derived/callisto_jpl_1440.jpg", false, 0.0f, 0.0f, false, 60.0f, 5.40965e-8f, "Jupiter"),
+        // Moon Expansion 1.5 — Tethys (Saturn). Derivations in
+        // docs/MOON_EXPANSION_1_5_TETHYS.md: size 0.046 = Moon-relative true
+        // ratio 0.15 * (531.10/1737.4); orbitRadius 3.10 = Enceladus-relative
+        // Saturn-system scale 2.5 * (295000/238400) — direct Moon scale gives
+        // 1.07, INVALID (inside Saturn's rendered rings, the Enceladus-class
+        // issue); orbitSpeed 233 = PRESENTATION (Enceladus 240 > Tethys 233 >
+        // Europa 227, NOT physical); initialAngle 30.0 = deterministic
+        // PRESENTATION phase (J2000 0.0 deg recorded, NOT applied — no epoch
+        // model); mass 3.10548e-10 = GM/GM_sun = 41.21353/1.32712440018e11.
+        CanonicalBodyDef("Tethys", 0.046f, 3.10f, 0.0f, 233.0f, "Textures/Derived/tethys_jpl_1440.jpg", false, 0.0f, 0.0f, false, 30.0f, 3.10548e-10f, "Saturn")
     };
     return s_moons;
 }
@@ -96,6 +106,8 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalNBodyObject
         CanonicalBodyDef("Ganymede", 0.227f, 3.90f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 7.45057e-8f, "Jupiter"),
         // Moon Expansion 1.4 — Callisto N-body entry (same shape).
         CanonicalBodyDef("Callisto", 0.208f, 6.86f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 5.40965e-8f, "Jupiter"),
+        // Moon Expansion 1.5 — Tethys N-body entry (same shape).
+        CanonicalBodyDef("Tethys", 0.046f, 3.10f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 3.10548e-10f, "Saturn"),
         CanonicalBodyDef("Mars", 0.4f, 12.5f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.00000032f),
         CanonicalBodyDef("Jupiter", 1.0f, 21.0f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.000954f),
         CanonicalBodyDef("Saturn", 0.9f, 27.0f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.000285f),

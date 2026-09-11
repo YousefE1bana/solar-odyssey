@@ -395,6 +395,53 @@ void CelestialDatabase::initDatabase() {
         callisto.hasRings = false;
         bodies[callisto.name] = callisto;
 
+        // --- TETHYS (Moon Expansion 1.5) ---
+        // Sourced from JPL SAT441 + NASA; full provenance in
+        // docs/MOON_EXPANSION_1_5_TETHYS.md. Heliocentric distances are
+        // parent-derived (Saturn's canonical dossier values, copied exactly).
+        // Axial tilt unsourced -> flag false ("N/A"). NOTE: JPL
+        // Laplace-plane tilt 0.0 deg is orbital geometry, NOT physical axial
+        // tilt — deliberately not used. Mean temperature sourced (~-187 C);
+        // no authorized min/max range -> range flag false ("N/A"), stored
+        // zeros inert. No ocean/plume/atmosphere claims. Bodies map only,
+        // NOT in `order`.
+        CelestialBodyData tethys;
+        tethys.name = "Tethys";
+        tethys.type = "Natural Satellite";
+        tethys.subtitle = "Saturn's Icy Scarred Moon";
+        tethys.realDiameterKm = 1062.2f; // Sourced: 2 x 531.10 km mean radius (SAT441)
+        tethys.relativeSizeToEarth = 0.083f; // Derived: 1062.2 / 12756.2 = 0.08327 (in-repo Earth diameter)
+        tethys.distanceFromSunAU = 9.582f; // Parent-derived: Saturn's canonical value (approximate heliocentric)
+        tethys.distanceFromSunMillionKm = 1433.5f; // Parent-derived: Saturn's canonical value
+        tethys.orbitalPeriodDays = 1.887802f; // Sourced (SAT441)
+        tethys.rotationPeriodHours = 45.3072f; // Sourced: synchronous/tidally locked (1.887802 * 24 = 45.307248)
+        tethys.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        tethys.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        tethys.knownMoons = 0;
+        tethys.surfaceGravityMs2 = 0.14611f; // Derived: 41.21353 / 531.10^2 * 1000
+        tethys.meanTemperatureC = -187.0f; // Sourced approx average (~-187 C; always displayed)
+        tethys.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        tethys.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        tethys.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        tethys.atmosphericComposition = "No substantial atmosphere; Tethys is an airless icy moon";
+        tethys.surfaceFeatures = "Bright water-ice surface marked by impact craters, the enormous Odysseus impact basin, and Ithaca Chasma, a canyon system extending more than 1,000 kilometers.";
+        tethys.discoveryInfo = "Discovered by Giovanni Domenico Cassini on 21 March 1684.";
+        tethys.description = "Tethys is a bright, low-density icy moon of Saturn composed largely of water ice. Its surface records a long impact history and is dominated by Odysseus, a giant impact crater, and Ithaca Chasma, an immense canyon system. Its proximity to Saturn and continued bombardment by E-ring ice particles have influenced its surface appearance.";
+        tethys.keyFacts = {
+            "Composed predominantly of water ice, with a density close to that of liquid water.",
+            "Odysseus crater is roughly 400 km across, nearly two-fifths of the moon.",
+            "Ithaca Chasma extends for more than 1,000 km across Tethys.",
+            "Tidally locked to Saturn, completing one orbit in about 1.89 Earth days."
+        };
+        tethys.themeColor = glm::vec3(0.85f, 0.86f, 0.88f);
+        tethys.visualSize = 0.046f; // Mirrors inventory derived size (Moon-relative true ratio)
+        tethys.visualOrbitRadius = 3.10f; // Mirrors inventory Enceladus-relative orbit
+        tethys.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        tethys.visualOrbitSpeed = 233.0f; // Mirrors inventory stylistic speed
+        tethys.textureFile = "Textures/Derived/tethys_jpl_1440.jpg";
+        tethys.hasRings = false;
+        bodies[tethys.name] = tethys;
+
         // --- MARS ---
         CelestialBodyData mars;
         mars.name = "Mars";

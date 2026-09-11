@@ -7,12 +7,11 @@
 // Authority rule: relationships are computed from caller-supplied roster
 // data, never from a parallel table. Engine feeds the CURRENT runtime roster
 // (its planets/moons vectors, themselves built from CanonicalInventory), so
-// only bodies that actually exist at runtime can appear. Derived-only assets
-// still on disk without a runtime entry (Tethys)
-// is not a runtime body and therefore never surfaces here. (Moon Expansion
-// 1.1–1.4: Enceladus, Europa, Ganymede and Callisto ARE runtime bodies now
-// and flow through these helpers with no code change — Saturn > Enceladus
-// and Jupiter > Europa/Ganymede/Callisto resolve from the live moons vector.)
+// only bodies that actually exist at runtime can appear. All five prepared
+// Moon Expansion 1.0 bodies (Enceladus, Europa, Ganymede, Callisto, Tethys)
+// ARE runtime bodies now and flow through these helpers with no code change:
+// Saturn > Enceladus/Tethys and Jupiter > Europa/Ganymede/Callisto resolve
+// from the live moons vector.
 //
 // Future-proofing: PSM.8 registers additional runtime moons by growing the
 // runtime vectors — these helpers take arbitrary pair lists, so the
