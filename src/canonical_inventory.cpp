@@ -51,7 +51,17 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // velocity); initialAngle 210.0 = deterministic PRESENTATION phase
         // (no epoch model; J2000 anomaly not applicable); mass 2.41327e-8 =
         // GM/GM_sun = 3202.71210/1.32712440018e11.
-        CanonicalBodyDef("Europa", 0.135f, 2.45f, 0.0f, 227.0f, "Textures/Derived/europa_jpl_1440.jpg", false, 0.0f, 0.0f, false, 210.0f, 2.41327e-8f, "Jupiter")
+        CanonicalBodyDef("Europa", 0.135f, 2.45f, 0.0f, 227.0f, "Textures/Derived/europa_jpl_1440.jpg", false, 0.0f, 0.0f, false, 210.0f, 2.41327e-8f, "Jupiter"),
+        // Moon Expansion 1.3 — Ganymede (Jupiter). Derivations in
+        // docs/MOON_EXPANSION_1_3_GANYMEDE.md: size 0.227 = Moon-relative
+        // true ratio 0.15 * (2631.20/1737.4); orbitRadius 3.90 = Moon
+        // absolute-distance scale 1070400 * (1.4/384400) (same Europa-valid
+        // scale); orbitSpeed 215 = PRESENTATION (moon stylistic ordering
+        // Enceladus 240 > Europa 227 > Ganymede 215 > Moon 200, NOT physical);
+        // initialAngle 300.0 = deterministic PRESENTATION phase (J2000 324.8
+        // deg recorded, NOT applied — no epoch model); mass 7.45057e-8 =
+        // GM/GM_sun = 9887.83275/1.32712440018e11.
+        CanonicalBodyDef("Ganymede", 0.227f, 3.90f, 0.0f, 215.0f, "Textures/Derived/ganymede_jpl_1440.jpg", false, 0.0f, 0.0f, false, 300.0f, 7.45057e-8f, "Jupiter")
     };
     return s_moons;
 }
@@ -72,6 +82,8 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalNBodyObject
         CanonicalBodyDef("Enceladus", 0.022f, 2.5f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 5.4331e-11f, "Saturn"),
         // Moon Expansion 1.2 — Europa N-body entry (Moon/Enceladus shape).
         CanonicalBodyDef("Europa", 0.135f, 2.45f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 2.41327e-8f, "Jupiter"),
+        // Moon Expansion 1.3 — Ganymede N-body entry (same shape).
+        CanonicalBodyDef("Ganymede", 0.227f, 3.90f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 7.45057e-8f, "Jupiter"),
         CanonicalBodyDef("Mars", 0.4f, 12.5f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.00000032f),
         CanonicalBodyDef("Jupiter", 1.0f, 21.0f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.000954f),
         CanonicalBodyDef("Saturn", 0.9f, 27.0f, 0.0f, 0.0f, "", false, 0.0f, 0.0f, false, 0.0f, 0.000285f),

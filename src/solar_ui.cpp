@@ -555,7 +555,13 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 
                     ImGui::TextDisabled("Mean Temperature:");
                     ImGui::NextColumn();
-                    ImGui::Text("%.1f deg C", data->meanTemperatureC);
+                    // Generic availability (Moon Expansion 1.3): same rule as
+                    // the tilt/range rows — no body-name checks in UI.
+                    if (data->hasMeanTemperatureData) {
+                        ImGui::Text("%.1f deg C", data->meanTemperatureC);
+                    } else {
+                        ImGui::Text("N/A");
+                    }
                     ImGui::NextColumn();
 
                     ImGui::Columns(1);

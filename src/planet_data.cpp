@@ -300,6 +300,54 @@ void CelestialDatabase::initDatabase() {
         europa.hasRings = false;
         bodies[europa.name] = europa;
 
+        // --- GANYMEDE (Moon Expansion 1.3) ---
+        // Sourced from JPL JUP365 + NASA; full provenance in
+        // docs/MOON_EXPANSION_1_3_GANYMEDE.md. Heliocentric distances are
+        // parent-derived (Jupiter's canonical dossier values, copied exactly).
+        // Axial tilt unsourced -> flag false ("N/A"). NOTE: JPL mean-elements
+        // "Tilt = 0.1 deg" is orbital/Laplace-plane geometry, NOT physical
+        // axial tilt — deliberately not used here. No authorized global mean
+        // temperature exists -> hasMeanTemperatureData = false ("N/A"); the
+        // range below is the sourced DAYTIME surface range (90-160 K), not
+        // absolute global extremes. Bodies map only, NOT in `order`.
+        CelestialBodyData ganymede;
+        ganymede.name = "Ganymede";
+        ganymede.type = "Natural Satellite";
+        ganymede.subtitle = "Jupiter's Largest Moon";
+        ganymede.realDiameterKm = 5262.4f; // Sourced: 2 x 2631.20 km mean radius (JUP365)
+        ganymede.relativeSizeToEarth = 0.413f; // Derived: 5262.4 / 12756.2 = 0.41254 (in-repo Earth diameter)
+        ganymede.distanceFromSunAU = 5.204f; // Parent-derived: Jupiter's canonical value (approximate heliocentric)
+        ganymede.distanceFromSunMillionKm = 778.6f; // Parent-derived: Jupiter's canonical value
+        ganymede.orbitalPeriodDays = 7.155588f; // Sourced (JUP365)
+        ganymede.rotationPeriodHours = 171.7341f; // Sourced: synchronous/tidally locked (7.155588 * 24 = 171.734112)
+        ganymede.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        ganymede.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        ganymede.knownMoons = 0;
+        ganymede.surfaceGravityMs2 = 1.42821f; // Derived: GM/radius^2 x 1000 = 9887.83275 / 2631.20^2 * 1000
+        ganymede.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        ganymede.hasMeanTemperatureData = false; // Generic semantic (1.3): dossier renders "N/A"
+        ganymede.minTemperatureC = -183.15f; // Sourced DAYTIME surface range bound (90 K), not global extreme
+        ganymede.maxTemperatureC = -113.15f; // Sourced DAYTIME surface range bound (160 K), not global extreme
+        ganymede.hasTemperatureRangeData = true; // Daytime range is sourced (defaults true; explicit for clarity)
+        ganymede.atmosphericComposition = "Thin oxygen atmosphere produced from Ganymede's icy surface; not a dense heat-trapping atmosphere";
+        ganymede.surfaceFeatures = "Water-ice surface with older dark heavily cratered terrain and younger bright grooved and ridged terrain.";
+        ganymede.discoveryInfo = "Discovered by Galileo Galilei on 7 January 1610.";
+        ganymede.description = "Ganymede is Jupiter's largest moon and the largest moon in the solar system. It is the only moon known to generate its own magnetic field. Evidence from Galileo and Hubble supports a subsurface saltwater ocean beneath its icy crust, possibly containing more water than Earth's surface oceans.";
+        ganymede.keyFacts = {
+            "Largest moon in the solar system, larger than the planet Mercury.",
+            "Only moon known to generate its own intrinsic magnetic field.",
+            "Strong evidence for a deep subsurface saltwater ocean beneath the icy crust.",
+            "Participates with Io and Europa in the 4:2:1 Laplace orbital resonance."
+        };
+        ganymede.themeColor = glm::vec3(0.72f, 0.68f, 0.60f);
+        ganymede.visualSize = 0.227f; // Mirrors inventory derived size (Moon-relative true ratio)
+        ganymede.visualOrbitRadius = 3.90f; // Mirrors inventory absolute-scale orbit
+        ganymede.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        ganymede.visualOrbitSpeed = 215.0f; // Mirrors inventory stylistic speed
+        ganymede.textureFile = "Textures/Derived/ganymede_jpl_1440.jpg";
+        ganymede.hasRings = false;
+        bodies[ganymede.name] = ganymede;
+
         // --- MARS ---
         CelestialBodyData mars;
         mars.name = "Mars";
