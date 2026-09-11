@@ -1,5 +1,20 @@
 # Moon Expansion 1.0 Plan — DESIGN ONLY (post-PSM cycle)
 
+> **Moon Expansion 1.0 implementation status (appended post-implementation;
+> historical design content below is unchanged):**
+> - Enceladus 1.1 — implemented
+> - Europa 1.2 — implemented
+> - Ganymede 1.3 — implemented
+> - Callisto 1.4 — implemented
+> - Tethys 1.5 — implemented
+> - Consolidation 1.6 — implemented
+> - runtime/visual/performance verification intentionally deferred to final
+>   mega-verification
+>
+> Final parents: Earth -> Moon; Jupiter -> Europa, Ganymede, Callisto;
+> Saturn -> Enceladus, Tethys. Final runtime counts: 6 moons, 19 N-body
+> objects. Final runtime PASS is NOT claimed here.
+
 - **Status:** design document. Nothing here is implemented; no roster, sim,
   renderer, save, or test changes are authorized by this file.
 - **Binding constraint:** the PSM.0 architecture froze the canonical runtime

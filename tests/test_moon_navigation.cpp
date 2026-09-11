@@ -1,10 +1,12 @@
-// PSM.7 — Parent/moon BODY navigation: relationship contract tests.
+// PSM.7 — Parent/moon BODY navigation: relationship contract tests,
+// reconciled in Moon Expansion 1.6 for the six-moon post-expansion roster.
 //
 // Pins the semantic roster queries against the real CanonicalInventory (no
-// GL), proves derived-only assets never surface, and proves navigation uses
-// the single existing BODY intent funnel with the established layer
-// preserve/fallback rule. Engine's thin roster wiring and the ImGui sections
-// consuming the same helpers are inspection-verified (established pattern).
+// GL), proves all expansion moons are runtime query participants, and proves
+// navigation uses the single existing BODY intent funnel with the established
+// layer preserve/fallback rule. Engine's thin roster wiring and the ImGui
+// sections consuming the same helpers are inspection-verified (established
+// pattern).
 
 #include "catch.hpp"
 #include "presentation_controller.h"
@@ -41,27 +43,35 @@ std::vector<std::string> canonicalExisting() {
 
 } // namespace
 
-TEST_CASE("PSM.7 Navigation - parentOf Moon is Earth from the canonical roster", "[psm7]") {
+TEST_CASE("PSM.7 Navigation - parentOf all six moons from the canonical roster", "[psm7]") {
     const auto pairs = canonicalMoonPairs();
     const auto existing = canonicalExisting();
-    REQUIRE(pairs.size() == 1);
+    REQUIRE(pairs.size() == 6);
     REQUIRE(parentOfBody("Moon", pairs, existing) == "Earth");
+    REQUIRE(parentOfBody("Enceladus", pairs, existing) == "Saturn");
+    REQUIRE(parentOfBody("Tethys", pairs, existing) == "Saturn");
+    REQUIRE(parentOfBody("Europa", pairs, existing) == "Jupiter");
+    REQUIRE(parentOfBody("Ganymede", pairs, existing) == "Jupiter");
+    REQUIRE(parentOfBody("Callisto", pairs, existing) == "Jupiter");
 }
 
-TEST_CASE("PSM.7 Navigation - childrenOf Earth contains Moon", "[psm7]") {
-    const auto children = childrenOfBody("Earth", canonicalMoonPairs(), canonicalExisting());
-    REQUIRE(children.size() == 1);
-    REQUIRE(children[0] == "Moon");
+TEST_CASE("PSM.7 Navigation - childrenOf Earth/Jupiter/Saturn exact sets", "[psm7]") {
+    const auto pairs = canonicalMoonPairs();
+    const auto existing = canonicalExisting();
+    REQUIRE(childrenOfBody("Earth", pairs, existing) == std::vector<std::string>{"Moon"});
+    REQUIRE((childrenOfBody("Jupiter", pairs, existing) ==
+             std::vector<std::string>{"Europa", "Ganymede", "Callisto"}));
+    REQUIRE((childrenOfBody("Saturn", pairs, existing) ==
+             std::vector<std::string>{"Enceladus", "Tethys"}));
 }
 
 TEST_CASE("PSM.7 Navigation - unrelated bodies fabricate no relationships", "[psm7]") {
     const auto pairs = canonicalMoonPairs();
     const auto existing = canonicalExisting();
-    for (const char* name : {"Mars", "Venus", "Jupiter", "Sun", "Ceres", "Earth"}) {
+    // Moon-less bodies expose no children; parented planets keep their own.
+    for (const char* name : {"Mars", "Venus", "Sun", "Ceres", "Mercury"}) {
         INFO("No children expected for: " << name);
-        if (std::string(name) != "Earth") {
-            REQUIRE(childrenOfBody(name, pairs, existing).empty());
-        }
+        REQUIRE(childrenOfBody(name, pairs, existing).empty());
     }
     REQUIRE(parentOfBody("Earth", pairs, existing).empty());
     REQUIRE(parentOfBody("Mars", pairs, existing).empty());
@@ -71,27 +81,27 @@ TEST_CASE("PSM.7 Navigation - unrelated bodies fabricate no relationships", "[ps
     REQUIRE(childrenOfBody("Krypton", pairs, existing).empty());
 }
 
-TEST_CASE("PSM.7 Navigation - derived-only assets never appear as runtime children", "[psm7]") {
-    // Their derived textures existing on disk does NOT make them runtime
-    // bodies: absent from the canonical moons, the database, and every query.
+TEST_CASE("PSM.7 Navigation - expansion moons are runtime bodies in every query", "[psm7]") {
+    // Moon Expansion 1.0 superseded the PSM.8 absence contract: all five
+    // expansion moons are now canonical moons, database rows, and query
+    // participants — presence asserted for exactly these bodies.
     CelestialDatabase db;
     const auto pairs = canonicalMoonPairs();
     const auto existing = canonicalExisting();
-    for (const char* name : {"Europa", "Ganymede", "Callisto", "Tethys", "Enceladus"}) {
-        INFO("Derived-only asset must stay absent: " << name);
+    for (const char* name : {"Enceladus", "Europa", "Ganymede", "Callisto", "Tethys"}) {
+        INFO("Expansion moon must be present: " << name);
         bool inCanonicalMoons = false;
         for (const auto& m : CanonicalInventory::getCanonicalMoons()) {
             if (m.name == name) inCanonicalMoons = true;
         }
-        REQUIRE_FALSE(inCanonicalMoons);
-        REQUIRE(db.getBody(name) == nullptr);
-        REQUIRE(parentOfBody(name, pairs, existing).empty());
-        REQUIRE(childrenOfBody(name, pairs, existing).empty());
+        REQUIRE(inCanonicalMoons);
+        REQUIRE(db.getBody(name) != nullptr);
+        REQUIRE_FALSE(parentOfBody(name, pairs, existing).empty());
     }
-    const auto earthChildren = childrenOfBody("Earth", pairs, existing);
-    for (const char* name : {"Europa", "Ganymede", "Callisto", "Tethys", "Enceladus"}) {
-        for (const auto& c : earthChildren) REQUIRE(c != name);
-    }
+    const auto saturnChildren = childrenOfBody("Saturn", pairs, existing);
+    REQUIRE(saturnChildren == std::vector<std::string>{"Enceladus", "Tethys"});
+    const auto jupiterChildren = childrenOfBody("Jupiter", pairs, existing);
+    REQUIRE((jupiterChildren == std::vector<std::string>{"Europa", "Ganymede", "Callisto"}));
 }
 
 TEST_CASE("PSM.7 Navigation - relationships require both ends in runtime", "[psm7]") {

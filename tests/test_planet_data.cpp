@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <utility>
 
 TEST_CASE("CelestialDatabase Canonical Inventory & Validation", "[planet_data][canonical]") {
     CelestialDatabase db;
@@ -77,6 +78,53 @@ TEST_CASE("CelestialDatabase Canonical Inventory & Validation", "[planet_data][c
         REQUIRE(moon->visualSize > 0.0f);
     }
 
+    SECTION("Validate all six expansion moons are present Natural Satellites") {
+        // Moon Expansion 1.6 reconciliation: absence inverted to presence for
+        // exactly the five expansion moons. Moon convention preserved: rows
+        // exist in the map but NOT in `order` (ordered navigation unchanged).
+        const auto& order = db.getOrder();
+        REQUIRE(order.size() == 13);
+        for (const char* name : {"Enceladus", "Europa", "Ganymede", "Callisto", "Tethys"}) {
+            INFO("Expansion moon present: " << name);
+            const CelestialBodyData* body = db.getBody(name);
+            REQUIRE(body != nullptr);
+            REQUIRE(body->type == "Natural Satellite");
+            REQUIRE(std::find(order.begin(), order.end(), name) == order.end());
+        }
+    }
+
+    SECTION("Validate moon scientific availability flags") {
+        const CelestialBodyData* enceladus = db.getBody("Enceladus");
+        REQUIRE(enceladus != nullptr);
+        REQUIRE(enceladus->hasAxialTiltData == false);
+        REQUIRE(enceladus->hasTemperatureRangeData == false);
+        REQUIRE(enceladus->hasMeanTemperatureData == true);
+
+        const CelestialBodyData* europa = db.getBody("Europa");
+        REQUIRE(europa != nullptr);
+        REQUIRE(europa->hasAxialTiltData == false);
+        REQUIRE(europa->hasTemperatureRangeData == true);
+        REQUIRE(europa->hasMeanTemperatureData == true);
+
+        const CelestialBodyData* ganymede = db.getBody("Ganymede");
+        REQUIRE(ganymede != nullptr);
+        REQUIRE(ganymede->hasAxialTiltData == false);
+        REQUIRE(ganymede->hasTemperatureRangeData == true);
+        REQUIRE(ganymede->hasMeanTemperatureData == false);
+
+        const CelestialBodyData* callisto = db.getBody("Callisto");
+        REQUIRE(callisto != nullptr);
+        REQUIRE(callisto->hasAxialTiltData == false);
+        REQUIRE(callisto->hasTemperatureRangeData == false);
+        REQUIRE(callisto->hasMeanTemperatureData == false);
+
+        const CelestialBodyData* tethys = db.getBody("Tethys");
+        REQUIRE(tethys != nullptr);
+        REQUIRE(tethys->hasAxialTiltData == false);
+        REQUIRE(tethys->hasTemperatureRangeData == false);
+        REQUIRE(tethys->hasMeanTemperatureData == true);
+    }
+
     SECTION("Validate Deep Space Objects (Black Hole and Wormhole)") {
         const CelestialBodyData* blackHole = db.getBody("Black Hole");
         REQUIRE(blackHole != nullptr);
@@ -137,8 +185,8 @@ TEST_CASE("N-Body Registry Canonical Consistency", "[planet_data][nbody]") {
         nbodySim.addBody(def.name, def.mass, def.size, def.isStatic, def.parentPlanet);
     }
 
-    SECTION("N-Body contains exactly 14 registered celestial bodies") {
-        REQUIRE(nbodySim.bodies.size() == 14);
+    SECTION("N-Body contains exactly 19 registered celestial bodies") {
+        REQUIRE(nbodySim.bodies.size() == 19);
         
         for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
             const NBodyObject* obj = nbodySim.getBody(def.name);
@@ -181,16 +229,23 @@ TEST_CASE("Engine Runtime Planet & Moon Inventory Canonical Consistency", "[plan
         REQUIRE(dwarfCount == 4);
     }
 
-    SECTION("Canonical Moons contains exactly 1 moon parented to Earth") {
-        REQUIRE(canonicalMoons.size() == 1);
-        REQUIRE(canonicalMoons[0].name == "Moon");
-        REQUIRE(canonicalMoons[0].parentPlanet == "Earth");
-        REQUIRE(canonicalMoons[0].size > 0.0f);
-        REQUIRE(canonicalMoons[0].orbitRadius > 0.0f);
+    SECTION("Canonical Moons contains exactly 6 moons with exact parents") {
+        REQUIRE(canonicalMoons.size() == 6);
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            {"Moon", "Earth"}, {"Enceladus", "Saturn"}, {"Europa", "Jupiter"},
+            {"Ganymede", "Jupiter"}, {"Callisto", "Jupiter"}, {"Tethys", "Saturn"}
+        };
+        for (size_t i = 0; i < expected.size(); ++i) {
+            INFO("Moon roster entry " << i);
+            REQUIRE(canonicalMoons[i].name == expected[i].first);
+            REQUIRE(canonicalMoons[i].parentPlanet == expected[i].second);
+            REQUIRE(canonicalMoons[i].size > 0.0f);
+            REQUIRE(canonicalMoons[i].orbitRadius > 0.0f);
+        }
     }
 
-    SECTION("Canonical N-Body objects contains exactly 14 objects") {
-        REQUIRE(canonicalNBody.size() == 14);
+    SECTION("Canonical N-Body objects contains exactly 19 objects") {
+        REQUIRE(canonicalNBody.size() == 19);
         REQUIRE(canonicalNBody[0].name == "Sun");
         REQUIRE(canonicalNBody[0].isStatic == true);
     }

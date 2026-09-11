@@ -204,6 +204,11 @@ void Engine::initPlanetsAndMoons() {
 }
 
 void Engine::focusPlanetByName(const std::string& name) {
+    // Legacy name kept for compatibility: semantically accepts ALL focusable
+    // runtime celestial bodies (Sun, planets, AND moons). Moon Expansion 1.6
+    // closed the pre-existing gap where moons could not use the
+    // Explorer/dossier "Focus Camera" path. Generic moon loop — no
+    // body-name branches; numeric 0-8 focus behavior unchanged.
     presenter.forceExplorer();
     selectBody(name);
     solarUI.showPlanetCard = true;
@@ -219,7 +224,19 @@ void Engine::focusPlanetByName(const std::string& name) {
         for (size_t i = 0; i < planets.size(); ++i) {
             if (planets[i].name == name) {
                 cameraCtrl.focusOnBody((int)i, name, planets[i].size, planets[i].currentPosition);
-                break;
+                return;
+            }
+        }
+        // Generic moon focus (1.6): same preamble/unwind as above (shared),
+        // live position, planetScale-aware effective radius (PSM.2 R3 rule),
+        // same CameraController body-focus path with the 100+i moon index
+        // convention used by picking and resolveBodyFocusTarget.
+        for (size_t i = 0; i < moons.size(); ++i) {
+            if (moons[i].name == name) {
+                const float effectiveRadius =
+                    PresentationController::effectivePresentationRadius(moons[i].size, solarUI.planetScale);
+                cameraCtrl.focusOnBody(100 + (int)i, name, effectiveRadius, moons[i].currentPosition);
+                return;
             }
         }
     }
