@@ -1,3 +1,4 @@
+#include "input_policy.h"
 #include "camera_controller.h"
 #include "save_state.h"
 #include <imgui.h>
@@ -140,7 +141,7 @@ void CameraController::focusOnBody(int planetIdx, const std::string& name, float
     focusedPlanetIndex = planetIdx;
     focusedBodyName = name;
     
-    float idealDist = std::max(bodyRadius * 3.8f, 1.2f);
+    float idealDist = std::max(bodyRadius * 3.8f, .01f);
     // PSM.2 correction: the Sun framing factor is derived from the passed
     // (effective) radius — 3.5x, i.e. exactly the legacy 7.0 at the canonical
     // 2.0 radius — instead of a fixed constant, so BODY presentation framing
@@ -162,7 +163,7 @@ void CameraController::focusOnBodyTour(int planetIndex, const std::string& name,
     focusedBodyName = name;
     focusAngleX = (name == "Saturn") ? 45.0f : 15.0f;
     focusAngleY = (name == "Saturn") ? 55.0f : 65.0f;
-    focusDistance = std::max(visualRadius * 3.8f, 2.5f);
+    focusDistance = std::max(visualRadius * 3.8f, .01f);
     minFocusDistance = visualRadius * 1.5f;
     maxFocusDistance = visualRadius * 15.0f;
 
@@ -245,8 +246,24 @@ void CameraController::setSpaceshipMode(bool enabled, const glm::vec3& shipEye, 
     }
 }
 
+void CameraController::integrateFreeMovement(const glm::vec3& direction, float speedMul, float deltaTime) {
+    if (mode != CAM_FREE || deltaTime <= 0) return;
+    glm::vec3 wishDir = direction;
+    if (glm::length(wishDir) > 0.001f) {
+        wishDir = glm::normalize(wishDir);
+        glm::vec3 targetVelocity = wishDir * (freeSpeed * speedMul);
+        freeVelocity = glm::mix(freeVelocity, targetVelocity, 1.0f - expf(-freeAcceleration * deltaTime));
+    } else {
+        freeVelocity = glm::mix(freeVelocity, glm::vec3(0.0f), 1.0f - expf(-freeDamping * deltaTime));
+    }
+
+    freePos += freeVelocity * deltaTime;
+    currentEye = freePos;
+    currentTarget = freePos + freeFront;
+}
+
 void CameraController::processKeyboard(GLFWwindow* window, float deltaTime) {
-    if (ImGui::GetIO().WantCaptureKeyboard) return;
+    if (!flightInputAllowed(ImGui::GetIO().WantTextInput, false)) return;
 
     if (mode == CAM_FREE) {
         float speedMul = 1.0f;
@@ -261,17 +278,7 @@ void CameraController::processKeyboard(GLFWwindow* window, float deltaTime) {
         if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) wishDir += glm::vec3(0.0f, 1.0f, 0.0f);
         if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) wishDir -= glm::vec3(0.0f, 1.0f, 0.0f);
 
-        if (glm::length(wishDir) > 0.001f) {
-            wishDir = glm::normalize(wishDir);
-            glm::vec3 targetVelocity = wishDir * (freeSpeed * speedMul);
-            freeVelocity = glm::mix(freeVelocity, targetVelocity, 1.0f - expf(-freeAcceleration * deltaTime));
-        } else {
-            freeVelocity = glm::mix(freeVelocity, glm::vec3(0.0f), 1.0f - expf(-freeDamping * deltaTime));
-        }
-
-        freePos += freeVelocity * deltaTime;
-        currentEye = freePos;
-        currentTarget = freePos + freeFront;
+        integrateFreeMovement(wishDir, speedMul, deltaTime);
     } else if (mode == CAM_ORBITAL) {
         float rotSpeed = 45.0f * deltaTime;
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) orbitAngleY = std::max(5.0f, orbitAngleY - rotSpeed);

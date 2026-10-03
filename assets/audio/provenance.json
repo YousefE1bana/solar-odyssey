@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "author": "Agecaf",
+  "year": 2018,
+  "source": "https://opengameart.org/content/out-in-space-0",
+  "license": "CC0-1.0",
+  "verification": "Author explicitly dedicates both original named Ogg files to the public domain. Local supplied files match source names/sizes; exploration Vorbis metadata identifies Agecaf and 2018.",
+  "transformation": "None; original Ogg bytes retained. Decoded locally to signed 16-bit PCM for synchronized OpenAL playback.",
+  "assets": [
+    {
+      "path": "out-in-space-menu.ogg",
+      "source_filename": "Out in Space Menu.ogg",
+      "bytes": 616192,
+      "sha256": "f9a2af7ab2e28f6150e87f9f0f957c4ea83b6aec948e847bcbc55e97c5594106"
+    },
+    {
+      "path": "out-in-space.ogg",
+      "source_filename": "Out in Space.ogg",
+      "bytes": 2375347,
+      "sha256": "85c5feb769eb8d400db309b8152011399666893549ed7de401a6249f25acf655"
+    }
+  ]
+}

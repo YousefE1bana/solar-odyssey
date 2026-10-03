@@ -434,12 +434,12 @@ bool structureValid(const Value& root, int version) {
                     !names.insert(entry.get("name").strVal).second) return false;
             }
         }
-        for (const char* key : {"camera", "spaceship", "settings", "progression", "presentation"}) if (!root.has(key)) return false;
+        for (const char* key : {"camera", "spaceship", "settings", "presentation"}) if (!root.has(key)) return false;
         for (const char* key : {"simTimeSeconds", "timeUnit", "timeMultiplier", "isPaused", "physicsMode", "orbitSpeedScale", "cloudRotationAngle", "numerical"}) if (!sim.has(key)) return false;
         if (sim.get("timeUnit").strVal != "simulation_seconds") return false;
         for (const char* key : {"mode", "eye", "target", "up", "orbitDistance", "orbitAngleX", "orbitAngleY", "focusedBodyName", "focusDistance", "focusAngleX", "focusAngleY", "freePos", "freeYaw", "freePitch", "freeSpeed", "fov", "povHeight", "povOrbitAngle", "minFocusDistance", "maxFocusDistance"}) if (!cam.has(key)) return false;
         for (const char* key : {"active", "position", "velocity", "throttle", "targetBody", "orientation", "boostEnergy", "cameraView"}) if (!ship.has(key)) return false;
-        if (!presentation.has("mode") || !presentation.has("selectedBodyName") || !prog.has("records") ||
+        if (!presentation.has("mode") || !presentation.has("selectedBodyName") || (version < 6 && !prog.has("records")) ||
             !root.get("settings").has("autoSaveOnExit")) return false;
         const auto& n = sim.get("numerical");
         if (!fields(n, J_NUM, {"gravitationalConstant", "softening", "fixedDeltaTime", "timeAccumulator", "maxAccumulatorCap"}) || !fields(n, J_ARR, {"roots"})) return false;
@@ -455,7 +455,7 @@ bool structureValid(const Value& root, int version) {
 
 bool SimulationSaveState::validate() const {
     const auto& c = camera;
-    if (version < 1 || version > 5 || !textValid(timestamp, true) ||
+    if (version < 1 || version > 6 || !textValid(timestamp, true) ||
         !bounded(simulationSeconds(), 0.0, 1e12) || !bounded(timeMultiplier, 0.0, 1e6) ||
         physicsMode < 0 || physicsMode > 1 || c.mode < CAM_ORBITAL || c.mode > CAM_WORMHOLE ||
         !vectorValid(c.eye) || !vectorValid(c.target) || !vectorValid(c.up) || !vectorValid(c.freePos) ||
@@ -473,14 +473,6 @@ bool SimulationSaveState::validate() const {
     if ((c.mode == CAM_FOCUS || c.mode == CAM_POV || c.mode == CAM_TOUR) && !bodyExists(c.focusedBodyName)) return false;
     if (c.mode == CAM_BLACK_HOLE && c.focusedBodyName != "Black Hole" && c.focusedBodyName != "Gargantua") return false;
     if (c.mode == CAM_WORMHOLE && c.focusedBodyName != "Wormhole" && c.focusedBodyName != "Einstein-Rosen Bridge") return false;
-    std::set<std::string> targets;
-    if (progression.records.size() > 1024) return false;
-    for (const auto& r : progression.records) {
-        if (!textValid(r.target) || !targets.insert(r.target).second || r.status < 0 || r.status > 4 || r.visitCount < 0 ||
-            !bounded(r.bestPhotoScore, 0.0, 100.0) || r.anomalyIds.size() > 1024) return false;
-        std::set<std::string> anomalies;
-        for (const auto& id : r.anomalyIds) if (!textValid(id) || !anomalies.insert(id).second) return false;
-    }
     if (version >= 4) {
         const auto& n = continuation;
         if (version >= 5) {
@@ -609,33 +601,7 @@ std::string SimulationSaveState::toJSON() const {
         ss << "  \"presentation\": {\"mode\": " << presentationMode << ", \"selectedBodyName\": \"" << escapeJSON(selectedBodyName) << "\"},\n";
     }
 
-    // Cycle 4 progression block (v3). Compact metadata only — never pixels.
-    ss << "  \"progression\": {\n";
-    ss << "    \"records\": [\n";
-    for (size_t i = 0; i < progression.records.size(); ++i) {
-        const auto& r = progression.records[i];
-        ss << "      {\n";
-        ss << "        \"target\": \"" << escapeJSON(r.target) << "\",\n";
-        ss << "        \"status\": " << r.status << ",\n";
-        ss << "        \"detected\": " << (r.detected ? "true" : "false") << ",\n";
-        ss << "        \"visited\": " << (r.visited ? "true" : "false") << ",\n";
-        ss << "        \"firstVisitRecorded\": " << (r.firstVisitRecorded ? "true" : "false") << ",\n";
-        ss << "        \"visitCount\": " << r.visitCount << ",\n";
-        ss << "        \"atmosphereApplicable\": " << (r.atmosphereApplicable ? "true" : "false") << ",\n";
-        ss << "        \"orbitalSurveyCompleted\": " << (r.orbitalSurveyCompleted ? "true" : "false") << ",\n";
-        ss << "        \"atmosphericScanCompleted\": " << (r.atmosphericScanCompleted ? "true" : "false") << ",\n";
-        ss << "        \"bestPhotoScore\": " << r.bestPhotoScore << ",\n";
-        ss << "        \"gravityMeasurementCompleted\": " << (r.gravityMeasurementCompleted ? "true" : "false") << ",\n";
-        ss << "        \"closeFlybyCompleted\": " << (r.closeFlybyCompleted ? "true" : "false") << ",\n";
-        ss << "        \"anomalies\": [";
-        for (size_t j = 0; j < r.anomalyIds.size(); ++j) {
-            ss << "\"" << escapeJSON(r.anomalyIds[j]) << "\"" << (j + 1 < r.anomalyIds.size() ? ", " : "");
-        }
-        ss << "]\n";
-        ss << "      }" << (i + 1 < progression.records.size() ? "," : "") << "\n";
-    }
-    ss << "    ]\n";
-    ss << "  },\n";
+    if (version < 6) ss << "  \"progression\": {\"records\": []},\n";
 
     // Settings
     ss << "  \"settings\": {\n";
@@ -655,7 +621,7 @@ bool SimulationSaveState::fromJSON(const std::string& jsonStr) {
 
     if (!integers(root, {"version"})) return false;
     const int fileVersion = root.get("version").getInt(1);
-    if (fileVersion < 1 || fileVersion > 5 || !structureValid(root, fileVersion)) return false;
+    if (fileVersion < 1 || fileVersion > 6 || !structureValid(root, fileVersion)) return false;
     // Never partially overwrite the caller's state, even on a late failure.
     SimulationSaveState parsed;
     auto& version = parsed.version;
@@ -670,7 +636,6 @@ bool SimulationSaveState::fromJSON(const std::string& jsonStr) {
     auto& shipVelocity = parsed.shipVelocity;
     auto& shipThrottle = parsed.shipThrottle;
     auto& shipTargetBody = parsed.shipTargetBody;
-    auto& progression = parsed.progression;
     auto& autoSaveOnExit = parsed.autoSaveOnExit;
 
     version = root.get("version").getInt(1);
@@ -783,38 +748,7 @@ bool SimulationSaveState::fromJSON(const std::string& jsonStr) {
         }
     }
 
-    // Cycle 4 progression (v3 only). v2 saves carry no such block: the
-    // default-fresh ProgressionSaveData member is kept untouched, so old
-    // saves load with new-game progression and all v2 data preserved.
-    if (version >= 3 && root.has("progression")) {
-        const auto& pObj = root.get("progression");
-        progression.records.clear();
-        if (pObj.has("records")) {
-            for (const auto& rVal : pObj.get("records").arrVal) {
-                DiscoveryRecordSave r;
-                r.target = rVal.get("target").getStr("");
-                if (r.target.empty()) continue;
-                r.status = rVal.get("status").getInt(0);
-                r.detected = rVal.get("detected").getBool(false);
-                r.visited = rVal.get("visited").getBool(false);
-                r.firstVisitRecorded = rVal.get("firstVisitRecorded").getBool(false);
-                r.visitCount = rVal.get("visitCount").getInt(0);
-                r.atmosphereApplicable = rVal.get("atmosphereApplicable").getBool(false);
-                r.orbitalSurveyCompleted = rVal.get("orbitalSurveyCompleted").getBool(false);
-                r.atmosphericScanCompleted = rVal.get("atmosphericScanCompleted").getBool(false);
-                r.bestPhotoScore = rVal.get("bestPhotoScore").getFloat(0.0f);
-                r.gravityMeasurementCompleted = rVal.get("gravityMeasurementCompleted").getBool(false);
-                r.closeFlybyCompleted = rVal.get("closeFlybyCompleted").getBool(false);
-                if (rVal.has("anomalies")) {
-                    for (const auto& aVal : rVal.get("anomalies").arrVal) {
-                        const std::string aid = aVal.getStr("");
-                        if (!aid.empty()) r.anomalyIds.push_back(aid);
-                    }
-                }
-                progression.records.push_back(r);
-            }
-        }
-    }
+    // Legacy discovery metadata is intentionally discarded during migration.
 
     // Settings
     if (root.has("settings")) {
@@ -906,17 +840,12 @@ void SaveStateManager::captureState(SimulationSaveState& outState,
     outState.autoSaveOnExit = autoSaveOnExit;
 }
 
-void SaveStateManager::captureProgression(SimulationSaveState& outState, const ScienceProgression& prog) {
-    if (outState.version < 3) outState.version = 3;
-    outState.progression = prog.captureSaveData();
-}
-
 void SaveStateManager::captureState(SimulationSaveState& out, const SimulationController& sim,
                                    const CameraController& cam, const Spaceship& ship, bool autoSave,
                                    int presentation, const std::string& selection) {
     out = SimulationSaveState{};
     captureState(out, sim.getSimTime(), sim.getTimeMultiplier(), sim.isPaused(), sim.getPhysicsMode(), cam, ship, autoSave);
-    out.version = 5;
+    out.version = 6;
     out.simTimeSeconds = sim.getSimTime();
     out.elapsedSimDays = sim.getElapsedSimDays();
     out.continuation = sim.captureContinuation();
@@ -945,14 +874,6 @@ void SaveStateManager::captureState(SimulationSaveState& out, const SimulationCo
         out.presentationMode = 0;
     }
     if (ship.active) { out.camera.mode = CAM_SPACESHIP; out.presentationMode = 0; }
-}
-
-void SaveStateManager::restoreProgression(const SimulationSaveState& state, ScienceProgression& prog) {
-    if (state.version >= 3) {
-        prog.applySaveData(state.progression);
-    } else {
-        prog.resetFresh(); // v2 and older: new-game progression, v2 data intact
-    }
 }
 
 bool SaveStateManager::restoreState(const SimulationSaveState& state, SimulationController& simulation,

@@ -4,7 +4,7 @@
 // GL-free and header-inline by design (<string>/<vector> + glm math only):
 // one scanner state machine, pure segment/sphere geometry helpers, and the
 // flyby session record. Engine drives exactly one scanner instance per
-// frame; completion updates ScienceProgression discovery records and status.
+// frame; completion produces passive instrument feedback.
 // No body names anywhere — targets are data (strings + positions).
 
 #include <string>
@@ -12,6 +12,8 @@
 #include <cmath>
 #include <algorithm>
 #include <glm/glm.hpp>
+
+enum class ScienceActivity { OrbitalSurvey, AtmosphericScan, CloseFlyby, GravityMeasurement };
 
 enum class ScannerMode {
     LongRange = 0,  // detection sweeps: undiscovered bodies/anomalies

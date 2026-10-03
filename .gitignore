@@ -1,4 +1,9 @@
 # Build output
+.output/
+__pycache__/
+*.pyc
+Screenshots/
+benchmark_results/
 build/
 build_cmake/
 build-cmake/

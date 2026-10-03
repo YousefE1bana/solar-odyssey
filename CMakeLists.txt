@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
-project(SolarOdyssey VERSION 1.0.0 LANGUAGES CXX RC)
+project(SolarOdyssey VERSION 1.1.0 LANGUAGES CXX RC)
+
+set_source_files_properties(app_icon.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,7 +30,6 @@ add_executable(SolarOdyssey
   src/planet_pov.cpp
   src/warp_system.cpp
   src/spaceship.cpp
-  src/science_progression.cpp
   src/solar_ui.cpp
   src/nbody_simulation.cpp
   src/audio_loader.cpp
@@ -134,6 +135,7 @@ enable_testing()
 
 add_executable(SolarOdysseyTests
   tests/test_main.cpp
+  tests/test_menu_transition.cpp
   src/runtime_paths.cpp
   tests/test_planet_data.cpp
   tests/test_picking.cpp
@@ -163,6 +165,7 @@ add_executable(SolarOdysseyTests
   tests/test_presentation_controller.cpp
   tests/test_body_framing.cpp
   tests/test_body_dossier.cpp
+  tests/test_dossier_layout.cpp
   tests/test_body_layers.cpp
   tests/test_venus_layers.cpp
   tests/test_science_layers.cpp
@@ -177,9 +180,9 @@ add_executable(SolarOdysseyTests
   src/wormhole_portal_renderer.cpp
   src/planet_data.cpp
   src/canonical_inventory.cpp
+  src/solar_ui.cpp
   src/picking.cpp
   src/camera_controller.cpp
-  src/science_progression.cpp
   src/settings_persistence.cpp
   src/spaceship.cpp
   src/warp_system.cpp

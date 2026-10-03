@@ -32,7 +32,8 @@ public:
 
     void musicLoad(const std::string& path);
     void musicStop();
-    void musicUpdate(bool muted, float masterVolume, float musicVolume);
+    void musicUpdate(bool muted, float masterVolume, float musicVolume,
+                     bool exploration = false, float deltaTime = 0.0f);
 
     void playPlanetSound(const std::string& planetName, bool muted, float masterVolume, float sfxVolume);
     void startPOVAmbientSound(const std::string& planetName, bool muted, float masterVolume, float sfxVolume);
@@ -44,7 +45,7 @@ public:
     void playWarpCharge(bool muted, float masterVolume, float sfxVolume);
     void playWarpExit(bool muted, float masterVolume, float sfxVolume);
     void stopWarpSounds(); // Load/session reset: no old charge/exit cue.
-    void playDiscoveryChime(bool muted, float masterVolume, float sfxVolume);
+    void playInstrumentChime(bool muted, float masterVolume, float sfxVolume);
 
     void updateSpatialAudio(const glm::vec3& cameraEye, const glm::vec3& bhPos, const glm::vec3& whPos, bool muted, float masterVolume, float sfxVolume);
     void updatePOVVolume(bool muted, float masterVolume, float sfxVolume);
@@ -52,11 +53,14 @@ public:
     // Queries for unit testing and state inspection
     const std::string& getCurrentPOVPlanet() const { return currentPOVPlanet; }
     bool isMusicActive() const { return gMusic.active; }
+    float musicGain() const {
+        float gain = 0;
+        if (isAudioAvailable && backgroundSource) alGetSourcef(backgroundSource, AL_GAIN, &gain);
+        return gain;
+    }
     const std::string& getMusicTrackPath() const { return gMusic.trackPath; }
 
 private:
-    void ensurePlanetAudio(const std::string& planetName);
-    std::set<std::string> loadedPlanetAudio;
     void generateTone(ALuint buffer, float frequency, float duration);
 
     bool isAudioAvailable = false;
@@ -65,6 +69,10 @@ private:
 
     ALuint backgroundSource = 0;
     ALuint backgroundBuffer = 0;
+    ALuint explorationSource = 0;
+    ALuint explorationBuffer = 0;
+    float musicBlend = 0.0f;
+    bool explorationMusicReady = false;
     ALuint spaceshipSource = 0;
     ALuint spaceshipBuffer = 0;
     ALuint blackHoleSource = 0;

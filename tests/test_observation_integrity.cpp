@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include "observation_policy.h"
 #include "science_scanner.h"
-#include "science_progression.h"
 #include "screenshot_writer.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
@@ -37,22 +36,6 @@ TEST_CASE("Observation proximity uses physical observer, never focus", "[observa
     REQUIRE(Observation::nearby(flight, target, 5));
     REQUIRE_FALSE(Observation::nearby(Observation::observer(Observation::Context::Spacecraft, eye, ship, true), target, 5));
     REQUIRE_FALSE(Observation::nearby({target.position, true}, target, 5));
-}
-
-TEST_CASE("Selection point cannot grant a remote visit", "[observation]") {
-    ScienceProgression science;
-    const std::vector<ProgressionBodyRef> bodies{{"Body", {100, 0, 0}, 1}};
-    const auto observer = Observation::observer(Observation::Context::FreeFlight, {0, 0, 0}, {100, 0, 0}, false);
-    REQUIRE(science.updateVisits(observer.position, bodies, {}).empty());
-    REQUIRE(science.getRecord("Body") == nullptr);
-    REQUIRE(science.updateVisits({102, 0, 0}, bodies, {}).size() == 1);
-    REQUIRE(science.updateVisits({102, 0, 0}, bodies, {}).empty());
-    REQUIRE(science.getRecord("Body")->visitCount == 1);
-    const auto saved = science.captureSaveData();
-    science.applySaveData(saved);
-    science.restoreVisitTracking({102, 0, 0}, bodies);
-    REQUIRE(science.updateVisits({102, 0, 0}, bodies, {}).empty());
-    REQUIRE(science.getRecord("Body")->visitCount == 1);
 }
 
 TEST_CASE("Optical evidence rejects behind, off frame, tiny and clipped bodies", "[observation][photo]") {
@@ -126,12 +109,8 @@ TEST_CASE("Scanner pauses and waits for observed arc before single completion", 
     REQUIRE(scanner.progress == Approx(1));
     REQUIRE(scanner.update(0.1f, true, true));
     REQUIRE_FALSE(scanner.update(12, true));
-    ScienceProgression science;
-    REQUIRE(science.recordActivity(scanner.target, ScienceActivity::OrbitalSurvey));
     scanner.acknowledge();
-    science.applySaveData(science.captureSaveData());
-    REQUIRE(science.isActivityComplete("Body", ScienceActivity::OrbitalSurvey));
-    REQUIRE_FALSE(science.recordActivity("Body", ScienceActivity::OrbitalSurvey));
+    REQUIRE(scanner.state == ScannerState::Idle);
 }
 
 TEST_CASE("Invalid time cannot complete scanner", "[observation][scan]") {
@@ -170,17 +149,6 @@ TEST_CASE("Flyby remembers collision after response and swept surface crossing",
     REQUIRE_FALSE(session.update({-2, 0, 0}, 1, false));
     REQUIRE(session.collided);
     REQUIRE_FALSE(session.update({-8, 0, 0}, 1, false));
-}
-
-TEST_CASE("Photography rejects generic completion and non-finite score", "[observation][photo]") {
-    ScienceProgression science;
-    REQUIRE_FALSE(science.recordActivity("Body", ScienceActivity::Photography));
-    REQUIRE_FALSE(science.recordPhoto("Body", std::numeric_limits<float>::quiet_NaN()));
-    REQUIRE_FALSE(science.recordPhoto("Body", std::numeric_limits<float>::infinity()));
-    REQUIRE(science.getRecord("Body") == nullptr);
-    REQUIRE(science.recordPhoto("Body", 73));
-    REQUIRE_FALSE(science.recordPhoto("Body", 21));
-    REQUIRE(science.getRecord("Body")->bestPhotoScore == Approx(73));
 }
 
 TEST_CASE("Screenshot serialization checks short writes, flush and BMP padding", "[observation][photo][capture]") {

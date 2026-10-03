@@ -22,7 +22,7 @@ void ParticleSystem::init() {
         flare.velocity = glm::normalize(flare.position) * (0.015f + static_cast<float>(rand()) / RAND_MAX * 0.025f);
         flare.color = glm::vec3(1.0f, 0.65f + static_cast<float>(rand()) / RAND_MAX * 0.35f, 0.1f);
         flare.size = 0.06f + static_cast<float>(rand()) / RAND_MAX * 0.08f;
-        flare.life = static_cast<float>(rand()) / RAND_MAX * 2.0f;
+        flare.life = 0.05f + static_cast<float>(rand()) / RAND_MAX * 2.0f;
         flare.maxLife = flare.life;
         solarFlares.push_back(flare);
     }
@@ -54,7 +54,7 @@ void ParticleSystem::update(float deltaTime) {
             float distance = 2.0f + static_cast<float>(rand()) / RAND_MAX * 0.4f;
             flare.position = glm::vec3(cos(angle) * distance, (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 1.8f, sin(angle) * distance);
             flare.velocity = glm::normalize(flare.position) * (0.015f + static_cast<float>(rand()) / RAND_MAX * 0.025f);
-            flare.life = static_cast<float>(rand()) / RAND_MAX * 2.0f;
+            flare.life = 0.05f + static_cast<float>(rand()) / RAND_MAX * 2.0f;
             flare.maxLife = flare.life;
         }
     }

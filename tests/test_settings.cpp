@@ -126,9 +126,9 @@ TEST_CASE("Pass 4 Centralized Defaults and Reset", "[settings]") {
     // initializers (same source, no parallel table). Fresh installs and
     // Reset All Settings both use it; resetToDefaults restores every field.
     const AppSettings fresh = AppSettings::defaults();
-    REQUIRE(fresh.masterVolume == Approx(0.8f));
-    REQUIRE(fresh.musicVolume == Approx(0.6f));
-    REQUIRE(fresh.sfxVolume == Approx(0.7f));
+    REQUIRE(fresh.masterVolume == Approx(0.55f));
+    REQUIRE(fresh.musicVolume == Approx(0.22f));
+    REQUIRE(fresh.sfxVolume == Approx(0.30f));
     REQUIRE(fresh.audioMuted == false);
     REQUIRE(fresh.showOrbits == true);
     REQUIRE(fresh.showLabels == true);
@@ -146,7 +146,7 @@ TEST_CASE("Pass 4 Centralized Defaults and Reset", "[settings]") {
     REQUIRE(fresh.ringOpacity == Approx(0.90f));
     REQUIRE(fresh.fieldOfView == Approx(60.0f));
     REQUIRE(fresh.vsyncEnabled == true); // VSync default ON
-    REQUIRE(fresh.fullscreen == false);
+    REQUIRE(fresh.fullscreen == true);
     REQUIRE(fresh.qualityPreset == 2); // High reference tier
 
     // A default-constructed struct IS the defaults (same definition).

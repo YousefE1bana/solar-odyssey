@@ -1,5 +1,5 @@
 param(
-    [string]$BuildDirectory = "build-release",
+    [string]$BuildDirectory = ".output/build",
     [string]$RuntimePrefix = "C:\msys64\mingw64",
     [string]$MakeNSIS = "C:\msys64\mingw64\bin\makensis.exe"
 )
@@ -12,9 +12,9 @@ $cache = Get-Content -LiteralPath (Join-Path $buildRoot "CMakeCache.txt")
 if ($cache -notcontains 'CMAKE_BUILD_TYPE:STRING=Release') { throw "Packaging requires an optimized Release build" }
 $exe = Join-Path $buildRoot "SolarOdyssey.exe"
 if ((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -ne $version) { throw "Executable version differs from CMake project" }
-$packageParent = Join-Path $buildRoot "package"
+$packageParent = Join-Path $sourceRoot ".output/staging"
 $stage = Join-Path $packageParent "SolarOdyssey-$version"
-$artifacts = Join-Path $buildRoot "artifacts"
+$artifacts = Join-Path $sourceRoot ".output/release"
 New-Item -ItemType Directory -Force $packageParent,$artifacts | Out-Null
 if (Test-Path -LiteralPath $stage) {
     $resolved = (Resolve-Path -LiteralPath $stage).Path

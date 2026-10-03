@@ -8,7 +8,6 @@
 #include <functional>
 #include <deque>
 #include "planet_data.h"
-#include "science_progression.h"
 #include "camera_controller.h"
 #include "post_processing.h"
 #include "spaceship.h"
@@ -71,13 +70,6 @@ public:
     std::string saveStatusToast = "";
     float saveStatusToastTimer = 0.0f;
 
-    // Cycle 4 Pass 1: Discovery Codex (functional version; Cycle 6 owns the
-    // visual redesign). Transient view state only — all facts live in
-    // CelestialDatabase + ScienceProgression.
-    bool showCodex = false;
-    char codexSearch[64] = "";
-    int codexStatusFilter = 0; // 0 All + 1..5 DiscoveryStatus+1
-
     // Graphics Preset
     GraphicsQuality qualityPreset = QUALITY_HIGH;
     // C3.8: Engine wires this to Engine::applyQualityTier so the Settings UI
@@ -99,9 +91,9 @@ public:
     std::function<void()> onResetAllSettings;
 
     // Audio controls
-    float masterVolume = 0.8f;
-    float musicVolume = 0.6f;
-    float sfxVolume = 0.7f;
+    float masterVolume = 0.55f;
+    float musicVolume = 0.22f;
+    float sfxVolume = 0.30f;
     bool audioMuted = false;
 
     // Selected planet name
@@ -195,13 +187,6 @@ public:
     void showToast(const std::string& title, const std::string& message, float duration = 4.0f);
     void updateNotifications(float deltaTime);
     void renderNotificationToast(bool flightHUD = false);
-
-    // Scientific Discovery Codex.
-    // roster: runtime body names (Engine-owned, built from live vectors —
-    // never a second hardcoded list). Unknown entries hide their identity;
-    // higher tiers progressively disclose database science.
-    void renderCodex(float screenWidth, float screenHeight, const CelestialDatabase& db,
-                     const ScienceProgression& prog, const std::vector<std::string>& roster);
 
     void renderSaveStatusToast(float screenWidth, float screenHeight);
 

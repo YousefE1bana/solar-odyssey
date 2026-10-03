@@ -210,11 +210,7 @@ TEST_CASE("SaveState - v4 continues numerical roots and live-parent moons", "[sa
     SimulationSaveState captured;
     auto& manager = SaveStateManager::instance();
     manager.captureState(captured, original, cam, ship, true, 0, "Earth");
-    ScienceProgression discoveries;
-    discoveries.markDetected("Earth");
-    discoveries.recordPhoto("Earth", 73.5f);
-    manager.captureProgression(captured, discoveries);
-    REQUIRE(captured.version == 5);
+    REQUIRE(captured.version == 6);
     REQUIRE(captured.continuation.roots.size() == 13);
     SimulationSaveState parsed;
     REQUIRE(parsed.fromJSON(captured.toJSON()));
@@ -241,9 +237,6 @@ TEST_CASE("SaveState - v4 continues numerical roots and live-parent moons", "[sa
         REQUIRE(restored.getNBodySimulation().getBody(body.name)->velocity == body.velocity);
     }
     REQUIRE(restored.getBodyPositionDouble("Moon") == original.getBodyPositionDouble("Moon"));
-    ScienceProgression loadedDiscoveries;
-    manager.restoreProgression(parsed, loadedDiscoveries);
-    REQUIRE(loadedDiscoveries.getRecord("Earth")->bestPhotoScore == 73.5f);
 }
 
 TEST_CASE("SaveState - rejection is transactional for parsed and live state", "[save_state]") {
@@ -259,7 +252,7 @@ TEST_CASE("SaveState - rejection is transactional for parsed and live state", "[
     SimulationSaveState output = valid;
     const std::string before = output.toJSON();
     for (const auto& json : {
-        std::string("{\"version\": 6, \"simulation\": {\"elapsedSimDays\": 10}}"),
+        std::string("{\"version\": 7, \"simulation\": {\"elapsedSimDays\": 10}}"),
         std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": -1}}"),
         std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": 1, \"isPaused\": \"false\"}}"),
         std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": 1e}}"),
@@ -340,15 +333,6 @@ TEST_CASE("SaveState - camera flight and visit transients cannot leak across res
     REQUIRE(ship.flightMode == FLIGHT_MANUAL);
     REQUIRE(ship.prevFramePosition == ship.position);
     REQUIRE_FALSE(ship.proximityAlertActive);
-    ScienceProgression progression;
-    const std::vector<ProgressionBodyRef> bodies{{"Earth", {}, 1.0f}};
-    progression.updateVisits(glm::vec3(2.0f, 0.0f, 0.0f), bodies, {});
-    const auto persistent = progression.captureSaveData();
-    progression.applySaveData(persistent);
-    progression.restoreVisitTracking(glm::vec3(2.0f, 0.0f, 0.0f), bodies);
-    progression.updateVisits(glm::vec3(2.0f, 0.0f, 0.0f), bodies, {});
-    REQUIRE(progression.getRecord("Earth") != nullptr);
-    REQUIRE(progression.getRecord("Earth")->visitCount == 1);
 }
 
 TEST_CASE("SaveState - failed replacement preserves an existing valid file", "[save_state]") {
@@ -388,41 +372,28 @@ TEST_CASE("SaveState - failed replacement preserves an existing valid file", "[s
     REQUIRE(std::remove(path.c_str()) == 0);
 }
 
-TEST_CASE("SaveState - legacy v3 scientific records survive migration", "[save_state]") {
-    ScienceProgression original;
-    const std::vector<ProgressionBodyRef> bodies{{"Earth", {}, 1.0f}};
-    original.updateVisits(glm::vec3(2.0f, 0.0f, 0.0f), bodies, {});
-    original.recordActivity("Earth", ScienceActivity::OrbitalSurvey);
-    original.recordActivity("Earth", ScienceActivity::GravityMeasurement);
-    original.recordActivity("Earth", ScienceActivity::CloseFlyby);
-    original.recordPhoto("Earth", 81.25f);
-    original.recordAnomaly("Earth", "earth_shadow");
+TEST_CASE("SaveState - retired discovery records are discarded without changing continuation", "[save_state]") {
+    SimulationController sim;
+    sim.init();
     CameraController cam;
     cam.resetInstant();
     Spaceship ship;
-    SimulationSaveState legacy;
-    auto& manager = SaveStateManager::instance();
-    manager.captureState(legacy, 12.25, 4.0, true, 0, cam, ship, true);
-    manager.captureProgression(legacy, original);
+    SimulationSaveState current;
+    SaveStateManager::instance().captureState(current, sim, cam, ship, true, 0, "Earth");
+    REQUIRE(current.version == 6);
+    REQUIRE(current.toJSON().find("progression") == std::string::npos);
+    auto legacy = current;
+    legacy.version = 5;
     auto json = legacy.toJSON();
-    json.insert(json.find('{') + 1, "\"sciencePoints\": 9999,"); // Retired fields are ignored.
-    SimulationSaveState parsed;
-    REQUIRE(parsed.fromJSON(json));
-    REQUIRE(parsed.version == 3);
-    REQUIRE(parsed.simulationSeconds() == 12.25);
-    ScienceProgression restored;
-    manager.restoreProgression(parsed, restored);
-    const auto* record = restored.getRecord("Earth");
-    REQUIRE(record != nullptr);
-    REQUIRE(record->visitCount == 1);
-    REQUIRE(record->firstVisitRecorded);
-    REQUIRE(record->orbitalSurveyCompleted);
-    REQUIRE(record->gravityMeasurementCompleted);
-    REQUIRE(record->closeFlybyCompleted);
-    REQUIRE(record->bestPhotoScore == 81.25f);
-    REQUIRE(record->anomalyIds == std::vector<std::string>{"earth_shadow"});
-    REQUIRE(record->status == original.getRecord("Earth")->status);
-    REQUIRE(parsed.toJSON().find("sciencePoints") == std::string::npos);
+    const auto records = json.find("\"records\": []");
+    REQUIRE(records != std::string::npos);
+    json.replace(records, std::string("\"records\": []").size(), R"("records": [{"target":"Earth","status":4,"visitCount":3,"bestPhotoScore":81,"anomalies":[],"detected":true,"visited":true,"firstVisitRecorded":true,"atmosphereApplicable":true,"orbitalSurveyCompleted":true,"atmosphericScanCompleted":true,"gravityMeasurementCompleted":true,"closeFlybyCompleted":true}])");
+    SimulationSaveState migrated;
+    REQUIRE(migrated.fromJSON(json));
+    REQUIRE(migrated.selectedBodyName == "Earth");
+    REQUIRE(migrated.simulationSeconds() == current.simulationSeconds());
+    migrated.version = 6;
+    REQUIRE(migrated.toJSON().find("progression") == std::string::npos);
 }
 
 TEST_CASE("SaveState - v4 ship bookmark preserves pose energy and view without resuming warp", "[save_state]") {

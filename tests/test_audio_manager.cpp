@@ -22,7 +22,7 @@ TEST_CASE("AudioManager - Creation and Headless Robustness", "[audio]") {
     audioMgr.stopSpaceshipSound();
     audioMgr.playWarpCharge(false, 1.0f, 1.0f);
     audioMgr.playWarpExit(false, 1.0f, 1.0f);
-    audioMgr.playDiscoveryChime(false, 1.0f, 1.0f);
+    audioMgr.playInstrumentChime(false, 1.0f, 1.0f);
 
     // Shutdown on uninitialized or newly created manager must be clean & idempotent
     audioMgr.shutdown();
@@ -38,7 +38,7 @@ TEST_CASE("AudioManager - Full Lifecycle and Device Operation", "[audio]") {
 
         // Test POV state tracking
         audioMgr.startPOVAmbientSound("Jupiter", false, 1.0f, 1.0f);
-        REQUIRE(audioMgr.getCurrentPOVPlanet() == "Jupiter");
+        REQUIRE(audioMgr.getCurrentPOVPlanet().empty());
 
         audioMgr.stopPOVAmbientSound();
         REQUIRE(audioMgr.getCurrentPOVPlanet().empty());
@@ -67,19 +67,33 @@ TEST_CASE("AudioManager - mute drives all managed source gains to zero", "[audio
 
     // Background music: audible unmuted, silent muted, restored on unmute.
     audioMgr.musicUpdate(false, 0.8f, 0.6f);
-    REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(0.8f * 0.6f * 0.45f));
+    REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(0.8f * 0.6f));
+    alSourcef(audioMgr.backgroundSource, AL_SEC_OFFSET, 3.0f);
+    alSourcef(audioMgr.explorationSource, AL_SEC_OFFSET, 3.0f);
     audioMgr.musicUpdate(true, 0.8f, 0.6f);
     REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(0.0f));
     audioMgr.musicUpdate(false, 0.8f, 0.6f);
-    REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(0.8f * 0.6f * 0.45f));
+    REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(0.8f * 0.6f));
+    audioMgr.musicUpdate(false, 0.8f, 0.6f, true, .7f);
+    REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(.24f));
+    REQUIRE(gainOf(audioMgr.explorationSource) == Approx(.24f * .58f));
+    audioMgr.musicUpdate(false, 0.8f, 0.6f, true, .7f);
+    REQUIRE(gainOf(audioMgr.backgroundSource) == Approx(0.0f));
+    REQUIRE(gainOf(audioMgr.explorationSource) == Approx(.48f * .58f));
+    audioMgr.musicUpdate(true, 0.8f, 0.6f, true, 0);
+    REQUIRE(gainOf(audioMgr.explorationSource) == Approx(0.0f));
+    float menuOffset = 0, gameOffset = 0;
+    alGetSourcef(audioMgr.backgroundSource, AL_SEC_OFFSET, &menuOffset);
+    alGetSourcef(audioMgr.explorationSource, AL_SEC_OFFSET, &gameOffset);
+    REQUIRE(menuOffset >= 3.0f);
+    REQUIRE(gameOffset >= 3.0f);
+    ALint musicState = 0;
+    alGetSourcei(audioMgr.explorationSource, AL_SOURCE_STATE, &musicState);
+    REQUIRE(musicState == AL_PLAYING);
 
     // POV ambient loop: same contract.
     audioMgr.startPOVAmbientSound("Saturn", false, 0.8f, 0.7f);
-    REQUIRE(audioMgr.currentPOVSource != 0);
-    audioMgr.updatePOVVolume(true, 0.8f, 0.7f);
-    REQUIRE(gainOf(audioMgr.currentPOVSource) == Approx(0.0f));
-    audioMgr.updatePOVVolume(false, 0.8f, 0.7f);
-    REQUIRE(gainOf(audioMgr.currentPOVSource) == Approx(0.8f * 0.7f * 0.35f));
+    REQUIRE(audioMgr.currentPOVSource == 0);
 
     // Spatial proximity loops stop under mute.
     const glm::vec3 ear(0.0f, 6.0f, 22.0f);

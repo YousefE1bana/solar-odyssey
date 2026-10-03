@@ -12,6 +12,16 @@
 #include <algorithm>
 #include <glm/glm.hpp>
 
+TEST_CASE("Small moons fill the same frame as larger bodies", "[camera][release]") {
+    CameraController camera;
+    for (float radius : {.025f, .06f, .11f, .22f}) {
+        camera.focusOnBody(105, "Tethys", radius, glm::vec3(30, 0, 0));
+        REQUIRE(camera.focusDistance / radius == Approx(3.8f));
+        REQUIRE(camera.minFocusDistance > radius);
+        REQUIRE(camera.maxFocusDistance > camera.focusDistance);
+    }
+}
+
 TEST_CASE("PSM.2 BODY framing - scaled radius drives distance and zoom clamps", "[psm2]") {
     const float canonical = 0.55f;
     const float scale = 3.5f; // UI maximum visual scale
@@ -21,7 +31,7 @@ TEST_CASE("PSM.2 BODY framing - scaled radius drives distance and zoom clamps", 
     CameraController cam;
     cam.focusOnBody(3, "Earth", effR, glm::vec3(10.0f, 0.0f, 0.0f));
 
-    const float ideal = std::max(effR * 3.8f, 1.2f);
+    const float ideal = std::max(effR * 3.8f, .01f);
     REQUIRE(cam.focusDistance == Approx(ideal));
     REQUIRE(cam.minFocusDistance == Approx(effR * 1.35f));
     REQUIRE(cam.maxFocusDistance == Approx(ideal * 4.0f));
@@ -44,7 +54,7 @@ TEST_CASE("PSM.2 BODY framing - unit scale matches legacy framing exactly", "[ps
     CameraController cam;
     cam.focusOnBody(5, "Jupiter", effR, glm::vec3(-4.0f, 1.0f, 2.0f));
 
-    const float ideal = std::max(effR * 3.8f, 1.2f);
+    const float ideal = std::max(effR * 3.8f, .01f);
     REQUIRE(cam.focusDistance == Approx(ideal));
     REQUIRE(cam.minFocusDistance == Approx(effR * 1.35f));
     REQUIRE(cam.maxFocusDistance == Approx(ideal * 4.0f));
@@ -116,7 +126,7 @@ TEST_CASE("PSM.2 BODY framing - moon focus index follows pickable convention", "
     REQUIRE(cam.focusedBodyName == "Moon");
     REQUIRE(cam.focusedPlanetIndex == 100);
     REQUIRE(cam.postTransitionMode == CAM_FOCUS);
-    const float ideal = std::max(effR * 3.8f, 1.2f);
+    const float ideal = std::max(effR * 3.8f, .01f);
     REQUIRE(cam.focusDistance == Approx(ideal));
     REQUIRE(cam.minFocusDistance == Approx(effR * 1.35f));
 }

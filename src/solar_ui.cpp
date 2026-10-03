@@ -1,7 +1,8 @@
 #include "label_layout.h"
 #include <cctype>
 #include "solar_ui.h"
-#include "anomaly_catalog.h"
+#include "texture_variants.h"
+#include "canonical_inventory.h"
 #include "settings_persistence.h"
 #include "lod_manager.h"
 #include "save_state.h"
@@ -180,8 +181,6 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
         ImGui::SameLine();
         if (ImGui::Button(psm.isSystem() ? "Explorer (Y)" : "System (Y)")) { if (onToggleSystemView) onToggleSystemView(); }
         ImGui::SameLine();
-        if (ImGui::Button("Codex")) showCodex = !showCodex;
-        ImGui::SameLine();
         if (ImGui::Button("Explore")) ImGui::OpenPopup("Exploration tools");
         if (ImGui::BeginPopup("Exploration tools")) {
             if (ImGui::MenuItem("Free camera", "F")) cam.toggleFreeCam();
@@ -203,7 +202,7 @@ void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, c
 }
 
 void SolarOdysseyUI::renderBottomControlBar(float screenWidth, float screenHeight, CameraController& cam) {
-        if (cam.photoModeActive || cam.mode == CAM_SPACESHIP) return;
+        if (cam.photoModeActive || cam.mode == CAM_SPACESHIP || cam.mode == CAM_FREE) return;
 
         float barWidth = std::min(870.0f, screenWidth - 32.0f);
         float barHeight = 52.0f;
@@ -277,8 +276,9 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
         const CelestialBodyData* data = db.getBody(dossierName);
         if (!data) return;
 
-        ImGui::SetNextWindowPos(ImVec2(screenWidth - 440.0f, 85.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(410.0f, 560.0f), ImGuiCond_FirstUseEver);
+        const float dossierWidth = std::min(510.0f, std::max(410.0f, 410.0f * ImGui::GetIO().FontGlobalScale));
+        ImGui::SetNextWindowPos(ImVec2(screenWidth - dossierWidth - 20, 85), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(dossierWidth, std::max(240.0f, std::min(640.0f, screenHeight - 175))), ImGuiCond_Always);
 
         // Cache the window title: rebuilding the string every frame while the card
         // is open causes a needless heap allocation per frame.
@@ -295,14 +295,8 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
             ImGui::SameLine();
             ImGui::TextDisabled("|  %s", data->type.c_str());
 
-            ImGui::TextColored(ImVec4(0.75f, 0.85f, 0.95f, 1.0f), "%s", data->subtitle.c_str());
-            // PSM.3: BODY-mode badge — the dossier is the primary body
-            // information panel while presenting this BODY.
-            if (showingBody) {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), " [BODY MODE]");
-            }
-            // PSM.7: parent breadcrumb on a moon BODY (e.g. "Earth > Moon").
+            ImGui::TextWrapped("%s", data->subtitle.c_str());
+            // Parent breadcrumb on a moon BODY (e.g. "Earth > Moon").
             // Clicking the parent transfers through the SAME authoritative
             // BODY-entry intent path — no camera manipulation from UI.
             if (showingBody && onQueryParent) {
@@ -317,37 +311,46 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     ImGui::Text("%s", data->name.c_str());
                 }
             }
+            ImGui::PushTextWrapPos(0);
+            for (const auto& moon : CanonicalInventory::getCanonicalMoons()) {
+                if (moon.name != dossierName) continue;
+                ImGui::TextDisabled(TextureVariants::isGlobalMoonTexture(moon.texture)
+                    ? "Global image mosaic / illustrative lighting" : "Procedural material / not measured terrain");
+            }
             ImGui::Separator();
 
+            ImGui::PopTextWrapPos();
+            const float actionWidth = (ImGui::GetContentRegionAvail().x - 10) * .5f;
+            const float actionHeight = ImGui::GetFrameHeight() + 4;
             // Quick Actions: Focus Camera & Explore POV
-            if (ImGui::Button(" Focus Camera", ImVec2(185, 32))) {
+            if (ImGui::Button(" Focus Camera", ImVec2(actionWidth, actionHeight))) {
                 if (onFocus) onFocus(data->name);
             }
             ImGui::SameLine(0, 10);
-            if (ImGui::Button(" Explore POV", ImVec2(185, 32))) {
+            if (ImGui::Button(" Explore POV", ImVec2(actionWidth, actionHeight))) {
                 if (onExplorePOV) onExplorePOV(data->name);
             }
             // PSM.3: no duplicated BODY control — when this dossier already
             // shows the active BODY, offer the exit instead of re-entry.
             if (showingBody) {
-                if (ImGui::Button(" Exit Body Mode (F)", ImVec2(380, 32))) {
+                if (ImGui::Button(" Exit Body Mode (F)", ImVec2(-1, actionHeight))) {
                     if (onExitBodyMode) onExitBodyMode();
                 }
             } else {
                 // PSM.2: records intent only; the updatePresentation() drain
                 // enters through enterBodyView.
-                if (ImGui::Button(" Enter Body Mode", ImVec2(380, 32))) {
+                if (ImGui::Button(" Enter Body Mode", ImVec2(-1, actionHeight))) {
                     if (onEnterBodyMode) onEnterBodyMode(data->name);
                 }
             }
             // Cycle 4 Pass 2: science-scan actions for the dossier body.
             // Atmospheric scans on inapplicable bodies toast the N/A message
             // (never a fake scan); gravity runs a Detailed session.
-            if (ImGui::Button(" Scan Atmosphere", ImVec2(185, 28))) {
+            if (ImGui::Button("Atmosphere scan", ImVec2(actionWidth, actionHeight))) {
                 if (onStartAtmosphericScan) onStartAtmosphericScan(data->name);
             }
             ImGui::SameLine(0, 10);
-            if (ImGui::Button(" Gravity Measure", ImVec2(185, 28))) {
+            if (ImGui::Button("Gravity", ImVec2(actionWidth, actionHeight))) {
                 if (onStartGravityScan) onStartGravityScan(data->name);
             }
             // PSM.7: compact Satellites list on a parent BODY. Each child
@@ -360,7 +363,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     ImGui::Spacing();
                     ImGui::TextDisabled("Satellites:");
                     for (const auto& child : navChildren) {
-                        if (ImGui::Button(child.c_str(), ImVec2(380, 26))) {
+                        if (ImGui::Button(child.c_str(), ImVec2(-1, actionHeight))) {
                             if (onEnterBodyMode) onEnterBodyMode(child);
                         }
                     }
@@ -368,6 +371,20 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
             }
 
             ImGui::Spacing();
+            auto beginMetrics = [](const char* id) {
+                if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp)) return false;
+                ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch, .43f);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, .57f);
+                return true;
+            };
+            auto metricLabel = [](const char* label) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushTextWrapPos(0);
+                ImGui::TextDisabled("%s", label);
+                ImGui::PopTextWrapPos();
+                ImGui::TableSetColumnIndex(1);
+            };
             if (ImGui::BeginTabBar("PlanetInfoTabs")) {
                 // Tab 1: Overview — lightweight summary only. Detail lives in
                 // the Environment / Orbit / Key Facts tabs (PSM.3 progressive
@@ -378,40 +395,28 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     ImGui::Spacing();
                     ImGui::Separator();
 
-                    ImGui::Columns(2, "MetricColumns", false);
-                    ImGui::SetColumnWidth(0, 180);
+                    if (beginMetrics("MetricTable")) {
+                        metricLabel("Type:");
+                        ImGui::TextWrapped("%s", data->type.c_str());
 
-                    ImGui::TextDisabled("Type:");
-                    ImGui::NextColumn();
-                    ImGui::TextWrapped("%s", data->type.c_str());
-                    ImGui::NextColumn();
+                        metricLabel("Physical Diameter:");
+                        ImGui::TextWrapped("%.1f km (%.2fx Earth)", data->realDiameterKm, data->relativeSizeToEarth);
 
-                    ImGui::TextDisabled("Physical Diameter:");
-                    ImGui::NextColumn();
-                    ImGui::Text("%.1f km (%.2fx Earth)", data->realDiameterKm, data->relativeSizeToEarth);
-                    ImGui::NextColumn();
+                        metricLabel("Distance from Sun:");
+                        if (data->name == "Sun") {
+                            ImGui::TextWrapped("Central star");
+                        } else {
+                            ImGui::TextWrapped("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
+                        }
 
-                    ImGui::TextDisabled("Distance from Sun:");
-                    ImGui::NextColumn();
-                    if (data->name == "Sun") {
-                        ImGui::Text("Central star");
-                    } else {
-                        ImGui::Text("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
+                        metricLabel((data->temperatureReference + ":").c_str());
+                        if (data->hasMeanTemperatureData) {
+                            ImGui::TextWrapped("%.1f deg C", data->meanTemperatureC);
+                        } else {
+                            ImGui::Text("N/A");
+                        }
+                        ImGui::EndTable();
                     }
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("%s:", data->temperatureReference.c_str());
-                    ImGui::NextColumn();
-                    // Generic availability (Moon Expansion 1.3): same rule as
-                    // the tilt/range rows — no body-name checks in UI.
-                    if (data->hasMeanTemperatureData) {
-                        ImGui::Text("%.1f deg C", data->meanTemperatureC);
-                    } else {
-                        ImGui::Text("N/A");
-                    }
-                    ImGui::NextColumn();
-
-                    ImGui::Columns(1);
                     ImGui::EndTabItem();
                 }
 
@@ -428,83 +433,58 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
 
                     ImGui::Spacing();
                     ImGui::Separator();
-                    ImGui::Columns(2, "EnvMetricColumns", false);
-                    ImGui::SetColumnWidth(0, 180);
+                    if (beginMetrics("EnvironmentMetricTable")) {
+                        metricLabel("Surface Gravity:");
+                        ImGui::TextWrapped("%.2f m/s^2", data->surfaceGravityMs2);
 
-                    ImGui::TextDisabled("Surface Gravity:");
-                    ImGui::NextColumn();
-                    ImGui::Text("%.2f m/s^2", data->surfaceGravityMs2);
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Temperature Range:");
-                    ImGui::NextColumn();
-                    // Generic availability (Moon Expansion 1.1): CelestialBodyData
-                    // declares whether the range is sourced; unsourced ranges
-                    // render "N/A" (existing dossier style) — never a fake span.
-                    if (data->hasTemperatureRangeData) {
-                        ImGui::Text("%.1f .. %.1f deg C", data->minTemperatureC, data->maxTemperatureC);
-                    } else {
-                        ImGui::Text("N/A");
+                        metricLabel("Temperature Range:");
+                        if (data->hasTemperatureRangeData) {
+                            ImGui::TextWrapped("%.1f .. %.1f deg C", data->minTemperatureC, data->maxTemperatureC);
+                        } else {
+                            ImGui::Text("N/A");
+                        }
+                        ImGui::EndTable();
                     }
-                    ImGui::NextColumn();
-
-                    ImGui::Columns(1);
                     ImGui::EndTabItem();
                 }
 
                 // Tab 3: Orbit / Motion (PSM.3) — all motion fields, one place.
                 if (ImGui::BeginTabItem("Orbit")) {
                     ImGui::Spacing();
-                    ImGui::Columns(2, "OrbitMetricColumns", false);
-                    ImGui::SetColumnWidth(0, 180);
+                    if (beginMetrics("OrbitMetricTable")) {
+                        metricLabel("Distance from Sun:");
+                        if (data->name == "Sun") {
+                            ImGui::TextWrapped("Central star (system barycenter)");
+                        } else {
+                            ImGui::TextWrapped("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
+                        }
 
-                    ImGui::TextDisabled("Distance from Sun:");
-                    ImGui::NextColumn();
-                    if (data->name == "Sun") {
-                        ImGui::Text("Central star (system barycenter)");
-                    } else {
-                        ImGui::Text("%.2f AU (%.1f M km)", data->distanceFromSunAU, data->distanceFromSunMillionKm);
+                        metricLabel("Orbital Period:");
+                        if (data->orbitalPeriodDays > 0.0f) {
+                            ImGui::TextWrapped("%.1f Earth days (~%.2f yrs)",
+                                               data->orbitalPeriodDays, data->orbitalPeriodDays / 365.25f);
+                        } else {
+                            ImGui::Text("N/A");
+                        }
+
+                        metricLabel("Rotation Period:");
+                        if (data->rotationPeriodHours < 0.0f) {
+                            ImGui::TextWrapped("%.2f hours (retrograde)", -data->rotationPeriodHours);
+                        } else {
+                            ImGui::TextWrapped("%.2f hours", data->rotationPeriodHours);
+                        }
+
+                        metricLabel("Axial Tilt:");
+                        if (data->hasAxialTiltData) {
+                            ImGui::TextWrapped("%.2f deg", data->axialTiltDeg);
+                        } else {
+                            ImGui::Text("N/A");
+                        }
+
+                        metricLabel(dossierMoonsRowLabel(*data));
+                        ImGui::Text("%d", data->knownMoons);
+                        ImGui::EndTable();
                     }
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Orbital Period:");
-                    ImGui::NextColumn();
-                    if (data->orbitalPeriodDays > 0.0f) {
-                        ImGui::Text("%.1f Earth days (~%.2f yrs)",
-                                    data->orbitalPeriodDays, data->orbitalPeriodDays / 365.25f);
-                    } else {
-                        ImGui::Text("N/A");
-                    }
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Rotation Period:");
-                    ImGui::NextColumn();
-                    if (data->rotationPeriodHours < 0.0f) {
-                        ImGui::Text("%.2f hours (retrograde)", -data->rotationPeriodHours);
-                    } else {
-                        ImGui::Text("%.2f hours", data->rotationPeriodHours);
-                    }
-                    ImGui::NextColumn();
-
-                    ImGui::TextDisabled("Axial Tilt:");
-                    ImGui::NextColumn();
-                    // Generic availability (Moon Expansion 1.1): same rule as
-                    // Temperature Range above — no body-name checks in UI.
-                    if (data->hasAxialTiltData) {
-                        ImGui::Text("%.2f deg", data->axialTiltDeg);
-                    } else {
-                        ImGui::Text("N/A");
-                    }
-                    ImGui::NextColumn();
-
-                    // PSM.3 Sun guard: knownMoons holds the major-planet count
-                    // for the Sun — never render it as "Confirmed Moons: 8".
-                    ImGui::TextDisabled("%s", dossierMoonsRowLabel(*data));
-                    ImGui::NextColumn();
-                    ImGui::Text("%d", data->knownMoons);
-                    ImGui::NextColumn();
-
-                    ImGui::Columns(1);
                     ImGui::EndTabItem();
                 }
 
@@ -592,24 +572,26 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
     ImGui::SetNextWindowPos(ImVec2(screen.x * .5f, screen.y * .5f), ImGuiCond_Always, ImVec2(.5f,.5f));
     ImGui::SetNextWindowSize(ImVec2(std::min(790.0f, screen.x - 48), std::min(680.0f, screen.y - 64)), ImGuiCond_Always);
     if (ImGui::Begin("SETTINGS", &showSettingsModal, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::TextDisabled("Changes apply immediately. Esc returns to your menu.");
-        ImGui::Spacing();
+        const float footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2;
+        ImGui::BeginChild("SettingsContent", ImVec2(0, -footerHeight), false);
+        ImGui::PushItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x * .60f));
         if (ImGui::BeginTabBar("Preferences")) {
             if (ImGui::BeginTabItem("DISPLAY")) {
                 if (ImGui::Checkbox("Fullscreen", &isFullscreen)) pendingFullscreenToggle = true;
                 if (ImGui::Checkbox("VSync / match display refresh", &vsyncEnabled) && onVSyncChanged) onVSyncChanged(vsyncEnabled);
                 if (ImGui::SliderFloat("Field of view", &cam.targetFieldOfView, 20, 120, "%.0f degrees")) cam.fieldOfView = cam.targetFieldOfView;
                 ImGui::Spacing(); ImGui::Separator();
-                const char* styles[] = {"Classic / cinematic", "Scientific / catalog imagery"};
-                ImGui::Combo("Starfield style", &starfieldStyle, styles, 2);
-                if (starfieldStyle == 0) {
-                    const char* panoramas[] = {"Stars", "Stars + Milky Way"};
-                    starfieldDataset = std::clamp(starfieldDataset, 0, 1);
-                    ImGui::Combo("Panorama", &starfieldDataset, panoramas, 2);
+                const char* starfields[] = {"Classic Milky Way", "Hipparcos", "Tycho", "Yale", "Scientific Composite"};
+                const int catalogIndices[] = {1, 2, 0, 3};
+                int selectedSky = 0;
+                if (starfieldStyle == 1) {
+                    for (int i = 0; i < 4; ++i) if (starfieldDataset == catalogIndices[i]) selectedSky = i + 1;
+                }
+                if (ImGui::Combo("Starfield", &selectedSky, starfields, 5)) {
+                    starfieldStyle = selectedSky == 0 ? 0 : 1;
+                    if (selectedSky > 0) starfieldDataset = catalogIndices[selectedSky - 1];
                 }
                 if (starfieldStyle == 1) {
-                    const char* datasets[] = {"Yale / bright stars", "Hipparcos", "Tycho", "Combined catalogs"};
-                    ImGui::Combo("Catalog", &starfieldDataset, datasets, 4);
                     ImGui::TextWrapped("Catalog map positions are preserved. The sky is a visualization, not an Earth-location planetarium or a navigational reference.");
                 }
                 ImGui::Checkbox("Body labels", &showLabels);
@@ -642,9 +624,11 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
             }
             if (ImGui::BeginTabItem("AUDIO")) {
                 ImGui::Checkbox("Mute audio", &audioMuted);
+                ImGui::BeginDisabled(audioMuted);
                 ImGui::SliderFloat("Master volume", &masterVolume, 0, 1);
                 ImGui::SliderFloat("Music volume", &musicVolume, 0, 1);
                 ImGui::SliderFloat("Effects volume", &sfxVolume, 0, 1);
+                ImGui::EndDisabled();
                 ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem("CONTROLS")) {
@@ -671,6 +655,8 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
             }
             ImGui::EndTabBar();
         }
+        ImGui::PopItemWidth();
+        ImGui::EndChild();
         ImGui::Spacing(); ImGui::Separator();
         if (ImGui::Button("Restore default settings")) ImGui::OpenPopup("Restore defaults?");
         if (ImGui::BeginPopupModal("Restore defaults?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -687,25 +673,21 @@ void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, Aster
 }
 
 void SolarOdysseyUI::renderFreeCamHUD(float screenWidth, float screenHeight, CameraController& cam) {
-        if (cam.mode != CAM_FREE || cam.photoModeActive) return;
-
-        float hudW = 380.0f;
-        float hudH = 80.0f;
-        ImGui::SetNextWindowPos(ImVec2(24.0f, screenHeight - hudH - 24.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(hudW, hudH), ImGuiCond_Always);
-
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                 ImGuiWindowFlags_NoSavedSettings;
-
-        if (ImGui::Begin("FreeCamTelemetry", nullptr, flags)) {
-            ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.65f, 1.0f), " 6-DOF FREE FLIGHT CAMERA");
-            ImGui::Separator();
-            ImGui::Text("Speed: %.1f u/s (Scroll to adjust)", cam.freeSpeed);
-            ImGui::TextDisabled("WASD: Move | Space/C: Elevate | [Alt] UI Cursor | [F] Exit");
-        }
-        ImGui::End();
+    if (cam.mode != CAM_FREE || cam.photoModeActive) return;
+    const auto display = ImGui::GetIO().DisplaySize;
+    const float width = std::min(350.0f, display.x - 40.0f);
+    ImGui::SetNextWindowPos(ImVec2(20, display.y - 20), ImGuiCond_Always, ImVec2(0, 1));
+    ImGui::SetNextWindowSize(ImVec2(width, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(.75f);
+    const auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs;
+    if (ImGui::Begin("FreeFlightTelemetry", nullptr, flags)) {
+        ImGui::TextColored(ImVec4(.55f,.83f,.89f,1), "FREE FLIGHT");
+        ImGui::SameLine(); ImGui::TextDisabled("%.0f units/s", cam.freeSpeed);
+        ImGui::Text("Position  %.1f  %.1f  %.1f", cam.freePos.x, cam.freePos.y, cam.freePos.z);
     }
+    ImGui::End();
+}
 
 void SolarOdysseyUI::applyQualityPreset(GraphicsQuality q, PostProcessingPipeline& postProc, AsteroidBelt* asteroidBelt) {
         if (q == QUALITY_LOW) {
@@ -736,8 +718,8 @@ void SolarOdysseyUI::renderPhotoModeHUD(float screenWidth, float screenHeight, C
         if (!cam.photoModeActive) return;
 
         // Bottom photo controls
-        float barWidth = 460.0f;
-        float barHeight = 56.0f;
+        float barWidth = std::min(580.0f, screenWidth - 40.0f);
+        float barHeight = ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2;
         ImGui::SetNextWindowPos(ImVec2((screenWidth - barWidth) * 0.5f, screenHeight - barHeight - 20.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(barWidth, barHeight), ImGuiCond_Always);
 
@@ -768,11 +750,11 @@ void SolarOdysseyUI::renderPhotoModeHUD(float screenWidth, float screenHeight, C
         if (postProc.screenshotToastTimer > 0.0f) {
             float toastWidth = 480.0f;
             ImGui::SetNextWindowPos(ImVec2((screenWidth - toastWidth) * 0.5f, 30.0f), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(toastWidth, 40.0f), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(toastWidth, 0.0f), ImGuiCond_Always);
             ImGuiWindowFlags toastFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
             if (ImGui::Begin("ScreenshotToast", nullptr, toastFlags)) {
-                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), " %s", postProc.lastScreenshotPath.c_str());
+                ImGui::TextColored(ImVec4(.55f,.85f,.72f,1), "Photograph saved");
             }
             ImGui::End();
         }
@@ -896,7 +878,7 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
 
         // 2. Flight Telemetry Card (Bottom Left)
         float cardW = 320.0f;
-        float cardH = 145.0f;
+        float cardH = ImGui::GetTextLineHeightWithSpacing() * 3 + ImGui::GetStyle().WindowPadding.y * 2 + 50.0f;
         ImGui::SetNextWindowPos(ImVec2(24.0f, screenHeight - cardH - 24.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(cardW, cardH), ImGuiCond_Always);
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -939,15 +921,15 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
         ImGui::End();
 
         // 3. Navigation Target Card (Top Right)
-        float navW = 360.0f;
-        float navH = 175.0f;
+        float navW = std::min(390.0f, screenWidth - 48.0f);
+        float navH = ImGui::GetTextLineHeightWithSpacing() * 4 + ImGui::GetStyle().WindowPadding.y * 2 + 86.0f;
         ImGui::SetNextWindowPos(ImVec2(screenWidth - navW - 24.0f, 80.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(navW, navH), ImGuiCond_Always);
 
         if (ImGui::Begin("SpaceshipNavTarget", nullptr, flags)) {
             ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.45f, 1.0f), " TARGET: %s", ship.targetPlanetName.c_str());
             ImGui::Separator();
-            ImGui::Text("Distance: %.2f AU (%.1f M km)", ship.targetDistance * 0.033f, ship.targetDistance * 4.95f);
+            ImGui::Text("Distance: %.2f scene units", ship.targetDistance);
             ImGui::Text("Closest Body: %s (%.1f units)", ship.nearestPlanetName.c_str(), ship.nearestPlanetDist);
 
             ImGui::Spacing();
@@ -996,38 +978,20 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
 
         // 4. Proximity Warning Banner (Top Center)
         if (ship.proximityAlertActive) {
-            float alertW = 440.0f;
-            float alertH = 42.0f;
+            float alertW = std::min(520.0f, screenWidth - 40.0f);
+            float alertH = 0;
             ImGui::SetNextWindowPos(ImVec2((screenWidth - alertW) * 0.5f, 80.0f), ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(alertW, alertH), ImGuiCond_Always);
 
             ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.35f, 0.08f, 0.08f, 0.90f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.35f, 0.25f, 1.0f));
-            if (ImGui::Begin("ProximityWarning", nullptr, flags)) {
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.25f, 1.0f), " WARNING: CLOSE PROXIMITY TO %s", ship.nearestPlanetName.c_str());
+            if (ImGui::Begin("ProximityWarning", nullptr, flags | ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::TextWrapped("CLOSE PROXIMITY: %s", ship.nearestPlanetName.c_str());
             }
             ImGui::End();
             ImGui::PopStyleColor(2);
         }
 
-        // 5. Controls Helper (Bottom Right)
-        float helpW = 340.0f;
-        float helpH = 170.0f;
-        ImGui::SetNextWindowPos(ImVec2(screenWidth - helpW - 24.0f, screenHeight - helpH - 24.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(helpW, helpH), ImGuiCond_Always);
-
-        if (ImGui::Begin("SpaceshipHelp", nullptr, flags)) {
-            ImGui::TextColored(ImVec4(0.65f, 0.80f, 0.95f, 1.0f), " FLIGHT CONTROLS");
-            ImGui::Separator();
-            ImGui::Text("W/S: Thrust / Brake  |  Shift: Boost");
-            ImGui::Text("A/D: Yaw  |  Q/E: Roll  |  R/F: Pitch");
-            ImGui::Text("J: Warp / Autopilot  |  H: Orbit Assist");
-            const char* camName = (ship.cameraView == SHIP_CAM_CHASE) ? "CHASE" :
-                                  (ship.cameraView == SHIP_CAM_CLOSE) ? "CLOSE" : "COCKPIT";
-            ImGui::Text("C: View [%s]  |  X: Exit  |  Esc: Pause", camName);
-            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.45f, 0.95f), "Hold [Alt] to release cursor for UI");
-        }
-        ImGui::End();
     }
 
 void SolarOdysseyUI::showToast(const std::string& title, const std::string& message, float duration) {
@@ -1047,9 +1011,12 @@ void SolarOdysseyUI::updateNotifications(float deltaTime) {
 void SolarOdysseyUI::renderNotificationToast(bool flightHUD) {
     const auto display = ImGui::GetIO().DisplaySize;
     const float width = std::min(370.0f, display.x - 32);
+    float bottom = display.y - 20;
     for (size_t i = 0; i < std::min<size_t>(2, toasts.size()); ++i) {
-        ImGui::SetNextWindowPos(ImVec2(20, display.y - (flightHUD ? 268 : 168) - float(i) * 78), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(width, 72), ImGuiCond_Always);
+        const float contentWidth = width - ImGui::GetStyle().WindowPadding.x * 2;
+        const float height = ImGui::CalcTextSize(toasts[i].message.c_str(), nullptr, false, contentWidth).y + ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().WindowPadding.y * 2 + 8;
+        ImGui::SetNextWindowPos(ImVec2(display.x - width - 20, bottom), ImGuiCond_Always, ImVec2(0,1));
+        ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(.88f);
         const std::string id = "##ObservationToast" + std::to_string(i);
         if (ImGui::Begin(id.c_str(), nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings)) {
@@ -1057,191 +1024,22 @@ void SolarOdysseyUI::renderNotificationToast(bool flightHUD) {
             ImGui::TextWrapped("%s", toasts[i].message.c_str());
         }
         ImGui::End();
+        bottom -= height + 10;
     }
 }
 
 void SolarOdysseyUI::renderSaveStatusToast(float screenWidth, float screenHeight) {
-    (void)screenHeight;
+    screenWidth = ImGui::GetIO().DisplaySize.x;
+    screenHeight = ImGui::GetIO().DisplaySize.y;
     if (saveStatusToastTimer <= 0.0f || saveStatusToast.empty()) return;
 
-    float toastWidth = 440.0f;
-    ImGui::SetNextWindowPos(ImVec2((screenWidth - toastWidth) * 0.5f, screenHeight - 124.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(toastWidth, 40.0f), ImGuiCond_Always);
+    float toastWidth = std::min(580.0f, screenWidth - 40.0f);
+    ImGui::SetNextWindowPos(ImVec2((screenWidth - toastWidth) * 0.5f, screenHeight - 120.0f), ImGuiCond_Always, ImVec2(0,1));
+    ImGui::SetNextWindowSize(ImVec2(toastWidth, 0), ImGuiCond_Always);
     ImGuiWindowFlags toastFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
     if (ImGui::Begin("SaveStatusToast", nullptr, toastFlags)) {
-        ImGui::TextColored(ImVec4(.65f,.82f,.9f,1), " [State] %s", saveStatusToast.c_str());
+        ImGui::TextWrapped("%s", saveStatusToast.c_str());
     }
     ImGui::End();
 }
-
-namespace {
-
-// Cycle 4 Pass 1: Codex status chip color (functional version).
-ImVec4 codexStatusColor(DiscoveryStatus s) {
-    switch (s) {
-        case DiscoveryStatus::Detected: return ImVec4(0.55f, 0.85f, 0.55f, 1.0f);
-        case DiscoveryStatus::Visited: return ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
-        case DiscoveryStatus::Scanned: return ImVec4(0.65f, 0.55f, 1.0f, 1.0f);
-        case DiscoveryStatus::FullySurveyed: return ImVec4(1.0f, 0.82f, 0.35f, 1.0f);
-        case DiscoveryStatus::Unknown:
-        default: return ImVec4(0.55f, 0.55f, 0.60f, 1.0f);
-    }
-}
-
-const char* codexActivityMark(bool done) {
-    return done ? "[x]" : "[ ]";
-}
-
-} // namespace
-
-void SolarOdysseyUI::renderCodex(float screenWidth, float screenHeight, const CelestialDatabase& db,
-                                 const ScienceProgression& prog,
-                                 const std::vector<std::string>& roster) {
-    if (!showCodex) return;
-
-    const float panelW = 560.0f;
-    const float panelH = 560.0f;
-    ImGui::SetNextWindowPos(ImVec2((screenWidth - panelW) * 0.5f, (screenHeight - panelH) * 0.5f),
-                            ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(panelW, panelH), ImGuiCond_FirstUseEver);
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-
-    if (!ImGui::Begin("DISCOVERY CODEX", &showCodex, flags)) {
-        ImGui::End();
-        return;
-    }
-
-    ImGui::SetNextItemWidth(220.0f);
-    ImGui::InputText("Search", codexSearch, sizeof(codexSearch));
-    ImGui::SameLine(0, 12);
-    ImGui::SetNextItemWidth(150.0f);
-    const char* statusNames[] = {"All statuses", "Unknown", "Detected", "Visited", "Scanned", "Fully Surveyed"};
-    ImGui::Combo("Status", &codexStatusFilter, statusNames, 6);
-
-    ImGui::Separator();
-    ImGui::BeginChild("CodexListScroll", ImVec2(0, 0), true);
-
-    const std::string needle(codexSearch);
-    for (const auto& name : roster) {
-        const DiscoveryRecord* rec = prog.getRecord(name);
-        const DiscoveryStatus status =
-            rec ? rec->status : DiscoveryStatus::Unknown;
-        // Status filter (0 = All, else DiscoveryStatus+1).
-        if (codexStatusFilter != 0 && static_cast<int>(status) != codexStatusFilter - 1) continue;
-
-        const bool known = (status != DiscoveryStatus::Unknown);
-        const std::string shownName = known ? name : "Undiscovered body";
-        // Text search matches the visible name (unknown rows match nothing
-        // except an empty query — no spoiler leakage through search).
-        if (!needle.empty() && shownName.find(needle) == std::string::npos) continue;
-
-        ImGui::PushID(name.c_str());
-        ImGui::TextColored(codexStatusColor(status), "[%s]", discoveryStatusLabel(status));
-        ImGui::SameLine(0, 8);
-        const CelestialBodyData* data = known ? db.getBody(name) : nullptr;
-        bool open = false;
-        if (known && data != nullptr) {
-            open = ImGui::CollapsingHeader(shownName.c_str());
-        } else {
-            ImGui::TextDisabled("%s", shownName.c_str());
-        }
-
-        if (open && data != nullptr) {
-            // Progressive disclosure: higher tiers reveal more database
-            // science. No per-body branches — field groups by status only.
-            ImGui::TextDisabled("%s", data->type.c_str());
-            if (status >= DiscoveryStatus::Visited) {
-                ImGui::Text("Diameter: %.1f km  |  Gravity: %.3f m/s^2  |  Period: %.2f d",
-                            data->realDiameterKm, data->surfaceGravityMs2,
-                            data->orbitalPeriodDays);
-                ImGui::TextWrapped("%s", data->subtitle.c_str());
-            }
-            if (status >= DiscoveryStatus::Scanned) {
-                ImGui::Spacing();
-                ImGui::TextWrapped("%s", data->description.c_str());
-                for (const auto& fact : data->keyFacts) {
-                    ImGui::BulletText("%s", fact.c_str());
-                }
-            }
-            if (status >= DiscoveryStatus::FullySurveyed) {
-                ImGui::Spacing();
-                if (data->hasMeanTemperatureData) ImGui::Text("%s: %.1f C", data->temperatureReference.c_str(), data->meanTemperatureC);
-                else ImGui::TextDisabled("Temperature: unavailable");
-                if (data->hasTemperatureRangeData) ImGui::Text("Range: %.1f / %.1f C", data->minTemperatureC, data->maxTemperatureC);
-                else ImGui::TextDisabled("Temperature range: unavailable");
-                ImGui::TextWrapped("Air: %s", data->atmosphericComposition.c_str());
-                ImGui::TextWrapped("Surface: %s", data->surfaceFeatures.c_str());
-                ImGui::TextWrapped("Discovery: %s", data->discoveryInfo.c_str());
-            }
-            ImGui::Spacing();
-            ImGui::Separator();
-            // Survey record (always visible once the identity is known).
-            ImGui::TextDisabled("Survey record:");
-            if (rec != nullptr) {
-                ImGui::Text("Visits: %d   |   Best photo: %s", rec->visitCount,
-                            rec->bestPhotoScore > 0.0f
-                                ? (std::to_string(static_cast<int>(rec->bestPhotoScore))).c_str()
-                                : "--");
-                ImGui::Text("%s Orbital survey   %s Atmospheric scan%s   %s Close flyby   %s Gravity",
-                            codexActivityMark(rec->orbitalSurveyCompleted),
-                            codexActivityMark(rec->atmosphericScanCompleted),
-                            rec->atmosphereApplicable ? "" : "(N/A airless)",
-                            codexActivityMark(rec->closeFlybyCompleted),
-                            codexActivityMark(rec->gravityMeasurementCompleted));
-                if (!rec->anomalyIds.empty()) {
-                    ImGui::Text("Anomalies (%d):", static_cast<int>(rec->anomalyIds.size()));
-                    for (const auto& aid : rec->anomalyIds) {
-                        // Catalog text when known; the raw id otherwise (ids
-                        // are stable keys, never prose to parse).
-                        if (const AnomalyDef* def = findAnomaly(aid)) {
-                            ImGui::BulletText("%s", def->displayName.c_str());
-                            ImGui::TextWrapped("%s", def->codexText.c_str());
-                        } else {
-                            ImGui::BulletText("%s", aid.c_str());
-                        }
-                    }
-                } else {
-                    ImGui::TextDisabled("Anomalies: none recorded");
-                }
-            }
-            ImGui::Separator();
-        }
-        ImGui::PopID();
-    }
-
-    // Non-roster discoveries (e.g. Black Hole / Wormhole anomaly contexts):
-    // records exist without a runtime-body roster slot. Listed generically
-    // from the progression map — never a second hardcoded body list.
-    bool otherHeaderShown = false;
-    for (const auto& kv : prog.allRecords()) {
-        bool inRoster = false;
-        for (const auto& r : roster) {
-            if (r == kv.first) { inRoster = true; break; }
-        }
-        if (inRoster) continue;
-        const DiscoveryRecord& rec = kv.second;
-        if (rec.anomalyIds.empty() && rec.status == DiscoveryStatus::Unknown) continue;
-        if (!otherHeaderShown) {
-            otherHeaderShown = true;
-            ImGui::Separator();
-            ImGui::TextDisabled("Other discoveries:");
-        }
-        ImGui::PushID(kv.first.c_str());
-        ImGui::TextColored(codexStatusColor(rec.status), "[%s]", discoveryStatusLabel(rec.status));
-        ImGui::SameLine(0, 8);
-        ImGui::Text("%s", kv.first.c_str());
-        for (const auto& aid : rec.anomalyIds) {
-            if (const AnomalyDef* def = findAnomaly(aid)) {
-                ImGui::BulletText("%s", def->displayName.c_str());
-            } else {
-                ImGui::BulletText("%s", aid.c_str());
-            }
-        }
-        ImGui::PopID();
-    }
-
-    ImGui::EndChild();
-    ImGui::End();
-}
-

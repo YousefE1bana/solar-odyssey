@@ -71,7 +71,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // NOT physical); initialAngle 60.0 = deterministic PRESENTATION phase
         // (J2000 87.4 deg recorded, NOT applied — no epoch model);
         // mass 5.40965e-8 = GM/GM_sun = 7179.28340/1.32712440018e11.
-        CanonicalBodyDef("Callisto", 0.208f, 6.86f, 0.0f, 207.0f, "Textures/Derived/callisto_jpl_1440.jpg", false, 0.0f, 0.0f, false, 60.0f, 5.40965e-8f, "Jupiter"),
+        CanonicalBodyDef("Callisto", 0.208f, 6.86f, 0.0f, 207.0f, "", false, 0.0f, 0.0f, false, 60.0f, 5.40965e-8f, "Jupiter"),
         // Moon Expansion 1.5 — Tethys (Saturn). Derivations in
         // docs/MOON_EXPANSION_1_5_TETHYS.md: size 0.046 = Moon-relative true
         // ratio 0.15 * (531.10/1737.4); orbitRadius 3.10 = Enceladus-relative
@@ -81,7 +81,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // Europa 227, NOT physical); initialAngle 30.0 = deterministic
         // PRESENTATION phase (J2000 0.0 deg recorded, NOT applied — no epoch
         // model); mass 3.10548e-10 = GM/GM_sun = 41.21353/1.32712440018e11.
-        CanonicalBodyDef("Tethys", 0.046f, 3.10f, 0.0f, 233.0f, "Textures/Derived/tethys_jpl_1440.jpg", false, 0.0f, 0.0f, false, 30.0f, 3.10548e-10f, "Saturn"),
+        CanonicalBodyDef("Tethys", 0.046f, 3.10f, 0.0f, 233.0f, "Textures/Derived/tethys_cassini_4096.jpg", false, 0.0f, 0.0f, false, 30.0f, 3.10548e-10f, "Saturn"),
         // Texture Source Completion 1/4 — Phobos (Mars). JPL MAR097 physical
         // parameters (mean radius 11.08 km, GM 0.0007087) + mean elements
         // (a = 9375 km, P = 0.3187 d): size 0.008 = READABILITY FLOOR
@@ -94,7 +94,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // stylistic speed, NOT physical); initialAngle 150.0 = deterministic
         // PRESENTATION phase (no epoch model); mass 5.34012e-15 =
         // GM/GM_sun = 0.0007087/1.32712440018e11.
-        CanonicalBodyDef("Phobos", 0.008f, 0.8f, 0.0f, 247.0f, "Textures/Derived/phobos_jpl_1440.jpg", false, 0.0f, 0.0f, false, 150.0f, 5.34012e-15f, "Mars"),
+        CanonicalBodyDef("Phobos", 0.008f, 0.8f, 0.0f, 247.0f, "", false, 0.0f, 0.0f, false, 150.0f, 5.34012e-15f, "Mars"),
         // Texture Source Completion 1/4 — Deimos (Mars). JPL MAR097 (mean
         // radius 6.2 km, GM 0.0000962; a = 23457 km, P = 1.2625 d): size
         // 0.008 = READABILITY FLOOR (true ratio 0.000535, see Phobos note);
@@ -103,7 +103,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // PRESENTATION (between Enceladus 240 and Tethys 233, NOT physical);
         // initialAngle 250.0 = PRESENTATION phase; mass 7.24876e-16 =
         // 0.0000962/1.32712440018e11.
-        CanonicalBodyDef("Deimos", 0.008f, 1.3f, 0.0f, 236.0f, "Textures/Derived/deimos_jpl_1440.jpg", false, 0.0f, 0.0f, false, 250.0f, 7.24876e-16f, "Mars"),
+        CanonicalBodyDef("Deimos", 0.008f, 1.3f, 0.0f, 236.0f, "", false, 0.0f, 0.0f, false, 250.0f, 7.24876e-16f, "Mars"),
         // Texture Source Completion 1/4 — Mimas (Saturn). JPL SAT441 (mean
         // radius 198.20 km, GM 2.50349; a = 185520 km, P = 0.9424218 d):
         // size 0.017 = Moon-relative true ratio 0.15 * (198.20/1737.4);
@@ -113,7 +113,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // inside Enceladus 2.5); orbitSpeed 246 = PRESENTATION (fastest
         // Saturn moon -> above Enceladus 240, NOT physical); initialAngle
         // 90.0 = PRESENTATION phase; mass 1.88640e-11 = 2.50349/GM_sun.
-        CanonicalBodyDef("Mimas", 0.017f, 2.2f, 0.0f, 246.0f, "Textures/Derived/mimas_jpl_1440.jpg", false, 0.0f, 0.0f, false, 90.0f, 1.88640e-11f, "Saturn"),
+        CanonicalBodyDef("Mimas", 0.017f, 2.2f, 0.0f, 246.0f, "", false, 0.0f, 0.0f, false, 90.0f, 1.88640e-11f, "Saturn"),
         // Texture Source Completion 1/4 — Dione (Saturn). JPL SAT441 (mean
         // radius 561.40 km, GM 73.11607; a = 377400 km, P = 2.736915 d):
         // size 0.048 = Moon-relative true ratio 0.15 * (561.40/1737.4);
@@ -122,7 +122,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // PRESENTATION (between Tethys 233 and Europa 227, NOT physical);
         // initialAngle 180.0 = PRESENTATION phase; mass 5.50936e-10 =
         // 73.11607/GM_sun.
-        CanonicalBodyDef("Dione", 0.048f, 3.95f, 0.0f, 229.0f, "Textures/Derived/dione_jpl_1440.jpg", false, 0.0f, 0.0f, false, 180.0f, 5.50936e-10f, "Saturn"),
+        CanonicalBodyDef("Dione", 0.048f, 3.95f, 0.0f, 229.0f, "Textures/Derived/dione_cassini_4096.jpg", false, 0.0f, 0.0f, false, 180.0f, 5.50936e-10f, "Saturn"),
         // Texture Source Completion 1/4 — Rhea (Saturn). JPL SAT441 (mean
         // radius 763.50 km, GM 153.94175; a = 527040 km, P = 4.517500 d):
         // size 0.066 = Moon-relative true ratio 0.15 * (763.50/1737.4);
@@ -130,7 +130,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // (outside Dione 3.95); orbitSpeed 221 = PRESENTATION (below Europa
         // 227, above Ganymede 215, NOT physical); initialAngle 270.0 =
         // PRESENTATION phase; mass 1.15996e-9 = 153.94175/GM_sun.
-        CanonicalBodyDef("Rhea", 0.066f, 5.53f, 0.0f, 221.0f, "Textures/Derived/rhea_jpl_1440.jpg", false, 0.0f, 0.0f, false, 270.0f, 1.15996e-9f, "Saturn"),
+        CanonicalBodyDef("Rhea", 0.066f, 5.53f, 0.0f, 221.0f, "Textures/Derived/rhea_cassini_1024.jpg", false, 0.0f, 0.0f, false, 270.0f, 1.15996e-9f, "Saturn"),
         // Texture Source Completion 1/4 — Iapetus (Saturn). JPL SAT441 (mean
         // radius 734.30 km, GM 120.51511; a = 3561300 km, P = 79.330183 d):
         // size 0.063 = Moon-relative true ratio 0.15 * (734.30/1737.4);
@@ -141,7 +141,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // stylistic speed, below Moon 200, NOT physical); initialAngle 330.0
         // = PRESENTATION phase; mass 9.08092e-10 = 120.51511/GM_sun. NOTE:
         // JPL "Tilt = 14.8 deg" is Laplace-plane geometry, NOT axial tilt.
-        CanonicalBodyDef("Iapetus", 0.063f, 8.5f, 0.0f, 195.0f, "Textures/Derived/iapetus_jpl_1440.jpg", false, 0.0f, 0.0f, false, 330.0f, 9.08092e-10f, "Saturn"),
+        CanonicalBodyDef("Iapetus", 0.063f, 8.5f, 0.0f, 195.0f, "", false, 0.0f, 0.0f, false, 330.0f, 9.08092e-10f, "Saturn"),
         // Texture Source Completion 2/4 — Miranda (Uranus). JPL URA111 (mean
         // radius 235.8 km, GM 4.3; a = 129872 km, P = 1.414 d): size 0.020 =
         // Moon-relative true ratio 0.15 * (235.8/1737.4); orbitRadius 1.2 =
@@ -150,21 +150,21 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // PRESENTATION (fastest Uranian moon, NOT physical); initialAngle
         // 45.0 = PRESENTATION phase; mass 3.24009e-11 = 4.3/GM_sun.
         // orbitDirection defaults +1 (prograde).
-        CanonicalBodyDef("Miranda", 0.020f, 1.2f, 0.0f, 245.0f, "Textures/Derived/miranda_jpl_1440.jpg", false, 0.0f, 0.0f, false, 45.0f, 3.24009e-11f, "Uranus"),
+        CanonicalBodyDef("Miranda", 0.020f, 1.2f, 0.0f, 245.0f, "", false, 0.0f, 0.0f, false, 45.0f, 3.24009e-11f, "Uranus"),
         // Texture Source Completion 2/4 — Ariel (Uranus). JPL URA111 (mean
         // radius 578.9 km, GM 83.5; a = 190941 km, P = 2.521 d): size 0.050
         // = true ratio 0.15 * (578.9/1737.4); orbitRadius 1.76 =
         // Miranda-relative true spacing 1.2 * (190941/129872); orbitSpeed 232
         // = PRESENTATION (NOT physical); initialAngle 135.0 = PRESENTATION
         // phase; mass 6.29180e-10 = 83.5/GM_sun.
-        CanonicalBodyDef("Ariel", 0.050f, 1.76f, 0.0f, 232.0f, "Textures/Derived/ariel_jpl_1440.jpg", false, 0.0f, 0.0f, false, 135.0f, 6.29180e-10f, "Uranus"),
+        CanonicalBodyDef("Ariel", 0.050f, 1.76f, 0.0f, 232.0f, "", false, 0.0f, 0.0f, false, 135.0f, 6.29180e-10f, "Uranus"),
         // Texture Source Completion 2/4 — Umbriel (Uranus). JPL URA111 (mean
         // radius 584.7 km, GM 85.1; a = 266012 km, P = 4.145 d): size 0.050
         // = true ratio (nearly identical true diameter to Ariel — honest
         // rounding); orbitRadius 2.46 = Miranda-relative 1.2 * (266012/
         // 129872); orbitSpeed 219 = PRESENTATION (NOT physical); initialAngle
         // 225.0 = PRESENTATION phase; mass 6.41236e-10 = 85.1/GM_sun.
-        CanonicalBodyDef("Umbriel", 0.050f, 2.46f, 0.0f, 219.0f, "Textures/Derived/umbriel_jpl_1440.jpg", false, 0.0f, 0.0f, false, 225.0f, 6.41236e-10f, "Uranus"),
+        CanonicalBodyDef("Umbriel", 0.050f, 2.46f, 0.0f, 219.0f, "", false, 0.0f, 0.0f, false, 225.0f, 6.41236e-10f, "Uranus"),
         // Texture Source Completion 2/4 — Titania (Uranus). JPL URA111 (mean
         // radius 788.9 km, GM 226.9; a = 436295 km, P = 8.706 d — the JPL/
         // ura111 consensus value): size 0.068 = true ratio 0.15 *
@@ -172,14 +172,14 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // (436295/129872); orbitSpeed 210 = PRESENTATION (NOT physical);
         // initialAngle 315.0 = PRESENTATION phase; mass 1.70971e-9 =
         // 226.9/GM_sun.
-        CanonicalBodyDef("Titania", 0.068f, 4.03f, 0.0f, 210.0f, "Textures/Derived/titania_jpl_1440.jpg", false, 0.0f, 0.0f, false, 315.0f, 1.70971e-9f, "Uranus"),
+        CanonicalBodyDef("Titania", 0.068f, 4.03f, 0.0f, 210.0f, "", false, 0.0f, 0.0f, false, 315.0f, 1.70971e-9f, "Uranus"),
         // Texture Source Completion 2/4 — Oberon (Uranus). JPL URA111 (mean
         // radius 761.4 km, GM 205.3; a = 583552 km, P = 13.468 d): size 0.066
         // = true ratio 0.15 * (761.4/1737.4); orbitRadius 5.39 =
         // Miranda-relative 1.2 * (583552/129872), outermost Uranian moon;
         // orbitSpeed 203 = PRESENTATION (NOT physical); initialAngle 75.0 =
         // PRESENTATION phase; mass 1.54695e-9 = 205.3/GM_sun.
-        CanonicalBodyDef("Oberon", 0.066f, 5.39f, 0.0f, 203.0f, "Textures/Derived/oberon_jpl_1440.jpg", false, 0.0f, 0.0f, false, 75.0f, 1.54695e-9f, "Uranus"),
+        CanonicalBodyDef("Oberon", 0.066f, 5.39f, 0.0f, 203.0f, "", false, 0.0f, 0.0f, false, 75.0f, 1.54695e-9f, "Uranus"),
         // Texture Source Completion 2/4 — Triton (Neptune). JPL NEP097 (mean
         // radius 1352.60 km, GM 1428.49546; a = 354760 km, P = 5.877 d
         // magnitude, RETROGRADE sense): size 0.117 = true ratio 0.15 *
@@ -189,7 +189,7 @@ const std::vector<CanonicalBodyDef>& CanonicalInventory::getCanonicalMoons() {
         // initialAngle 285.0 = PRESENTATION phase; mass 1.07638e-8 =
         // 1428.49546/GM_sun; orbitDirection -1.0f = RETROGRADE (generic
         // canonical data — consumed by sign, never name-checked).
-        CanonicalBodyDef("Triton", 0.117f, 1.29f, 0.0f, 213.0f, "Textures/Derived/triton_jpl_1440.jpg", false, 0.0f, 0.0f, false, 285.0f, 1.07638e-8f, "Neptune", false, -1.0f)
+        CanonicalBodyDef("Triton", 0.117f, 1.29f, 0.0f, 213.0f, "", false, 0.0f, 0.0f, false, 285.0f, 1.07638e-8f, "Neptune", false, -1.0f)
     };
     return s_moons;
 }

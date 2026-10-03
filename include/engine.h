@@ -20,6 +20,7 @@
 // Subsystems
 #include "settings_persistence.h"
 #include "session_shell.h"
+#include "menu_transition.h"
 #include "planet_data.h"
 #include "camera_controller.h"
 #include "solar_ui.h"
@@ -47,9 +48,7 @@
 #include "benchmark_runner.h"
 #include "presentation_controller.h"
 #include "body_relationships.h"
-#include "science_progression.h"
 #include "science_scanner.h"
-#include "anomaly_catalog.h"
 
 class Engine {
 public:
@@ -72,6 +71,9 @@ public:
 
     // Subsystems
     SessionShell shell;
+    MenuTransition menuTransition;
+    MenuPose menuHeroPose() const;
+    void beginMenuTransition();
     bool validContinue = false;
     std::string continueSummary;
     bool confirmFresh = false;
@@ -95,12 +97,8 @@ public:
     WormholePortalRenderer wormholePortalRenderer;
     SceneRenderer renderer;
 
-    // Authoritative scientific discovery records. Fed from live runtime
-    // state in updateSimulation; read by the Codex/HUD; persisted in v3/v4.
-    ScienceProgression progression;
-    // Codex roster: runtime body names (Sun + planets + moons) rebuilt in
-    // initPlanetsAndMoons from live vectors — never a second hardcoded list.
-    std::vector<std::string> codexRoster;
+    // Session-only completed instruments prevent automatic survey repetition.
+    std::set<std::pair<std::string, ScienceActivity>> completedScience;
     // Cycle 4 Pass 2: single authoritative scanner session, transient
     // close-flyby session, long-range sweep timer, and a short camera
     // history ring for photo-stability scoring. None of this is persisted;
@@ -111,7 +109,6 @@ public:
     // while scanActivityActive; orbital sessions start automatically).
     ScienceActivity activeScanActivity = ScienceActivity::OrbitalSurvey;
     bool scanActivityActive = false;
-    float longRangeSweepTimer = 0.0f;
     std::deque<std::pair<glm::vec3, glm::vec3>> cameraHistory;
 
     // Simulation Data
@@ -287,8 +284,6 @@ public:
     // Cycle 4 Pass 2: per-frame session drivers (scanner, flyby, sweeps,
     // anomaly evaluation). No-ops during benchmark/QA capture.
     void updateScienceSessions(float deltaTime);
-    void updateDetection(const glm::mat4& view, const glm::mat4& projection);
-    void updateAnomalies(const glm::mat4& view, const glm::mat4& projection);
     // PSM.2: resolves a body name to its focus target. Sun -> index -1 at the
     // origin (canonical radius 2.0); planets -> vector index; moons -> 100+i
     // (pickable-list convention). Black Hole/Wormhole/unknown/empty -> false

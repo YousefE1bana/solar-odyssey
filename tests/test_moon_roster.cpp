@@ -107,9 +107,8 @@ TEST_CASE("Moon roster - hybrid N-body set holds 13 roots, no moons", "[moon-exp
     }
 }
 
-TEST_CASE("Moon roster - SaveState remains version 2", "[moon-expansion][roster]") {
-    // Roster expansion carries no persistence change: default state is v2.
-    REQUIRE(SimulationSaveState{}.version == 5);
+TEST_CASE("Moon roster - current save format", "[moon-expansion][roster]") {
+    REQUIRE(SimulationSaveState{}.version == 6);
 }
 
 TEST_CASE("Moon roster - every moon is Natural and Scientific only", "[moon-expansion][roster]") {

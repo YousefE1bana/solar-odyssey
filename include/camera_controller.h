@@ -120,6 +120,7 @@ public:
     void setSpaceshipMode(bool enabled, const glm::vec3& shipEye, const glm::vec3& shipTarget, const glm::vec3& shipUp);
 
     void processKeyboard(GLFWwindow* window, float deltaTime);
+    void integrateFreeMovement(const glm::vec3& direction, float speedMultiplier, float deltaTime);
     void processMouseDrag(float xoffset, float yoffset);
     void processScroll(float yoffset);
 

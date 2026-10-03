@@ -4,7 +4,6 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "camera_controller.h"
-#include "science_progression.h"
 #include "spaceship.h"
 #include "simulation_controller.h"
 
@@ -36,7 +35,7 @@ struct CameraBookmark {
 struct SimulationSaveState {
     // v4 has an explicit clock unit and numerical continuation. The legacy
     // bookmark capture overload explicitly emits v3 for compatibility/QA.
-    int version = 5;
+    int version = 6;
     std::string timestamp;
 
     // Simulation
@@ -64,9 +63,6 @@ struct SimulationSaveState {
     int presentationMode = 0;
     std::string selectedBodyName;
 
-    // Scientific discovery records. Fresh defaults == new game;
-    // v2 loads keep these fresh.
-    ProgressionSaveData progression;
 
     // Persistence Settings
     bool autoSaveOnExit = true;
@@ -101,10 +97,6 @@ public:
                        CameraController& cam,
                        Spaceship& ship, SolarOdysseyUI& ui);
 
-    // Progression is captured/restored separately from simulation state.
-    // v2 states (no progression block) restore as fresh.
-    void captureProgression(SimulationSaveState& outState, const ScienceProgression& prog);
-    void restoreProgression(const SimulationSaveState& state, ScienceProgression& prog);
 
     const std::string& getDefaultSavePath() const { return defaultPath; }
     std::string getSaveSummary(const std::string& filepath) const;

@@ -1,6 +1,24 @@
 #include "catch.hpp"
 #include "input_manager.h"
 #include <vector>
+#include <imgui.h>
+#include "input_policy.h"
+
+TEST_CASE("Flight input is independent of passive HUD focus", "[input][release]") {
+    REQUIRE(flightInputAllowed(false, false));
+    REQUIRE_FALSE(flightInputAllowed(true, false));
+    REQUIRE_FALSE(flightInputAllowed(false, true));
+    auto* context = ImGui::CreateContext();
+    InputManager input;
+    input.init(nullptr);
+    ImGui::GetIO().WantCaptureMouse = false;
+    input.onMouseButton(GLFW_MOUSE_BUTTON_LEFT, GLFW_PRESS, 0);
+    REQUIRE(input.isLeftMouseButtonDown());
+    ImGui::GetIO().WantCaptureMouse = true;
+    input.onMouseButton(GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);
+    REQUIRE_FALSE(input.isLeftMouseButtonDown());
+    ImGui::DestroyContext(context);
+}
 
 TEST_CASE("InputManager - Context Management and State Reset", "[input]") {
     InputManager inputMgr;

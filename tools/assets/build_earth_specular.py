@@ -2,7 +2,7 @@
 """
 tools/assets/build_earth_specular.py
 
-Converts the authentic repository TIFF asset (Textures/8k_earth_specular_map.tif)
+Converts the checksum-verified downloaded TIFF master
 into a lightweight, linear scalar PNG mask (Textures/earth_specular.png)
 for OpenGL GL_R8 runtime consumption.
 
@@ -13,14 +13,17 @@ Documents:
 - Measured water coverage fraction
 """
 
+import json
+from pathlib import Path
 import os
 import sys
 import hashlib
 import numpy as np
 from PIL import Image
 
-SOURCE_PATH = "Textures/8k_earth_specular_map.tif"
-OUTPUT_PATH = "Textures/earth_specular.png"
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE_PATH = str(ROOT / ".output/qa/sources/8k_earth_specular_map.tif")
+OUTPUT_PATH = str(ROOT / "Textures/earth_specular.png")
 TARGET_SIZE = (4096, 2048)
 
 def compute_sha256(filepath):
@@ -41,6 +44,10 @@ def main():
 
     # 1. Source Asset Validation
     src_sha256 = compute_sha256(SOURCE_PATH)
+    manifest = json.loads((ROOT / "Textures/provenance.json").read_text())
+    entry = next(a for a in manifest["assets"] if a["file"] == "Textures/earth_specular.png")
+    if src_sha256 != entry["source_sha256"]:
+        raise SystemExit("Source checksum mismatch")
     src_size_bytes = os.path.getsize(SOURCE_PATH)
     print(f"Source Asset:          {SOURCE_PATH}")
     print(f"Source SHA-256:        {src_sha256}")

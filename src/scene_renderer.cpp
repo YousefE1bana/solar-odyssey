@@ -152,8 +152,30 @@ Moon::Moon(const std::string& name, float size, float orbitRadius, float orbitSp
 
 void SceneRenderer::initNeutralMoonTexture() {
     if (neutralMoonTexture != 0) return;
-    // Constant RGB albedo, not measured terrain or a body-specific color.
-    const unsigned char neutralPixel[] = {128, 128, 128};
+    // Spherical coordinates keep seams and poles continuous. This is illustrative,
+    // not reconstructed or measured terrain; the dossier explicitly says so.
+    constexpr int width = 1024, height = 512;
+    std::vector<unsigned char> material(width * height * 3);
+    std::vector<glm::vec3> centers;
+    for (int i = 0; i < 96; ++i) {
+        const float y = 1.0f - 2.0f * (i + .5f) / 96.0f;
+        const float angle = i * 2.39996323f;
+        const float radial = std::sqrt(1.0f - y*y);
+        centers.emplace_back(radial*std::cos(angle), y, radial*std::sin(angle));
+    }
+    for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+        const float lat = 3.14159265f * (float(y) / (height-1) - .5f);
+        const float lon = 6.2831853f * float(x) / width;
+        const glm::vec3 point(std::cos(lat)*std::cos(lon), std::sin(lat), std::cos(lat)*std::sin(lon));
+        float albedo = 134 + 10*std::sin(point.x*17 + std::sin(point.z*11))*std::cos(point.y*19);
+        for (int i = 0; i < 96; ++i) {
+            const float radius = .04f + .012f * (i%11);
+            const float d = glm::length(point - centers[i]) / radius;
+            if (d < 1.5f) albedo += 24*std::exp(-50*(d-1)*(d-1)) - 22*std::exp(-3*d*d);
+        }
+        const auto gray = static_cast<unsigned char>(std::clamp(albedo, 70.0f, 190.0f));
+        for (int c = 0; c < 3; ++c) material[(y*width+x)*3+c] = gray;
+    }
     GLint previousBinding = 0, previousAlignment = 0;
     glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousBinding);
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
@@ -161,8 +183,9 @@ void SceneRenderer::initNeutralMoonTexture() {
     if (!neutralMoonTexture) return;
     glBindTexture(GL_TEXTURE_2D, neutralMoonTexture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, neutralPixel);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, material.data());
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -200,7 +223,7 @@ bool SceneRenderer::init(int textureTier) {
             out vec4 FragColor;
             uniform sampler2D uStarTex;
             void main() {
-                vec3 col = texture(uStarTex, vTexCoord).rgb * 0.38;
+                vec3 col = texture(uStarTex, vTexCoord).rgb * 0.85;
                 FragColor = vec4(col, 1.0);
             }
         )";
@@ -221,10 +244,7 @@ bool SceneRenderer::init(int textureTier) {
     // Textures with fallbacks
     sunTexture = loadTextureOrFallback("Textures/sun.jpg", "Textures/earth_daymap.jpg");
     saturnRingTexture = loadTextureOrFallback("Textures/saturn_ring_alpha.png", "Textures/venus_atmosphere.jpg");
-    // Pass 3: scientific catalog starfield selected by texture tier (Low =
-    // Yale bright, Medium = Hipparcos, High = Tycho dense, Ultra = full
-    // union composite). Replaces the legacy non-catalog Milky Way art with
-    // real Yale/Hipparcos/Tycho resources.
+    // Sky selection is independent of graphics quality; Classic is the default.
     starfieldPath = TextureVariants::starfieldForStyle(0, 0);
     starfieldTexture = loadTextureOrFallback(starfieldPath.c_str(), "");
     earthDayTexture = loadTextureOrFallback("Textures/earth_daymap.jpg", "Textures/earth_nightmap.jpg");

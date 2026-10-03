@@ -1,3 +1,4 @@
+#include "input_policy.h"
 #include "input_manager.h"
 #include <imgui.h>
 #include <cstring>
@@ -47,7 +48,7 @@ void InputManager::onKey(int key, int scancode, int action, int mods) {
 
 void InputManager::onMouseButton(int button, int action, int mods) {
     (void)mods;
-    if (ImGui::GetIO().WantCaptureMouse) return;
+    if (action != GLFW_RELEASE && ImGui::GetIO().WantCaptureMouse) return;
 
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         isLeftMouseDown = (action == GLFW_PRESS);
@@ -104,7 +105,7 @@ bool InputManager::consumeKeyPress(int key) {
 
 SpaceshipFlightInput InputManager::pollSpaceshipFlight(GLFWwindow* window) const {
     SpaceshipFlightInput input;
-    if (!window || ImGui::GetIO().WantCaptureKeyboard) return input;
+    if (!window || !flightInputAllowed(ImGui::GetIO().WantTextInput, uiReleaseCursorHeld)) return input;
 
     input.fwd = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
     input.back = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
@@ -120,7 +121,7 @@ SpaceshipFlightInput InputManager::pollSpaceshipFlight(GLFWwindow* window) const
 
 FreeCameraMovementInput InputManager::pollFreeCameraMovement(GLFWwindow* window) const {
     FreeCameraMovementInput input;
-    if (!window || ImGui::GetIO().WantCaptureKeyboard) return input;
+    if (!window || !flightInputAllowed(ImGui::GetIO().WantTextInput, uiReleaseCursorHeld)) return input;
 
     input.fwd = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
     input.back = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
@@ -135,7 +136,7 @@ FreeCameraMovementInput InputManager::pollFreeCameraMovement(GLFWwindow* window)
 
 OrbitalRotationInput InputManager::pollOrbitalRotation(GLFWwindow* window) const {
     OrbitalRotationInput input;
-    if (!window || ImGui::GetIO().WantCaptureKeyboard) return input;
+    if (!window || !flightInputAllowed(ImGui::GetIO().WantTextInput, uiReleaseCursorHeld)) return input;
 
     input.pitchUp = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
     input.pitchDown = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);

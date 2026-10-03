@@ -37,8 +37,7 @@ inline std::size_t variantIndex(std::size_t count, int tier) {
 
 // Ordered alternate Natural-texture paths per moon, highest-quality first.
 // Same-body alternate representations only (filter/processing variants or
-// lower resolutions) — never different scientific layers. Rejected mosaics
-// remain on disk as scientific resources, not Natural tier alternatives.
+// lower resolutions), never different scientific layers.
 struct MoonVariantSet {
     std::string body;
     std::vector<std::string> alternates;
@@ -65,13 +64,15 @@ inline const std::vector<std::string>& moonAlternates(const std::string& body) {
 }
 
 // Asset-specific approval, not a body-name or aspect-ratio assumption.
-// Evidence: texture_audit_report.md, texture_conversion_report.md and the
-// Moon LRO attribution in THIRD_PARTY_NOTICES.md. Partial or unresolved maps
-// (including Tethys polar coverage, Phobos provenance and Iapetus dark-region
-// semantics) are deliberately absent. New/unreviewed assets default neutral.
+// Coverage, projection and conversion evidence is recorded in
+// Textures/provenance.json and THIRD_PARTY_NOTICES.md. Partial or unresolved
+// maps are deliberately absent. New/unreviewed assets default neutral.
 inline bool isGlobalMoonTexture(const std::string& path) {
     static const std::vector<std::string> approved = {
         "Textures/moon.jpg",
+        "Textures/Derived/tethys_cassini_4096.jpg",
+        "Textures/Derived/dione_cassini_4096.jpg",
+        "Textures/Derived/rhea_cassini_1024.jpg",
         "Textures/Derived/enceladus_albedo_4096.jpg",
         "Textures/Derived/enceladus_albedo_2048.jpg",
         "Textures/Derived/europa_jpl_1440.jpg",
@@ -125,18 +126,10 @@ inline const LayerVariantSet* findLayerVariants(const std::string& body, BodyLay
     return nullptr;
 }
 
-// Scientific starfield dataset per tier, derived from the three catalog
-// TIFFs (all native 2880x1440 equirectangular, directly compatible).
-// Density hierarchy verified from source statistics (luminance means:
-// Yale 0.3 < Hipparcos 1.3 < Tycho 4.0):
-//   Low    -> Yale bright/classic naked-eye stars (sparsest).
-//   Medium -> Hipparcos precise intermediate-density catalog.
-//   High   -> Tycho denser star field (default reference tier).
-//   Ultra  -> truthful per-pixel max union of all three catalogs (a star
-//             recorded in ANY catalog appears; nothing invented, no nebula
-//             art painted over the catalogs).
+// Starfield selection is independent of texture quality. Keep the catalog
+// indices stable for existing settings: Yale=0, Hipparcos=1, Tycho=2, union=3.
 inline std::string starfieldForStyle(int style, int dataset) {
-    if (style == 0) return dataset == 1 ? "Textures/stars_milky_way.jpg" : "Textures/8k_stars.jpg";
+    if (style != 1) return "Textures/stars_milky_way.jpg";
     switch (dataset) {
         case 1: return "Textures/Derived/stars_hipparcos_2880.jpg";
         case 2: return "Textures/Derived/stars_tycho_2880.jpg";

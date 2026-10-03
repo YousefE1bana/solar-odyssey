@@ -4,9 +4,9 @@
 
 struct AppSettings {
     // Audio
-    float masterVolume = 0.8f;
-    float musicVolume  = 0.6f;
-    float sfxVolume    = 0.7f;
+    float masterVolume = 0.55f;
+    float musicVolume  = 0.22f;
+    float sfxVolume    = 0.30f;
     bool  audioMuted   = false;
 
     // Visuals
@@ -30,7 +30,7 @@ struct AppSettings {
     // Camera & Screen
     float fieldOfView = 60.0f;
     bool  vsyncEnabled = true;
-    bool  fullscreen   = false;
+    bool  fullscreen   = true;
 
     // C3.8: rendering quality tier 0=Low..3=Ultra (default High = reference tier).
     // Persisted in solar_odyssey_settings.ini only; SaveState v2 untouched.

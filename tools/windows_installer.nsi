@@ -1,5 +1,7 @@
 Unicode true
 !include "MUI2.nsh"
+!define MUI_ICON "${STAGE}\icon.ico"
+!define MUI_UNICON "${STAGE}\icon.ico"
 Name "Solar Odyssey ${VERSION}"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\Solar Odyssey"

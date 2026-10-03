@@ -1,0 +1,482 @@
+{
+  "schema_version": 1,
+  "asset_scope": "Runtime texture union, independent of graphics preset. Source masters are downloaded, not committed.",
+  "generated_materials": [
+    {
+      "name": "unsupported-moon-material",
+      "classification": "runtime-required",
+      "source": "src/scene_renderer.cpp",
+      "description": "Deterministic spherical procedural craters and noise; shared neutral illustrative material, not measured terrain."
+    }
+  ],
+  "assets": [
+    {
+      "file": "Textures/stars_milky_way.jpg",
+      "classification": "runtime-required",
+      "sha256": "1fd005ddd6d53364cc5106e0121b83fd3bca236b1503f6b51f5501d9d51eafaf",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/4k_ceres_fictional.jpg",
+      "classification": "runtime-required",
+      "sha256": "e4452a4f84830a30d7a9b8be1b59c5a568e0aae8ed6ba5ebb7be0c3f672e7553",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Fictional dwarf-planet artwork."
+    },
+    {
+      "file": "Textures/4k_eris_fictional.jpg",
+      "classification": "runtime-required",
+      "sha256": "682787869e69dfcf41ce5f4db2a9b54fb00bd7e28b97b7b61e6a0296956c1278",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Fictional dwarf-planet artwork."
+    },
+    {
+      "file": "Textures/4k_haumea_fictional.jpg",
+      "classification": "runtime-required",
+      "sha256": "1e039b82323030cda110eb21e47e38f46a4e9c46dc24eb545428eb0263c28292",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Fictional dwarf-planet artwork."
+    },
+    {
+      "file": "Textures/4k_makemake_fictional.jpg",
+      "classification": "runtime-required",
+      "sha256": "d94c950da2614aa643f88db24437d706c1e3975aa38f7943620141f14301625c",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Fictional dwarf-planet artwork."
+    },
+    {
+      "file": "Textures/earth_clouds.jpg",
+      "classification": "runtime-required",
+      "sha256": "c792eca228989d36ebb45d3ea6ff1198be5e21a25d70d2fbcb2124ffd14ba7f5",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/earth_daymap.jpg",
+      "classification": "runtime-required",
+      "sha256": "88ab060b6e7d241cfc590c69f528fab2b3247b738d40124cb590999a6fe44abc",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/earth_nightmap.jpg",
+      "classification": "runtime-required",
+      "sha256": "9894e83a585a22c1c425e7ca4f987a9ba625bf08ecee45d3c9dcacae3c2ad5f7",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/earth_specular.png",
+      "source_sha256": "194e67ef7f14dd50b402a1a6f8c7ed55810e16515b95f7736091951efe8dc3fb",
+      "master_url": "https://www.solarsystemscope.com/textures/download/8k_earth_specular_map.tif",
+      "reproduction": "tools/assets/build_earth_specular.py; mode L, 4096x2048 Lanczos, optimized PNG; linear mask, white ocean",
+      "classification": "runtime-required",
+      "sha256": "298412af574b5b3c00087a4a46919be2a5dc6241d92e63148bd6e9fae7bcc5fc",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/jupiter.jpg",
+      "classification": "runtime-required",
+      "sha256": "b0f04d005350252636b0e3396fc592548cbd9e9126b269d32d5c6abd4b0e4f2b",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/mars.jpg",
+      "classification": "runtime-required",
+      "sha256": "4cc52149924abc6ae507d63032f994e1d42a55cb82c09e002d1a567ff66c23ee",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/mercury.jpg",
+      "classification": "runtime-required",
+      "sha256": "5c8bd885ae3571c6ba2cd34b3446b9c6d767e314bf0ee8c1d5c147cadd388fc3",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/moon.jpg",
+      "classification": "runtime-required",
+      "sha256": "d1875bcec83588ca25e4802e576f6bb9f88b39e1e403cb41ff55867419c54796",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/neptune.jpg",
+      "classification": "runtime-required",
+      "sha256": "cb42ea82709741d28b0af44d8b283cbc6dbd0c521a7f0e1e1e010ade00977df6",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/saturn.jpg",
+      "classification": "runtime-required",
+      "sha256": "0d39a4a490c87c3edabe00a3881a29bb3418364178c79c534fe0986e97e09853",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/saturn_ring_alpha.png",
+      "classification": "runtime-required",
+      "sha256": "f1f826933c9ff87d64ecf0518d6256b8ed990b003722794f67e96e3d2b876ae4",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/sun.jpg",
+      "classification": "runtime-required",
+      "sha256": "f22b1cfb306ddce72a7e3b628668a0175b745038ce6268557cb2f7f1bdf98b9d",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/uranus.jpg",
+      "classification": "runtime-required",
+      "sha256": "d15239d46f82d3ea13d2b260b5b29b2a382f42f2916dae0694d0387b1204a09d",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/venus_atmosphere.jpg",
+      "classification": "runtime-required",
+      "sha256": "a14aeba3c6ad7a56f989bb32008dec548077aeded420495b34df98f2dc14ba91",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/venus_surface.jpg",
+      "classification": "runtime-required",
+      "sha256": "9bc21a50577ed8ac734cda91058724c7a741c19427aa276224ce349351432c5b",
+      "credit": "Solar System Scope / INOVE",
+      "source_url": "https://www.solarsystemscope.com/textures/",
+      "license": "CC-BY-4.0",
+      "projection": "equirectangular",
+      "processing": "Delivered adaptation; texture resizing/transcoding and runtime illustrative lighting. See THIRD_PARTY_NOTICES.md.",
+      "limitations": "Illustrative imagery; provider adjusts color and may fill unmapped regions. Not calibrated measurements."
+    },
+    {
+      "file": "Textures/Derived/tethys_cassini_4096.jpg",
+      "classification": "runtime-required",
+      "sha256": "945b16d284eed45befa7d6eb17f99ef0bb65db73f8ce37a8b8c6ced64bc33906",
+      "credit": "NASA/JPL-Caltech/Space Science Institute; Roatsch, Kersten, Hoffmeister and Wahlisch; USGS Astrogeology",
+      "license": "USGS public-domain planetary map product; cite mission and product authors",
+      "source_url": "https://planetarymaps.usgs.gov/mosaic/Tethys_Cassini_mosaic_global_293m.tif",
+      "product_page": "https://astrogeology.usgs.gov/search/map/tethys_cassini_global_mosaic_293m",
+      "source_sha256": "40723c3ebfaaa52a657827b37309bc84234811db1cf26a21d086e26aba2b3640",
+      "source_dimensions": [
+        11520,
+        5760
+      ],
+      "projection": "Global simple cylindrical / equirectangular; planetocentric latitude; positive-west source longitudes",
+      "processing": "Horizontal mirror converts positive-west to east-increasing texture U. Lanczos resize to 4096x2048; grayscale JPEG quality 92.",
+      "limitations": "Global Cassini mosaic; Dione includes Voyager gap coverage. Illumination baked into image; not calibrated albedo."
+    },
+    {
+      "file": "Textures/Derived/dione_cassini_4096.jpg",
+      "classification": "runtime-required",
+      "sha256": "6a3a5b7fc66da16c3af5f9454397a6ece6aa39cfc68c71588ef52d078a5b301d",
+      "credit": "NASA/JPL-Caltech/Space Science Institute; Roatsch, Kersten, Hoffmeister and Wahlisch; USGS Astrogeology",
+      "license": "USGS public-domain planetary map product; cite mission and product authors",
+      "source_url": "https://planetarymaps.usgs.gov/mosaic/Dione_Cassini_Voyager_mosaic_global_154m.tif",
+      "product_page": "https://astrogeology.usgs.gov/search/map/dione_cassini_voyager_global_mosaic_154m",
+      "source_sha256": "5c5d796c02e3c99fde5dd034e01dd1f25905699a4885843aed445ded955e08b5",
+      "source_dimensions": [
+        23040,
+        11520
+      ],
+      "projection": "Global simple cylindrical / equirectangular; planetocentric latitude; positive-west source longitudes",
+      "processing": "Horizontal mirror converts positive-west to east-increasing texture U. Lanczos resize to 4096x2048; grayscale JPEG quality 92.",
+      "limitations": "Global Cassini mosaic; Dione includes Voyager gap coverage. Illumination baked into image; not calibrated albedo."
+    },
+    {
+      "file": "Textures/Derived/rhea_cassini_1024.jpg",
+      "classification": "runtime-required",
+      "sha256": "cc5eaf8b34fad2d164f55bc5f94958602494bf402d1537cfd6ca60a0d529e0d4",
+      "credit": "NASA/JPL-Caltech/Space Science Institute; Roatsch, Kersten, Hoffmeister and Wahlisch; USGS Astrogeology",
+      "license": "USGS public-domain planetary map product; cite mission and product authors",
+      "source_url": "https://astrogeology.usgs.gov/ckan/dataset/22bc1015-d9c9-4212-86c3-e42061b204d4/resource/77fa77f8-6d6b-4072-9360-17138caa6e7d/download/full.jpg",
+      "product_page": "https://astrogeology.usgs.gov/search/map/rhea_cassini_voyager_global_mosaic_417m",
+      "source_sha256": "1f1401668e26a42f33aa88ab337981dd621382b137fd04847286dc5f780a9f0b",
+      "source_dimensions": [
+        1024,
+        512
+      ],
+      "projection": "Global simple cylindrical / equirectangular; planetocentric latitude; positive-west source longitudes",
+      "processing": "Horizontal mirror converts positive-west to east-increasing texture U. Native 1024x512 browse rendition; JPEG quality 95.",
+      "limitations": "Official 1024x512 full browse image, not the mislabeled TIFF link. Lower source resolution; no invented detail."
+    },
+    {
+      "file": "Textures/Derived/enceladus_albedo_2048.jpg",
+      "classification": "runtime-required",
+      "sha256": "7078abd0a37ae79a1472430ae8e6859e17438441f5436cba6a5d7ce2262e34d1",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://planetarymaps.usgs.gov/mosaic/Enceladus_Cassini_mosaic_global_110m.tif",
+      "source_sha256": "c9d29292141dd986e52b2a24b692df34701d1dabaee69bcb9fb64ebc6baba335",
+      "projection": "Global equirectangular visualization",
+      "processing": "Lanczos resample 14401x7201 -> 2048x1024; no crop; no sharpening; no tonal change",
+      "jpeg_quality": 92,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/enceladus_albedo_4096.jpg",
+      "classification": "runtime-required",
+      "sha256": "57116e1cfa74d4cc78aed42b67b201a8d50e410363519b2a1d642933dd122d8d",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://planetarymaps.usgs.gov/mosaic/Enceladus_Cassini_mosaic_global_110m.tif",
+      "source_sha256": "c9d29292141dd986e52b2a24b692df34701d1dabaee69bcb9fb64ebc6baba335",
+      "projection": "Global equirectangular visualization",
+      "processing": "Lanczos resample 14401x7201 -> 4096x2048; no crop; no sharpening; no tonal change",
+      "jpeg_quality": 92,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/europa_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "d080b86eff69f7b381762370cdc0ca4668e48484574d6a51ed0586cd1f375265",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/jup2vss2.tif",
+      "source_sha256": "e91274a5ed606eb046598e2d297cffcbdb10f58595ce742e437a39c3d9eed559",
+      "projection": "Global equirectangular visualization",
+      "processing": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+      "jpeg_quality": 92,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/europa_vuu2_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "d9144c4179ebc9599795f76415f0ec05b1ad6699ef2ba73a937316d116016f13",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/jup2vuu2.tif",
+      "source_sha256": "6efdd6e7f25520881ee578a0b4d76a826d89ccf9ea9caaf0f9b127fb335ad3a8",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 92,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/ganymede_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "59462cb97d67a5da3c6a171f4a3ea4dc35b0c4b5383413918321d856ccfbeea0",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/jup3vss2.tif",
+      "source_sha256": "97a02ed72dc0b377e17ddd50b72ea348c05fc670d27327e754d1910ad9cda142",
+      "projection": "Global equirectangular visualization",
+      "processing": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+      "jpeg_quality": 92,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/ganymede_vuu2_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "7131a2ebef6791a9a98fe465d1aeae84bcddb5b81ff7ff31bb8b2cca7fbf4cd3",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/jup3vuu2.tif",
+      "source_sha256": "63f174fed85f90b78683e52b8dc5497fe40d067a82b584bcf50384380e44a396",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 92,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/earth_relief_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "f8b504b89962acb1d42ce1e1f442edaadf0f40d0ef3e9fdb55ef81b6c0f3acfe",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/ear0xuu2.tif",
+      "source_sha256": "11d7c79c9e1277faceb59b071dfe09e1847141f54719aa9684d23e7cd1ed8caa",
+      "projection": "Global equirectangular visualization",
+      "processing": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+      "jpeg_quality": 95,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/mars_viking_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "7bbf15a781047977d1880324426cab22fb7dd6e18d445b06c43f0e54609d8013",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/mar0kuu2.tif",
+      "source_sha256": "1dcad8bb108f4b6ea25ec56ff03e76fa7b3808636efa583b237e081b1a6d8e64",
+      "projection": "Global equirectangular visualization",
+      "processing": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+      "jpeg_quality": 95,
+      "limitations": "Illustrative mosaic with inherited seams and lighting; not quantitative surface data."
+    },
+    {
+      "file": "Textures/Derived/venus_clouds_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "16870b94d5d8ffa05cc958eff811f97e5565e84676d76018bc7390067acb0409",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/ven0mss2.tif",
+      "source_sha256": "d21fc5198a6607a6d061e92179d9aca41a65a71dc2977dcac61667da4c54a64f",
+      "projection": "Global equirectangular visualization",
+      "processing": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+      "jpeg_quality": 95,
+      "limitations": "Radar and representative cloud visualization; inherited gap filling or cloned source imagery, not natural calibrated color."
+    },
+    {
+      "file": "Textures/Derived/venus_radar_ajj2_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "7b0b2b3991ea6c040bb0d04adc527ad23f4188a7ec9460c209aaf9e2e1d0874e",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/ven0ajj2.tif",
+      "source_sha256": "59a749343de9cc5121a6d470b44b6e59dec15edaf9232ce5ec46427bdcea7bc0",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 95,
+      "limitations": "Radar and representative cloud visualization; inherited gap filling or cloned source imagery, not natural calibrated color."
+    },
+    {
+      "file": "Textures/Derived/venus_radar_auu1_720.jpg",
+      "classification": "runtime-required",
+      "sha256": "2f1c3fa23ba56cb7dc7a84c6ddcbcb383d466c26ba606ae1df196342fade443b",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/ven0auu1.tif",
+      "source_sha256": "5acc7fb107dbe0faaa46ff781041d3982f198ade89ca308be6f8360cea622fdb",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 95,
+      "limitations": "Radar and representative cloud visualization; inherited gap filling or cloned source imagery, not natural calibrated color."
+    },
+    {
+      "file": "Textures/Derived/venus_radar_jpl_1440.jpg",
+      "classification": "runtime-required",
+      "sha256": "d73f30c209b97fd2b0f105ee9975ca7d720dee0499ebb049acff99e6d4517316",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/ven0aaa2.tif",
+      "source_sha256": "4b3a187bdf462523daf3d0e0fce3e53fb6eb8f65aff2381d30532effb9bfc3db",
+      "projection": "Global equirectangular visualization",
+      "processing": "direct transcode, native resolution; no resize; no crop; no filters; no tonal change",
+      "jpeg_quality": 95,
+      "limitations": "Radar and representative cloud visualization; inherited gap filling or cloned source imagery, not natural calibrated color."
+    },
+    {
+      "file": "Textures/Derived/stars_yale_2880.jpg",
+      "classification": "runtime-required",
+      "sha256": "ccb53aef372e621ea8f514ebbb6ec02dc3567aacf961e5aca64f003e28175774",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/yale8.tif",
+      "source_sha256": "9b4288d5f1fccdb6a61b693ca9719f1da924275ed57b0ef69434ac57b8313773",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 95,
+      "limitations": "Catalog visualization, not observer/date planetarium."
+    },
+    {
+      "file": "Textures/Derived/stars_hipparcos_2880.jpg",
+      "classification": "runtime-required",
+      "sha256": "c55dd776c4ef02afd6de5c126fd7b29a3f1580be9cbd86604c80790592f39be4",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/hipp8.tif",
+      "source_sha256": "1741b80aaf139496cd2d08a3adc53f01b87d05305784b73dfaf38eb813f6540c",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 95,
+      "limitations": "Catalog visualization, not observer/date planetarium."
+    },
+    {
+      "file": "Textures/Derived/stars_tycho_2880.jpg",
+      "classification": "runtime-required",
+      "sha256": "586a8955425bc579c71aea7718e780b351a7dd68880536377164dcf022887ca5",
+      "credit": "NASA/JPL-Caltech/USGS and mission contributors; catalog maps by David Seal",
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/tycho8.tif",
+      "source_sha256": "fed5049312ef340ba6c3492166b51be3a796f4cf42d6265ab8f883c3b010bb8e",
+      "projection": "Global equirectangular visualization",
+      "processing": "Native-resolution JPEG transcode; no crop, invented terrain, sharpening or colorization.",
+      "jpeg_quality": 95,
+      "limitations": "Catalog visualization, not observer/date planetarium."
+    },
+    {
+      "file": "Textures/Derived/stars_scientific_full_2880.jpg",
+      "classification": "runtime-required",
+      "sha256": "a6c686cc82ca68cd5011918e41a3a0ae039428e82f8fcfc80d643a4ee35b0b8c",
+      "credit": "David Seal / NASA/JPL-Caltech; derived from three catalog textures",
+      "source_files": [
+        "Derived/stars_yale_2880.jpg",
+        "Derived/stars_hipparcos_2880.jpg",
+        "Derived/stars_tycho_2880.jpg"
+      ],
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/stars.html",
+      "processing": "Per-channel maximum of RGB catalog JPEGs, JPEG quality 95, subsampling 0.",
+      "limitations": "Visual union, not a deduplicated catalog, photometric model, or observer/date planetarium."
+    }
+  ]
+}

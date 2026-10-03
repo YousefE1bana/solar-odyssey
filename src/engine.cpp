@@ -1,3 +1,4 @@
+#include "input_policy.h"
 #include "screenshot_writer.h"
 #include "runtime_paths.h"
 #include "engine.h"
@@ -26,6 +27,24 @@
 #include <shellapi.h>
 #endif
 
+namespace {
+void fitWindowToDesktop(GLFWwindow* window) {
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    if (!window || !monitor) return;
+    int workX, workY, workW, workH, x, y, w, h, left, top, right, bottom;
+    glfwGetMonitorWorkarea(monitor, &workX, &workY, &workW, &workH);
+    if (workW <= 0 || workH <= 0) return;
+    glfwGetWindowPos(window, &x, &y); glfwGetWindowSize(window, &w, &h);
+    glfwGetWindowFrameSize(window, &left, &top, &right, &bottom);
+    if (workW <= left + right || workH <= top + bottom) return;
+    w = std::min(w, std::max(1, workW - left - right));
+    h = std::min(h, std::max(1, workH - top - bottom));
+    x = std::clamp(x, workX + left, workX + workW - w - right);
+    y = std::clamp(y, workY + top, workY + workH - h - bottom);
+    glfwSetWindowSize(window, w, h);
+    glfwSetWindowPos(window, x, y);
+}
+}
 
 
 Engine::Engine(SessionKind kind) : toolSession(kind == SessionKind::Tool) {}
@@ -251,6 +270,7 @@ void Engine::toggleFullscreen() {
     } else {
         glfwSetWindowMonitor(window, nullptr, savedWindowPos[0], savedWindowPos[1],
                              savedWindowSize[0], savedWindowSize[1], 0);
+        if (!toolSession) fitWindowToDesktop(window);
     }
 }
 
@@ -277,12 +297,6 @@ void Engine::initPlanetsAndMoons() {
         if (moons.back().texture) ownedCelestialTextures.insert(moons.back().texture);
     }
 
-    // Cycle 4 Pass 1: Codex roster from the live runtime vectors (generic —
-    // never a second hardcoded celestial-body list).
-    codexRoster.clear();
-    codexRoster.push_back("Sun");
-    for (const auto& planet : planets) codexRoster.push_back(planet.name);
-    for (const auto& moon : moons) codexRoster.push_back(moon.name);
 
     // Configure data-driven planetary surface capabilities and bind renderer material resources
     for (auto &planet : planets) {
@@ -533,7 +547,7 @@ bool Engine::startScanSession(const std::string& name, ScienceActivity activity)
     }
     const bool gravity = (activity == ScienceActivity::GravityMeasurement);
     const float range = gravity ? std::max(6.0f * radius, 3.0f) : std::max(10.0f * radius, 5.0f);
-    if (progression.isActivityComplete(name, activity)) {
+    if (completedScience.count({name, activity}) != 0) {
         solarUI.showToast("ALREADY COMPLETED", name);
         return false;
     }
@@ -623,7 +637,7 @@ void Engine::updateScienceSessions(float deltaTime) {
     const auto bodies = observationBodies(false);
     const std::string selected = observationTarget();
     auto completed = [&](const std::string& name, ScienceActivity activity) {
-        return progression.isActivityComplete(name, activity);
+        return completedScience.count({name, activity}) != 0;
     };
     auto findBody = [&](const std::string& name) {
         return std::find_if(bodies.begin(), bodies.end(),
@@ -695,12 +709,11 @@ void Engine::updateScienceSessions(float deltaTime) {
                 scanner.acknowledge();
                 scanActivityActive = false;
                 surveyAngularTravel = 0.0f;
-                progression.ensureTarget(targetName, scientificAtmosphere(targetName));
-                if (progression.recordActivity(targetName, activity)) {
+                if (completedScience.insert({targetName, activity}).second) {
                     solarUI.showToast(activity == ScienceActivity::OrbitalSurvey ? "SURVEY COMPLETE" :
                         activity == ScienceActivity::AtmosphericScan ? "ATMOSPHERIC SCAN COMPLETE" :
                         "GRAVITY MEASUREMENT COMPLETE", targetName);
-                    if (audioMgr) audioMgr->playDiscoveryChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+                    if (audioMgr) audioMgr->playInstrumentChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
                 }
             }
         }
@@ -733,8 +746,7 @@ void Engine::updateScienceSessions(float deltaTime) {
                     spaceship.collisionBodiesThisFrame.end(), targetName) != spaceship.collisionBodiesThisFrame.end();
                 const bool earned = flybySession.update(observer.position - subject->position, subject->radius, collision);
                 if (earned) {
-                    progression.ensureTarget(targetName, scientificAtmosphere(targetName));
-                    progression.recordActivity(targetName, ScienceActivity::CloseFlyby);
+                    completedScience.insert({targetName, ScienceActivity::CloseFlyby});
                     char detail[160];
                     snprintf(detail, sizeof(detail), "%s closest %.2f approach %.2f u/s",
                         targetName.c_str(), (double)std::min(minimumBefore, flybySession.minDistance), (double)entrySpeed);
@@ -751,102 +763,8 @@ void Engine::updateScienceSessions(float deltaTime) {
     if (observer.physical) for (const auto& body : bodies)
         previousObservationOffsets[body.name] = observer.position - body.position;
 
-    longRangeSweepTimer += deltaTime;
 }
 
-void Engine::updateDetection(const glm::mat4& view, const glm::mat4& projection) {
-    if (!canObserve() || longRangeSweepTimer < 4.0f) return;
-    longRangeSweepTimer = 0.0f;
-    const auto observer = scienceObserver();
-    const auto bodies = observationBodies(false);
-    const auto scene = observationBodies(true);
-    bool toasted = false;
-    for (const auto& body : bodies) {
-        if (!simCtrl.getBodyState(body.name)) continue;
-        const auto* record = progression.getRecord(body.name);
-        if (record && record->detected) continue;
-        bool detected = spaceship.active && Observation::nearby(observer, body, 60.0f) &&
-            Observation::lineOfSight(observer.position, body, bodies);
-        const auto rendered = std::find_if(scene.begin(), scene.end(),
-            [&](const Observation::Body& b) { return b.name == body.name; });
-        if (!detected && !postPipeline.startupActive && !spaceship.warpSystem.isWarpActive() &&
-            !frameEvents.wormholeTraversed && rendered != scene.end())
-            detected = observeFrame(*rendered, scene, view, projection).valid;
-        if (detected) {
-            progression.ensureTarget(body.name, scientificAtmosphere(body.name));
-            if (progression.markDetected(body.name) && !toasted) {
-                solarUI.showToast("NEW DISCOVERY", body.name);
-                toasted = true;
-            }
-        }
-    }
-}
-
-void Engine::updateAnomalies(const glm::mat4& view, const glm::mat4& projection) {
-    if (!canObserve() || postPipeline.startupActive) return;
-    const auto observer = scienceObserver();
-    const auto physicalBodies = observationBodies(false);
-    const auto scene = observationBodies(true);
-    auto alreadyKnown = [&](const AnomalyDef& def, const std::string& owner) {
-        const auto* record = progression.getRecord(owner);
-        return record && std::find(record->anomalyIds.begin(), record->anomalyIds.end(), def.id) != record->anomalyIds.end();
-    };
-    auto discover = [&](const AnomalyDef& def, const std::string& owner) {
-        if (owner.empty()) return;
-        progression.ensureTarget(owner, scientificAtmosphere(owner));
-        if (progression.recordAnomaly(owner, def.id)) {
-            solarUI.showToast("ANOMALY DISCOVERED", def.displayName);
-            if (audioMgr) audioMgr->playDiscoveryChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
-        }
-    };
-    auto visible = [&](const std::string& name) {
-        const auto target = std::find_if(scene.begin(), scene.end(),
-            [&](const Observation::Body& b) { return b.name == name; });
-        return target != scene.end() && observeFrame(*target, scene, view, projection).valid;
-    };
-    if (frameEvents.wormholeTraversed && spaceship.active) {
-        if (const auto* def = findAnomaly("wormhole-transit")) discover(*def, def->contextBody);
-    }
-    if (blackHole.active) {
-        if (const auto* def = findAnomaly("photon-ring")) {
-            const Observation::Body target{"Black Hole", blackHole.position, blackHole.shadowRadius};
-            if (!alreadyKnown(*def, def->contextBody) &&
-                Observation::nearby(observer, target, blackHole.shadowRadius * 12.0f) &&
-                visible(target.name)) discover(*def, def->contextBody);
-        }
-    }
-    for (const auto& def : anomalyCatalog()) {
-        if (def.proximityBody.empty() || alreadyKnown(def, def.contextBody)) continue;
-        const auto target = std::find_if(physicalBodies.begin(), physicalBodies.end(),
-            [&](const Observation::Body& b) { return b.name == def.proximityBody; });
-        if (target != physicalBodies.end() &&
-            Observation::nearby(observer, *target, std::max(def.proximityFactor * target->radius, def.proximityFloor)) &&
-            visible(target->name)) discover(def, def.contextBody);
-    }
-    // Witness the actual eclipsed moon. A remote eclipse somewhere in the
-    // system cannot award a discovery to an observer looking elsewhere.
-    if (const auto* def = findAnomaly("eclipse-event")) for (const auto& moon : moons) {
-        if (alreadyKnown(*def, moon.name)) continue;
-        int index;
-        glm::vec3 parentPosition;
-        float parentRadius;
-        const std::string parent = bodyParentOf(moon.name);
-        if (parent.empty() || !resolveBodyFocusTarget(parent, index, parentPosition, parentRadius)) continue;
-        if (inShadowOf(moon.currentPosition, parentPosition, parentRadius * solarUI.planetScale, sunWorldPosition) &&
-            visible(moon.name)) discover(*def, moon.name);
-    }
-    // A belt is an annular disk, not a spherical heliocentric shell. This
-    // region observation retains the catalog's explicit Ceres record owner.
-    if (asteroidBelt && observer.physical) {
-        const glm::vec3 relative = observer.position - sunWorldPosition;
-        const float radial = glm::length(glm::vec2(relative.x, relative.z));
-        const float outer = asteroidBelt->getOuterRadius();
-        if (radial >= asteroidBelt->getInnerRadius() - 1.0f && radial <= outer + 1.0f &&
-            std::fabs(relative.y) <= outer * 0.08f + 1.0f) {
-            if (const auto* def = findAnomaly("belt-resonance")) discover(*def, def->contextBody);
-        }
-    }
-}
 void Engine::setSelectedBody(const std::string& name, bool openCard) {
     selectBody(name);
     solarUI.showPlanetCard = openCard;
@@ -1116,6 +1034,12 @@ void Engine::enterBodyView(const std::string& name) {
     // min/max zoom clamps follow the rendered size. Canonical radius kept.
     const float effectiveRadius =
         PresentationController::effectivePresentationRadius(canonicalRadius, solarUI.planetScale);
+    if (name != "Sun") {
+        const auto light = glm::normalize(sunWorldPosition - bodyPos);
+        const float longitude = std::atan2(light.z, light.x) + glm::radians(25.0f);
+        cameraCtrl.focusAngleX = glm::degrees(longitude);
+        cameraCtrl.focusAngleY = 70;
+    }
     cameraCtrl.focusOnBody(bodyIndex, name, effectiveRadius, bodyPos);
     updateCursorCapture();
 }
@@ -1158,24 +1082,25 @@ bool Engine::init(int width, int height, const char* title) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
+    if (!toolSession) {
+        windowWidth = std::min(windowWidth, 1600);
+        windowHeight = std::min(windowHeight, 900);
+    }
+
     window = glfwCreateWindow(windowWidth, windowHeight, title, NULL, NULL);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
         return failStartup();
     }
+    if (!toolSession) fitWindowToDesktop(window);
 
     glfwSetWindowUserPointer(window, this);
 
     // Set Window and Taskbar Icon
     int iconWidth = 0, iconHeight = 0, iconChannels = 0;
     unsigned char* iconPixels = nullptr;
-    const char* iconCandidates[] = {
-        "icon.png", "icon.jpg",
-        "Textures/icon.png", "Textures/icon.jpg",
-        "build/icon.png", "build/icon.jpg",
-        "build-cmake/icon.png", "build-cmake/icon.jpg",
-        "../icon.png", "../icon.jpg"
-    };
+    const std::string runtimeIcon = (RuntimePaths::assets() / "icon.png").u8string();
+    const char* iconCandidates[] = {runtimeIcon.c_str()};
     const char* loadedPath = nullptr;
     for (const char* path : iconCandidates) {
         iconPixels = stbi_load(path, &iconWidth, &iconHeight, &iconChannels, 4);
@@ -1204,7 +1129,8 @@ bool Engine::init(int width, int height, const char* title) {
         HICON hIconSmall = (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(1), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
 
         if (!hIconBig) {
-            const wchar_t* icoCandidates[] = { L"icon.ico", L"build/icon.ico", L"build-cmake/icon.ico", L"Textures/icon.ico", L"../icon.ico" };
+            const auto runtimeIco = (RuntimePaths::assets() / "icon.ico").wstring();
+            const wchar_t* icoCandidates[] = { runtimeIco.c_str() };
             for (const wchar_t* icoPath : icoCandidates) {
                 hIconBig = (HICON)LoadImageW(NULL, icoPath, IMAGE_ICON, 48, 48, LR_LOADFROMFILE | LR_DEFAULTCOLOR);
                 if (hIconBig) {
@@ -1264,8 +1190,9 @@ bool Engine::init(int width, int height, const char* title) {
     imguiOpenGLReady = ImGui_ImplOpenGL3_Init("#version 450");
     if (!imguiOpenGLReady) return failStartup();
     if (std::filesystem::exists("assets/fonts/Inter.ttf")) {
-        ImGui::GetIO().Fonts->AddFontFromFileTTF("assets/fonts/Inter.ttf", 18.0f);
-        titleFont = ImGui::GetIO().Fonts->AddFontFromFileTTF("assets/fonts/Inter.ttf", 44.0f);
+        static const ImWchar textRanges[] = {0x0020, 0x00FF, 0x2022, 0x2022, 0};
+        ImGui::GetIO().Fonts->AddFontFromFileTTF("assets/fonts/Inter.ttf", 18.0f, nullptr, textRanges);
+        titleFont = ImGui::GetIO().Fonts->AddFontFromFileTTF("assets/fonts/Inter.ttf", 44.0f, nullptr, textRanges);
     }
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     solarUI.applySpaceTheme();
@@ -1373,7 +1300,6 @@ void Engine::cleanup() {
         SimulationSaveState exitState;
         SaveStateManager::instance().captureState(exitState, simCtrl, cameraCtrl, spaceship,
                                                   solarUI.autoSaveOnExit, static_cast<int>(presenter.state()), presenter.selectedBodyName());
-        SaveStateManager::instance().captureProgression(exitState, progression);
         const bool saved = SaveStateManager::instance().saveToFile(savePath(), exitState);
         std::cout << (saved ? "[SaveState] Auto-save completed (Day " : "[SaveState] Auto-save FAILED (Day ")
                   << simCtrl.getElapsedSimDays() << ")" << std::endl;
@@ -1460,6 +1386,14 @@ void Engine::cleanup() {
 
 void Engine::processInput(float deltaTime) {
     if (!shell.playing()) { updateCursorCapture(); return; }
+    if (menuTransition.active()) {
+        const int movement[] = {GLFW_KEY_W, GLFW_KEY_A, GLFW_KEY_S, GLFW_KEY_D,
+            GLFW_KEY_Q, GLFW_KEY_E, GLFW_KEY_R, GLFW_KEY_F, GLFW_KEY_UP, GLFW_KEY_DOWN,
+            GLFW_KEY_LEFT, GLFW_KEY_RIGHT};
+        for (int key : movement) if (glfwGetKey(window, key) == GLFW_PRESS) menuTransition.cancel();
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) menuTransition.cancel();
+    }
+
     if (spaceship.active || cameraCtrl.mode == CAM_SPACESHIP) {
         if (inputMgr) inputMgr->setContext(InputContext::Spaceship);
         bool leftAltDown = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
@@ -1469,7 +1403,7 @@ void Engine::processInput(float deltaTime) {
             updateCursorCapture();
         }
 
-        if (!ImGui::GetIO().WantCaptureKeyboard) {
+        if (flightInputAllowed(ImGui::GetIO().WantTextInput, uiReleaseCursorHeld)) {
             SpaceshipFlightInput input = inputMgr ? inputMgr->pollSpaceshipFlight(window) : SpaceshipFlightInput{};
             if (!inputMgr) {
                 input.fwd = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
@@ -1504,12 +1438,17 @@ void Engine::processInput(float deltaTime) {
         }
         updateCursorCapture();
         if (audioMgr) audioMgr->stopSpaceshipSound();
-        cameraCtrl.processKeyboard(window, deltaTime);
+        if (!uiReleaseCursorHeld) cameraCtrl.processKeyboard(window, deltaTime);
     }
 }
 
 void Engine::updateSimulation(float deltaTime) {
     processSessionRequests();
+    if (audioMgr) audioMgr->musicUpdate(solarUI.audioMuted, solarUI.masterVolume,
+        solarUI.musicVolume, shell.sessionStarted && shell.page != SessionShell::Page::MainMenu &&
+        !(shell.page == SessionShell::Page::Settings && shell.settingsReturn == SessionShell::Page::MainMenu), deltaTime);
+    if (!shell.playing()) menuTransition.cancel();
+    else menuTransition.advance(deltaTime);
     if (!shell.playing()) { postPipeline.updateStartup(deltaTime); return; }
     simCtrl.setPaused(solarUI.isPaused);
     // Only actual UI changes write back; a float mirror must not round a
@@ -1691,26 +1630,10 @@ void Engine::updateSimulation(float deltaTime) {
         spaceship.position = wormhole.exitDestination;
         frameEvents.wormholeTraversed = true;
         solarUI.showToast("WORMHOLE TRAVERSED!", "Emerged across spacetime gateway");
-        if (audioMgr) audioMgr->playDiscoveryChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+        if (audioMgr) audioMgr->playInstrumentChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
     }
 
-    // Only physical observers enter visit regions. Presentation views can
-    // detect/photograph a disk but never count as travel or proximity.
-    if (canObserve()) {
-        const auto observer = scienceObserver();
-        std::vector<ProgressionBodyRef> visitRefs{{"Sun", sunWorldPosition, 2.0f}};
-        for (const auto& p : planets) visitRefs.push_back({p.name, p.currentPosition, p.size});
-        for (const auto& m : moons) visitRefs.push_back({m.name, m.currentPosition, m.size});
-        if (observer.physical) {
-            auto hasAtmo = [this](const std::string& n) { return scientificAtmosphere(n); };
-            for (const auto& entered : progression.updateVisits(observer.position, visitRefs, hasAtmo))
-                solarUI.showToast("FIRST VISIT", entered);
-        } else {
-            // Suspend hysteresis without altering persistent discoveries.
-            progression.restoreVisitTracking(observer.position, visitRefs);
-        }
-        updateScienceSessions(deltaTime);
-    }
+    if (canObserve()) updateScienceSessions(deltaTime);
     if (spaceship.active && audioMgr) {
         if (spaceship.warpSystem.triggerChargeSound) {
             spaceship.warpSystem.triggerChargeSound = false;
@@ -1743,7 +1666,6 @@ void Engine::updateSimulation(float deltaTime) {
     if (audioMgr) {
         audioMgr->updateSpatialAudio(cameraCtrl.currentEye, blackHole.position, wormhole.position, solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
         audioMgr->updatePOVVolume(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
-        audioMgr->musicUpdate(solarUI.audioMuted, solarUI.masterVolume, solarUI.musicVolume);
     }
 
 }
@@ -1754,7 +1676,6 @@ void Engine::processSessionRequests() {
         SimulationSaveState saveState;
         SaveStateManager::instance().captureState(saveState, simCtrl, cameraCtrl, spaceship,
                                                   solarUI.autoSaveOnExit, static_cast<int>(presenter.state()), presenter.selectedBodyName());
-        SaveStateManager::instance().captureProgression(saveState, progression);
         bool ok = canPersistPlayerState() && shell.sessionStarted && SaveStateManager::instance().saveToFile(savePath(), saveState);
         if (ok) { autoSaveEligible = true; refreshContinue(); }
         solarUI.saveStatusToast = !canPersistPlayerState() ? "Player persistence disabled for this session" :
@@ -1764,6 +1685,7 @@ void Engine::processSessionRequests() {
     }
 
     if (solarUI.requestStateLoad) {
+        const bool fromMenu = shell.page == SessionShell::Page::MainMenu;
         solarUI.requestStateLoad = false;
         solarUI.requestStateSave = false; // Load wins over a simultaneous save.
         SimulationSaveState loadState;
@@ -1772,7 +1694,6 @@ void Engine::processSessionRequests() {
         if (ok) {
             autoSaveEligible = true;
             shell.start();
-            SaveStateManager::instance().restoreProgression(loadState, progression);
             // R02: record only — updatePresentation() performs the adoption.
             // No PresentationController call may occur inside updateSimulation.
             pendingSelectionAdopt = solarUI.selectedPlanetName;
@@ -1793,10 +1714,6 @@ void Engine::processSessionRequests() {
             float radius = 0.0f;
             if (resolveBodyFocusTarget(cameraCtrl.focusedBodyName, index, focusPos, radius)) cameraCtrl.focusedPlanetIndex = index;
             resetLoadedSessionTransients();
-            std::vector<ProgressionBodyRef> visitRefs{{"Sun", sunWorldPosition, 2.0f}};
-            for (const auto& p : planets) visitRefs.push_back({p.name, p.currentPosition, p.size});
-            for (const auto& m : moons) visitRefs.push_back({m.name, m.currentPosition, m.size});
-            progression.restoreVisitTracking(scienceObserver().position, visitRefs);
             gameContext.simTime = simTime;
             gameContext.timeMultiplier = solarUI.timeMultiplier;
             gameContext.paused = solarUI.isPaused;
@@ -1815,6 +1732,7 @@ void Engine::processSessionRequests() {
             gameContext.targetBodyPos = spaceship.targetPlanetPos;
             gameContext.targetBodyRadius = spaceship.targetPlanetRadius;
             updateCursorCapture();
+            if (fromMenu) beginMenuTransition();
             solarUI.saveStatusToast = loadState.version < 4 && loadState.physicsMode == PHYSICS_NBODY ?
                 "Legacy save loaded: N-body re-seeded at saved time; trajectory was not stored" : "Saved exploration restored";
             std::cout << "[SaveState] " << solarUI.saveStatusToast << " (Day " << simCtrl.getElapsedSimDays() << ")" << std::endl;
@@ -1829,11 +1747,12 @@ void Engine::processSessionRequests() {
 }
 
 void Engine::resetLoadedSessionTransients() {
+    menuTransition.cancel();
     scanner = ScienceScanner{};
     flybySession.reset();
     scanActivityActive = false;
     activeScanActivity = ScienceActivity::OrbitalSurvey;
-    longRangeSweepTimer = 0.0f;
+    completedScience.clear();
     cameraHistory.clear();
     pendingPhotoTarget.clear();
     observationFrameDepth.clear();
@@ -1914,12 +1833,48 @@ void Engine::renderWorldBackground(const SceneRenderContext& ctx) {
 void Engine::renderFrame(float deltaTime) {
     renderer.applyStarfield(solarUI.starfieldStyle, solarUI.starfieldDataset);
     RenderProfiler::instance().beginFrame();
+    const bool menuScene = shell.page == SessionShell::Page::MainMenu ||
+        (shell.page == SessionShell::Page::Settings && shell.settingsReturn == SessionShell::Page::MainMenu);
+    if (menuScene) {
+        const auto heroPose = menuHeroPose();
+        CameraController hero = cameraCtrl;
+        hero.mode = CAM_FOCUS; hero.focusedBodyName = "Earth"; hero.focusedPlanetIndex = 2;
+        hero.currentEye = heroPose.eye;
+        hero.currentUp = heroPose.up;
+        hero.currentTarget = heroPose.target;
+        const auto view = hero.getViewMatrix();
+        const auto projection = glm::perspective(glm::radians(46.0f), float(windowWidth)/float(windowHeight), .05f, 600.0f);
+        SolarOdysseyUI sceneUI = solarUI;
+        sceneUI.planetScale = 1; sceneUI.showAtmospheres = true; sceneUI.enableAxialTilt = true;
+        renderer.activeBodyLayer = BodyLayerId::Natural;
+        std::vector<Planet> heroBodies;
+        for (const auto& planet : planets) if (planet.name == "Earth") heroBodies.push_back(planet);
+        postPipeline.beginScene();
+        renderer.renderStarfield(view, projection, hero.currentEye);
+        renderer.renderPlanets(heroBodies, moons, view, projection, sunWorldPosition,
+            glm::vec3(view * glm::vec4(sunWorldPosition,1)), static_cast<float>(simTime), cloudRotationAngle, sceneUI, hero, celestialDb, atmosphereEffects);
+        postPipeline.transitionToLensed();
+        postPipeline.endSceneAndPostProcess();
+        ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
+        renderSessionShell();
+        ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (solarUI.pendingFullscreenToggle) { solarUI.pendingFullscreenToggle=false; toggleFullscreen(); }
+        if (releaseQA) runReleaseQASequence(++qaFrameCount);
+        return;
+    }
 
-    float currentFOV = cameraCtrl.fieldOfView + (spaceship.active ? spaceship.warpSystem.fovOffset : 0.0f);
+    if (menuTransition.active() && (!postPipeline.sceneFBO || !MenuTransition::valid(
+        {cameraCtrl.currentEye, cameraCtrl.currentTarget, cameraCtrl.currentUp, cameraCtrl.fieldOfView}))) menuTransition.cancel();
+    const auto renderPose = menuTransition.pose(
+        {cameraCtrl.currentEye, cameraCtrl.currentTarget, cameraCtrl.currentUp, cameraCtrl.fieldOfView});
+    float currentFOV = renderPose.fov + (spaceship.active ? spaceship.warpSystem.fovOffset : 0.0f);
+    const bool closeBody = presenter.isBody() || cameraCtrl.mode == CAM_FOCUS ||
+        (cameraCtrl.mode == CAM_TRANSITION && cameraCtrl.postTransitionMode == CAM_FOCUS);
+    const float nearPlane = closeBody ? std::clamp(cameraCtrl.minFocusDistance * .08f, .001f, .1f) : .1f;
     glm::mat4 projMat = glm::perspective(glm::radians(currentFOV),
-                                         (float)windowWidth / (float)windowHeight, 0.1f, 600.0f);
+                                         (float)windowWidth / (float)windowHeight, nearPlane, 600.0f);
 
-    glm::mat4 viewMat = cameraCtrl.getViewMatrix();
+    glm::mat4 viewMat = glm::lookAt(renderPose.eye, renderPose.target, renderPose.up);
     if (spaceship.active && spaceship.warpSystem.cameraShakeIntensity > 0.001f) {
         viewMat = glm::translate(viewMat, spaceship.warpSystem.cameraShakeOffset);
     }
@@ -1928,17 +1883,17 @@ void Engine::renderFrame(float deltaTime) {
 
     // 1. Build Main Scene Context
     SceneRenderContext mainCtx;
-    mainCtx.camera.eyeD = glm::dvec3(cameraCtrl.currentEye);
-    mainCtx.camera.eye = cameraCtrl.currentEye;
-    mainCtx.camera.target = cameraCtrl.currentTarget;
-    mainCtx.camera.up = cameraCtrl.currentUp;
+    mainCtx.camera.eyeD = glm::dvec3(renderPose.eye);
+    mainCtx.camera.eye = renderPose.eye;
+    mainCtx.camera.target = renderPose.target;
+    mainCtx.camera.up = renderPose.up;
     mainCtx.camera.forward = -glm::vec3(viewMat[0][2], viewMat[1][2], viewMat[2][2]);
     mainCtx.camera.viewMatrix = viewMat;
     mainCtx.camera.projMatrix = projMat;
     mainCtx.camera.viewProjMatrix = projMat * viewMat;
     mainCtx.camera.fov = currentFOV;
     mainCtx.camera.aspectRatio = (float)windowWidth / (float)windowHeight;
-    mainCtx.camera.nearPlane = 0.1f;
+    mainCtx.camera.nearPlane = nearPlane;
     mainCtx.camera.farPlane = 600.0f;
     mainCtx.passType = RenderPassType::Main;
     mainCtx.portalDepth = 0;
@@ -1959,7 +1914,19 @@ void Engine::renderFrame(float deltaTime) {
     // 3. Begin Main Scene Pass (HDR_A: sceneFBO)
     postPipeline.beginScene();
 
-    renderWorldBackground(mainCtx);
+    if (menuTransition.showingHero()) {
+        CameraController hero = cameraCtrl;
+        hero.currentEye = renderPose.eye; hero.currentTarget = renderPose.target; hero.currentUp = renderPose.up;
+        hero.mode = CAM_FOCUS; hero.focusedBodyName = "Earth"; hero.focusedPlanetIndex = 2;
+        SolarOdysseyUI sceneUI = solarUI;
+        sceneUI.planetScale = 1; sceneUI.showAtmospheres = true; sceneUI.enableAxialTilt = true;
+        std::vector<Planet> heroBodies;
+        for (const auto& planet : planets) if (planet.name == "Earth") heroBodies.push_back(planet);
+        renderer.renderStarfield(viewMat, projMat, renderPose.eye);
+        renderer.renderPlanets(heroBodies, moons, viewMat, projMat, sunWorldPosition,
+            glm::vec3(viewMat * glm::vec4(sunWorldPosition, 1)), static_cast<float>(simTime),
+            cloudRotationAngle, sceneUI, hero, celestialDb, atmosphereEffects);
+    } else renderWorldBackground(mainCtx);
 
     // Checkpoint C3.3: Dual-HDR Pre-Lens Transition (HDR_A -> HDR_B full copy, bind HDR_B)
     // Copies complete pre-lens scene from sceneFBO to lensedFBO with zero feedback loop.
@@ -1969,14 +1936,14 @@ void Engine::renderFrame(float deltaTime) {
     // Checkpoint C3.4: Bounded Relativistic Deflection Pass (reads HDR_A / sceneColorTex, writes HDR_B / lensedFBO)
     if (blackHole.active && blackHole.enableLensingPass) {
         glm::dvec3 bhPosD = glm::dvec3(blackHole.position);
-        glm::dvec3 camPosD = glm::dvec3(cameraCtrl.currentEye);
+        glm::dvec3 camPosD = glm::dvec3(renderPose.eye);
         blackHole.renderLensingPass(postPipeline.sceneColorTex, postPipeline.lensedFBO,
                                     viewMat, projMat, postPipeline.width, postPipeline.height,
                                     camPosD, bhPosD);
     }
 
     // Composite Black Hole primary components and foreground entities into HDR_B (lensedFBO)
-    renderer.renderBlackHole(blackHole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime);
+    renderer.renderBlackHole(blackHole, viewMat, projMat, renderPose.eye, (float)simTime);
 
     // C3.8: on Low-tier cadence-skipped frames the previous VALID portal texture
     // is reused; culled/disabled frames still fall back (never stale-invalid).
@@ -1986,8 +1953,8 @@ void Engine::renderFrame(float deltaTime) {
                         (wormholePortalRenderer.lastPassSkippedByCadence &&
                          wormholePortalRenderer.portalContentValid));
     GLuint portalTex = portalReady ? wormholePortalRenderer.portalTarget.colorTex : 0;
-    renderer.renderWormhole(wormhole, viewMat, projMat, cameraCtrl.currentEye, (float)simTime,
-                            portalTex, portalReady, cameraCtrl.currentUp);
+    renderer.renderWormhole(wormhole, viewMat, projMat, renderPose.eye, (float)simTime,
+                            portalTex, portalReady, renderPose.up);
 
     if (spaceship.active) {
         spaceship.render(projMat, viewMat);
@@ -2013,8 +1980,6 @@ void Engine::renderFrame(float deltaTime) {
             observationDepthReadAttempted = true;
             const PhotoScore score = evaluatePhotoScore(target, viewMat, projMat, observationFrameDepth);
             if (score.total > 0.0f) {
-                progression.ensureTarget(target, scientificAtmosphere(target));
-                progression.recordPhoto(target, score.total);
                 char detail[160];
                 snprintf(detail, sizeof(detail), "Cov %.0f/35 Cent %.0f/25 Stab %.0f/20 Vis %.0f/20 TOTAL %.0f/100",
                     score.coverage, score.centering, score.stability, score.visibility, score.total);
@@ -2027,7 +1992,6 @@ void Engine::renderFrame(float deltaTime) {
         postPipeline.pendingCapturePath.clear();
         pendingPhotoTarget.clear();
     }
-    if (shell.playing()) { updateDetection(viewMat, projMat); updateAnomalies(viewMat, projMat); }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -2054,8 +2018,9 @@ void Engine::renderFrame(float deltaTime) {
                                (float)windowWidth / (float)windowHeight, 0.1f, 600.0f);
 
     if (shell.playing()) {
-    solarUI.renderFloatingLabels(pickableList, celestialDb, viewMat, projMat,
-                                (float)windowWidth, (float)windowHeight, cameraCtrl);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, menuTransition.hudOpacity());
+    if (!menuTransition.active())
+        solarUI.renderFloatingLabels(pickableList, celestialDb, viewMat, projMat, uiWidth, uiHeight, cameraCtrl);
 
     std::vector<std::pair<std::string, int>> dummyMap;
     solarUI.renderTopNavBar(uiWidth, cameraCtrl, celestialDb, dummyMap, presenter);
@@ -2075,9 +2040,11 @@ void Engine::renderFrame(float deltaTime) {
     solarUI.renderPhotoModeHUD(uiWidth, uiHeight, cameraCtrl, postPipeline);
     solarUI.renderSpaceshipHUD(uiWidth, uiHeight, spaceship, cameraCtrl, celestialDb);
     solarUI.renderNotificationToast(spaceship.active || cameraCtrl.mode == CAM_FREE);
-    solarUI.renderCodex(uiWidth, uiHeight, celestialDb, progression, codexRoster);
+    ImGui::PopStyleVar();
     }
     renderSessionShell();
+    if (menuTransition.veilOpacity() > 0) ImGui::GetForegroundDrawList()->AddRectFilled(
+        ImVec2(0,0), ImGui::GetIO().DisplaySize, IM_COL32(3,6,9,static_cast<int>(255 * menuTransition.veilOpacity())));
     solarUI.renderSaveStatusToast(uiWidth, uiHeight);
 
     ImGui::Render();
@@ -2337,6 +2304,7 @@ void Engine::runQACaptureSequence(int qaCount) {
 void Engine::onKey(int key, int scancode, int action, int mods) {
     if (inputMgr) inputMgr->onKey(key, scancode, action, mods);
     if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
+    menuTransition.cancel();
     if (!runQACapture && key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         shell.escape();
         solarUI.showSettingsModal = shell.page == SessionShell::Page::Settings;
@@ -2344,7 +2312,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
         updateCursorCapture();
         return;
     }
-    if (!shell.playing() || ImGui::GetIO().WantCaptureKeyboard) return;
+    if (!shell.playing() || !flightInputAllowed(ImGui::GetIO().WantTextInput, uiReleaseCursorHeld)) return;
 
     if (postPipeline.startupActive && action == GLFW_PRESS) {
         postPipeline.skipStartup();
@@ -2558,7 +2526,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
 void Engine::onMouseButton(int button, int action, int mods) {
     if (!shell.playing()) return;
     if (inputMgr) inputMgr->onMouseButton(button, action, mods);
-    if (ImGui::GetIO().WantCaptureMouse) {
+    if (action != GLFW_RELEASE && ImGui::GetIO().WantCaptureMouse) {
         // ImGui-captured clicks never feed the scene double-click recognizer.
         lastPickName.clear();
         lastPickTimeSec = -1.0;
@@ -2706,7 +2674,12 @@ void Engine::framebufferSizeCallback(GLFWwindow* window, int width, int height) 
 
 int Engine::run(int argc, char** argv) {
     bool hasBenchmark = benchmarkRunner.initFromArgs(argc, argv);
+    int qaWidth = 1920, qaHeight = 1080;
+    float qaScale = 1;
     for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--qa-width") == 0 && i + 1 < argc) qaWidth = std::clamp(std::atoi(argv[++i]), 960, 3840);
+        else if (strcmp(argv[i], "--qa-height") == 0 && i + 1 < argc) qaHeight = std::clamp(std::atoi(argv[++i]), 640, 2160);
+        else if (strcmp(argv[i], "--qa-scale") == 0 && i + 1 < argc) qaScale = std::clamp(float(std::atof(argv[++i])), 1.0f, 1.5f);
         if (strcmp(argv[i], "--release-qa") == 0) releaseQA = true;
         if (strcmp(argv[i], "--player-qa") == 0) { releaseQA = true; playerQA = true; }
         if (strcmp(argv[i], "--tool-session") == 0 || strcmp(argv[i], "--no-persist") == 0) toolSession = true;
@@ -2716,9 +2689,11 @@ int Engine::run(int argc, char** argv) {
     }
 
     toolSession = toolSession || hasBenchmark || runQACapture || (releaseQA && !playerQA);
-    if (!init(1920, 1080, "Solar Odyssey")) {
+    if (!init(releaseQA ? qaWidth : 1920, releaseQA ? qaHeight : 1080, "Solar Odyssey")) {
         return -1;
     }
+
+    if (releaseQA) ImGui::GetIO().FontGlobalScale = qaScale;
 
     if (!toolSession && !std::filesystem::exists(std::filesystem::u8path(RuntimePaths::save()))) {
         SimulationSaveState legacy;
@@ -2729,9 +2704,6 @@ int Engine::run(int argc, char** argv) {
     if (toolSession) shell.start();
     else {
         refreshContinue();
-        enterBodyView("Saturn");
-        cameraCtrl.mode = CAM_FOCUS;
-        cameraCtrl.update(10.0f, simCtrl.getBodyPosition("Saturn"), 1.2f);
         postPipeline.skipStartup();
     }
 
@@ -2801,23 +2773,60 @@ void Engine::startFreshSession() {
     cameraCtrl = CameraController{};
     applyLoadedSettings();
     cameraCtrl.resetInstant();
-    progression.resetFresh();
+    const auto earth = simCtrl.getBodyPosition("Earth");
+    cameraCtrl.focusedBodyName = "Earth";
+    cameraCtrl.focusedPlanetIndex = 2;
+    cameraCtrl.mode = CAM_FOCUS;
+    cameraCtrl.focusDistance = 2.15f;
+    cameraCtrl.minFocusDistance = .75f;
+    cameraCtrl.maxFocusDistance = 50.0f;
+    const auto openingDirection = glm::normalize(menuHeroPose().eye - earth);
+    cameraCtrl.focusAngleX = glm::degrees(std::atan2(openingDirection.z, openingDirection.x));
+    cameraCtrl.focusAngleY = glm::degrees(std::acos(std::clamp(openingDirection.y, -1.0f, 1.0f)));
+    cameraCtrl.currentTarget = earth;
+    cameraCtrl.currentEye = cameraCtrl.calculateOrbitalEye(cameraCtrl.focusDistance,
+        cameraCtrl.focusAngleX, cameraCtrl.focusAngleY, earth);
+    completedScience.clear();
     resetLoadedSessionTransients();
     presenter.forceExplorer();
     selectBody("");
-    solarUI.showPlanetCard = solarUI.showCodex = false;
+    solarUI.showPlanetCard = false;
     pendingSelectionAdopt.reset();
     shell.start();
     autoSaveEligible = true;
     postPipeline.skipStartup();
     updateCursorCapture();
+    beginMenuTransition();
+}
+
+MenuPose Engine::menuHeroPose() const {
+    const glm::vec3 earth = simCtrl.getBodyPosition("Earth");
+    const auto light = glm::normalize(sunWorldPosition - earth);
+    const auto offset = glm::normalize(light * .80f + glm::vec3(.35f,.28f,.65f));
+    const auto right = glm::normalize(glm::cross(-offset, glm::vec3(0,1,0)));
+    const float motion = static_cast<float>(glfwGetTime());
+    return {earth + offset * (2.25f + .025f * std::sin(motion * .09f)),
+        earth - right * .65f, {0,1,0}, 46};
+}
+
+void Engine::beginMenuTransition() {
+    if (!postPipeline.sceneFBO || !renderer.starfieldTexture) return;
+    menuTransition.begin(menuHeroPose(),
+        {cameraCtrl.currentEye, cameraCtrl.currentTarget, cameraCtrl.currentUp, cameraCtrl.fieldOfView});
 }
 
 void Engine::renderSessionShell() {
-    if (shell.playing()) return;
+    if (shell.playing() && !menuTransition.active()) return;
+    const bool transitioning = menuTransition.active();
+    const float opacity = transitioning ? menuTransition.menuOpacity() : 1;
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, opacity);
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     auto* backdrop = ImGui::GetBackgroundDrawList();
-    backdrop->AddRectFilled(ImVec2(0,0), display, IM_COL32(3, 8, 16, 175));
+    if (shell.page == SessionShell::Page::Pause ||
+        (shell.page == SessionShell::Page::Settings && shell.settingsReturn == SessionShell::Page::Pause))
+        backdrop->AddRectFilled(ImVec2(0,0), display, IM_COL32(4, 6, 10, 155));
+    else backdrop->AddRectFilledMultiColor(ImVec2(0,0), ImVec2(display.x*.54f,display.y),
+        IM_COL32(3,6,9,static_cast<int>(205*opacity)), IM_COL32(3,6,9,0), IM_COL32(3,6,9,0), IM_COL32(3,6,9,static_cast<int>(205*opacity)));
     if (shell.page == SessionShell::Page::Settings) {
         solarUI.showSettingsModal = true;
         solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
@@ -2826,23 +2835,25 @@ void Engine::renderSessionShell() {
             captureCurrentSettings();
             if (canPersistPlayerState()) saveSettings(RuntimePaths::settings(), appSettings);
         }
+        ImGui::PopStyleVar();
         return;
     }
-    const bool main = shell.page == SessionShell::Page::MainMenu;
-    const float panelWidth = std::min(420.0f, display.x - 48.0f);
-    ImGui::SetNextWindowPos(ImVec2(display.x * 0.10f, display.y * 0.22f), ImGuiCond_Always);
+    const bool main = shell.page == SessionShell::Page::MainMenu || transitioning;
+    const float panelWidth = std::min(360.0f, display.x * .39f);
+    ImGui::SetNextWindowPos(ImVec2(display.x * 0.085f, std::max(36.0f, (display.y - 530.0f) * .5f)), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(panelWidth, 0), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.0f);
     ImGui::Begin("##ApplicationShell", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::BeginDisabled(transitioning);
     if (renderer.brandMarkTexture) ImGui::Image((ImTextureID)(intptr_t)renderer.brandMarkTexture, ImVec2(64,64));
-    ImGui::TextColored(ImVec4(.52f,.76f,.86f,1), "S C I E N T I F I C   E X P L O R A T I O N");
+    ImGui::TextColored(ImVec4(.52f,.76f,.86f,1), "SCIENTIFIC EXPLORATION");
     ImGui::Spacing();
     if (titleFont) ImGui::PushFont(titleFont);
-    ImGui::TextUnformatted(main ? "SOLAR" : "EXPLORATION");
-    ImGui::TextUnformatted(main ? "ODYSSEY" : "PAUSED");
+    ImGui::TextUnformatted(main ? "SOLAR" : "PAUSED");
+    if (main) ImGui::TextUnformatted("ODYSSEY");
     if (titleFont) ImGui::PopFont();
     ImGui::Spacing(); ImGui::Spacing();
-    ImGui::TextDisabled(main ? "A solar system. Your curiosity." : "Your journey is held here.");
+    ImGui::TextDisabled(main ? "A solar system. Your curiosity." : "Exploration paused");
     ImGui::Spacing(); ImGui::Spacing();
     const ImVec2 button(panelWidth - 28, 42);
     if (main) {
@@ -2877,10 +2888,17 @@ void Engine::renderSessionShell() {
         ImGui::EndPopup();
     }
     ImGui::Spacing(); ImGui::Spacing();
-    ImGui::TextDisabled("31 worlds  /  observation tools  /  no prescribed path");
+    ImGui::EndDisabled();
     ImGui::End();
     auto* footer = ImGui::GetForegroundDrawList();
-    footer->AddText(ImVec2(display.x * .10f, display.y - 44), IM_COL32(135,156,177,255), "SOLAR ODYSSEY 1.0.0     |     ESC to navigate     |     Stylized scales, sourced science");
+    footer->AddText(ImVec2(display.x * .085f, display.y - 55), IM_COL32(135,156,177,static_cast<int>(255*opacity)), "SOLAR ODYSSEY 1.1.0");
+    const char* credit = "Created by Yousef Elbanna  \xE2\x80\xA2  y3usef.osama@email.com";
+    const float creditWidth = ImGui::CalcTextSize(credit).x;
+    if (creditWidth > display.x * .83f) {
+        footer->AddText(ImVec2(display.x*.085f, display.y-36), IM_COL32(135,156,177,static_cast<int>(210*opacity)), "Created by Yousef Elbanna");
+        footer->AddText(ImVec2(display.x*.085f, display.y-20), IM_COL32(135,156,177,static_cast<int>(210*opacity)), "y3usef.osama@email.com");
+    } else footer->AddText(ImVec2(display.x*.085f, display.y-30), IM_COL32(135,156,177,static_cast<int>(210*opacity)), credit);
+    ImGui::PopStyleVar();
 }
 
 std::string Engine::savePath() const {
@@ -2888,7 +2906,7 @@ std::string Engine::savePath() const {
 }
 
 bool Engine::captureReleaseFrame(const std::string& name, bool withUI) {
-    const auto directory = RuntimePaths::assets() / "Screenshots" / "Release";
+    const auto directory = RuntimePaths::userData() / "Screenshots" / "QA";
     std::filesystem::create_directories(directory);
     const auto path = directory / (name + ".bmp");
     if (!withUI) return postPipeline.captureScreenshot(path.u8string().c_str());
@@ -2899,6 +2917,7 @@ bool Engine::captureReleaseFrame(const std::string& name, bool withUI) {
     glReadPixels(0, 0, windowWidth, windowHeight, GL_BGR, GL_UNSIGNED_BYTE, pixels.data());
     glPixelStorei(GL_PACK_ALIGNMENT, alignment);
     if (glGetError() != GL_NO_ERROR) return false;
+    if (std::none_of(pixels.begin(), pixels.end(), [](unsigned char p) { return p > 16; })) return false;
     std::ofstream file(path, std::ios::binary);
     const bool wrote = file && writeScreenshotBMP(file, windowWidth, windowHeight, pixels);
     file.close();
@@ -2914,20 +2933,60 @@ void Engine::runReleaseQASequence(int frame) {
     if (frame == 1) {
         postPipeline.skipStartup();
         shell.mainMenu(); refreshContinue();
-        enterBodyView("Saturn");
-        cameraCtrl.mode = CAM_FOCUS;
-        cameraCtrl.focusAngleX = -45;
-        cameraCtrl.focusDistance = 5.5f;
-        cameraCtrl.currentEye = cameraCtrl.calculateOrbitalEye(cameraCtrl.focusDistance, -45, 65, simCtrl.getBodyPosition("Saturn"));
-        cameraCtrl.currentTarget = simCtrl.getBodyPosition("Saturn");
+        check(audioMgr && audioMgr->isAvailable() && audioMgr->isMusicActive() && audioMgr->musicGain() > 0,
+              "Main Menu has active audible-gain music");
+#ifdef _WIN32
+        const HWND nativeWindow = glfwGetWin32Window(window);
+        check(SendMessage(nativeWindow, WM_GETICON, ICON_BIG, 0) != 0 &&
+              SendMessage(nativeWindow, WM_GETICON, ICON_SMALL, 0) != 0 &&
+              GetClassLongPtr(nativeWindow, GCLP_HICON) != 0,
+              "Running window has taskbar and Alt-Tab icon handles");
+#endif
         check((playerQA ? canPersistPlayerState() : !canPersistPlayerState()) && !canObserve(), "Persistence eligibility matches explicit session kind");
+        GLuint previousTexture = 0;
+        for (const auto& name : {"Tethys", "Dione", "Rhea"}) {
+            const auto moon = std::find_if(moons.begin(), moons.end(), [&](const Moon& m) { return m.name == name; });
+            check(moon != moons.end() && moon->texture != 0 && moon->texture != previousTexture &&
+                  TextureVariants::isGlobalMoonTexture(moon->texturePath), "Distinct approved global moon map loaded");
+            if (moon != moons.end()) previousTexture = moon->texture;
+        }
         if (playerQA && std::filesystem::exists(std::filesystem::u8path(RuntimePaths::settings()))) {
             check(std::abs(appSettings.masterVolume - .37f) < .001f && std::abs(appSettings.fieldOfView - 63) < .001f &&
                   std::abs(cameraCtrl.fieldOfView - 63) < .001f && std::abs(cameraCtrl.targetFieldOfView - 63) < .001f,
                   "Restart restores volume and both FOV targets");
+            check(!isFullscreen && appSettings.starfieldStyle == 1 && appSettings.starfieldDataset == 3, "Restart restores windowed preference and independent composite sky");
+            int x, y, w, h, left, top, right, bottom, workX, workY, workW, workH;
+            glfwGetWindowPos(window, &x, &y); glfwGetWindowSize(window, &w, &h);
+            glfwGetWindowFrameSize(window, &left, &top, &right, &bottom);
+            glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &workX, &workY, &workW, &workH);
+            check(x - left >= workX && y - top >= workY && x + w + right <= workX + workW && y + h + bottom <= workY + workH,
+                  "Windowed frame and HUD fit the usable desktop");
         }
+        if (playerQA && !std::filesystem::exists(std::filesystem::u8path(RuntimePaths::settings())))
+            check(isFullscreen && appSettings.starfieldStyle == 0, "Fresh player starts fullscreen with Classic Milky Way");
     } else if (frame == 30) capture("main-menu", true);
-    else if (frame == 35) { startFreshSession(); check(progression.allRecords().empty(), "Fresh session has no synthetic discoveries"); }
+    else if (frame == 35) {
+        startFreshSession();
+        check(completedScience.empty(), "Fresh session has no synthetic observations");
+        check(shell.playing() && menuTransition.active(), "Safe gameplay starts before optional cinematic");
+        check(glm::distance(cameraCtrl.currentEye, simCtrl.getBodyPosition("Earth")) <
+              glm::distance(menuHeroPose().eye, simCtrl.getBodyPosition("Earth")), "Fresh handoff approaches the live Earth");
+    } else if (frame == 36) {
+        const auto eye = cameraCtrl.currentEye;
+        const auto target = cameraCtrl.currentTarget;
+        const auto pose = menuTransition.pose({eye, target, cameraCtrl.currentUp, cameraCtrl.fieldOfView});
+        check(MenuTransition::valid(pose) && eye == cameraCtrl.currentEye && target == cameraCtrl.currentTarget,
+              "Cinematic render pose does not mutate authoritative camera");
+        capture("menu-handoff", true);
+    } else if (frame == 37) {
+        menuTransition.advance(std::numeric_limits<double>::quiet_NaN());
+        check(shell.playing() && !menuTransition.active() && menuTransition.veilOpacity() == 0,
+              "Invalid cinematic timing falls back immediately without black frame");
+    } else if (frame == 38) beginMenuTransition();
+    else if (frame == 39) {
+        onKey(GLFW_KEY_W, 0, GLFW_PRESS, 0);
+        check(shell.playing() && !menuTransition.active(), "Player movement cancels menu assistance");
+    }
     else if (frame == 40) enterBodyView("Earth");
     else if (frame == 160) { capture("earth"); capture("earth-dossier", true); }
     else if (frame == 170) {
@@ -2945,7 +3004,6 @@ void Engine::runReleaseQASequence(int frame) {
     } else if (frame == 250) {
         SimulationSaveState saved;
         SaveStateManager::instance().captureState(saved, simCtrl, cameraCtrl, spaceship, true, static_cast<int>(presenter.state()), presenter.selectedBodyName());
-        SaveStateManager::instance().captureProgression(saved, progression);
         check(SaveStateManager::instance().saveToFile(savePath(), saved), "QA-only continuation write");
         qaPausedTime = simCtrl.getSimTime();
         refreshContinue(); check(validContinue, "Continue requires validated save");
@@ -2978,17 +3036,51 @@ void Engine::runReleaseQASequence(int frame) {
     } else if (frame == 1110) capture("spacecraft", true);
     else if (frame == 1120) {
         spaceship.active = false; enterBodyView("Earth");
-        // Fixture records belong only to the explicitly isolated QA profile.
-        progression.markDetected("Earth"); progression.recordActivity("Earth", ScienceActivity::GravityMeasurement);
-        solarUI.showCodex = true;
-    } else if (frame == 1240) capture("codex", true);
-    else if (frame == 1250) { solarUI.showCodex = solarUI.showPlanetCard = false; cameraCtrl.setPhotoMode(true); }
+    } else if (frame == 1240) capture("body", true);
+    else if (frame == 1250) { solarUI.showPlanetCard = false; cameraCtrl.setPhotoMode(true); }
     else if (frame == 1280) capture("photography", true);
     else if (frame == 1285 && playerQA) {
         solarUI.masterVolume = .37f;
         cameraCtrl.fieldOfView = cameraCtrl.targetFieldOfView = 63;
     }
-    else if (frame == 1290) {
+    else if (frame == 1290) { cameraCtrl.setPhotoMode(false); shell.mainMenu(); solarUI.starfieldStyle = 0; }
+    else if (frame == 1320) capture("sky-classic", true);
+    else if (frame == 1330) { solarUI.starfieldStyle = 1; solarUI.starfieldDataset = 1; }
+    else if (frame == 1360) capture("sky-hipparcos", true);
+    else if (frame == 1370) solarUI.starfieldDataset = 2;
+    else if (frame == 1400) capture("sky-tycho", true);
+    else if (frame == 1410) solarUI.starfieldDataset = 0;
+    else if (frame == 1440) capture("sky-yale", true);
+    else if (frame == 1450) solarUI.starfieldDataset = 3;
+    else if (frame == 1480) capture("sky-composite", true);
+    else if (frame == 1490) { shell.start(); enterBodyView("Tethys"); }
+    else if (frame == 1600) capture("tethys", true);
+    else if (frame == 1610) enterBodyView("Dione");
+    else if (frame == 1720) capture("dione", true);
+    else if (frame == 1730) enterBodyView("Rhea");
+    else if (frame == 1840) capture("rhea", true);
+    else if (frame == 1850) enterBodyView("Iapetus");
+    else if (frame == 1960) capture("procedural-moon", true);
+    else if (frame == 1970) {
+        presenter.forceExplorer(); solarUI.showPlanetCard = false;
+        cameraCtrl.enterFreeCam();
+        solarUI.showToast("Instrument complete", "Earth atmospheric scan recorded. Navigation remains available.", 5);
+        scanner.startScan("Earth", ScannerMode::Scientific, 10, 5); scanActivityActive = true;
+        ImGui::GetIO().WantCaptureKeyboard = true; ImGui::GetIO().WantTextInput = false;
+        onKey(GLFW_KEY_F,0,GLFW_PRESS,0);
+        check(cameraCtrl.mode != CAM_FREE, "Focused HUD cannot capture navigation shortcut");
+        onKey(GLFW_KEY_F,0,GLFW_PRESS,0);
+        check(cameraCtrl.mode == CAM_FREE && shell.playing(), "Scanning and feedback do not lock free camera");
+        auto eye = cameraCtrl.currentEye;
+        cameraCtrl.integrateFreeMovement(cameraCtrl.freeFront, 1, .1f);
+        check(cameraCtrl.currentEye != eye && scanner.state != ScannerState::Idle, "Movement remains possible during scanner activity");
+    }
+    else if (frame == 1980) capture("free-flight-feedback", true);
+    else if (frame == 2000 && playerQA) {
+        if (isFullscreen) toggleFullscreen();
+        solarUI.masterVolume = .37f; cameraCtrl.fieldOfView = cameraCtrl.targetFieldOfView = 63;
+    }
+    else if (frame == 2010) {
         check(glGetError() == GL_NO_ERROR, "No GL error at end of release smoke");
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }

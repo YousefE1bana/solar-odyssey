@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master ]
 
 jobs:
   build-and-test:
@@ -31,12 +31,12 @@ jobs:
 
     - name: Configure CMake
       shell: msys2 {0}
-      run: cmake -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEADLESS_TESTS=ON
+      run: cmake -B .output/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEADLESS_TESTS=ON
 
     - name: Build Solar Odyssey & Test Targets
       shell: msys2 {0}
-      run: cmake --build build-cmake --config Release
+      run: cmake --build .output/build --config Release
 
     - name: Run headless CTest (native GL acceptance requires hardware)
       shell: msys2 {0}
-      run: ctest --test-dir build-cmake --output-on-failure
+      run: ctest --test-dir .output/build --output-on-failure
