@@ -1,3 +1,5 @@
+#include "safe_file_write.h"
+#include <cmath>
 #include "settings_persistence.h"
 #include <fstream>
 #include <sstream>
@@ -27,18 +29,62 @@ std::string AppSettings::serialize() const {
     ss << "vsyncEnabled=" << (vsyncEnabled ? 1 : 0) << "\n";
     ss << "fullscreen=" << (fullscreen ? 1 : 0) << "\n";
     ss << "qualityPreset=" << qualityPreset << "\n";
+    ss << "showParticles=" << (showParticles ? 1 : 0) << "\n";
+    ss << "enableMeshLOD=" << (enableMeshLOD ? 1 : 0) << "\n";
+    ss << "effectsEnabled=" << (effectsEnabled ? 1 : 0) << "\n";
+    ss << "toneMappingEnabled=" << (toneMappingEnabled ? 1 : 0) << "\n";
+    ss << "vignetteEnabled=" << (vignetteEnabled ? 1 : 0) << "\n";
+    ss << "autoSaveOnExit=" << (autoSaveOnExit ? 1 : 0) << "\n";
+    ss << "bloomIntensity=" << bloomIntensity << "\n";
+    ss << "bloomThreshold=" << bloomThreshold << "\n";
+    ss << "exposure=" << exposure << "\n";
+    ss << "freeSpeed=" << freeSpeed << "\n";
+    ss << "mouseSensitivity=" << mouseSensitivity << "\n";
+    ss << "starfieldStyle=" << starfieldStyle << "\n";
+    ss << "starfieldDataset=" << starfieldDataset << "\n";
     return ss.str();
 }
 
 void AppSettings::apply(const std::unordered_map<std::string, std::string>& kv) {
     auto getF = [&](const char* k, float& v) {
         auto it = kv.find(k);
-        if (it != kv.end()) { try { v = std::stof(it->second); } catch (...) {} }
+        if (it != kv.end()) { try { size_t end = 0; const float parsed = std::stof(it->second, &end);
+            if (end == it->second.size() && std::isfinite(parsed)) v = parsed; } catch (...) {} }
     };
     auto getB = [&](const char* k, bool& v) {
         auto it = kv.find(k);
-        if (it != kv.end()) v = (it->second == "1" || it->second == "true");
+        if (it != kv.end()) {
+            if (it->second == "1" || it->second == "true") v = true;
+            else if (it->second == "0" || it->second == "false") v = false;
+        }
     };
+    getB("showParticles", showParticles);
+    getB("enableMeshLOD", enableMeshLOD);
+    getB("effectsEnabled", effectsEnabled);
+    getB("toneMappingEnabled", toneMappingEnabled);
+    getB("vignetteEnabled", vignetteEnabled);
+    getB("autoSaveOnExit", autoSaveOnExit);
+    getF("bloomIntensity", bloomIntensity);
+    getF("bloomThreshold", bloomThreshold);
+    getF("exposure", exposure);
+    getF("freeSpeed", freeSpeed);
+    getF("mouseSensitivity", mouseSensitivity);
+    auto getI = [&](const char* key, int& value) {
+        auto it = kv.find(key);
+        if (it == kv.end()) return;
+        try { size_t end = 0; const int parsed = std::stoi(it->second, &end);
+            if (end == it->second.size()) value = parsed;
+        } catch (...) {}
+    };
+    getI("starfieldStyle", starfieldStyle);
+    getI("starfieldDataset", starfieldDataset);
+    starfieldStyle = std::clamp(starfieldStyle, 0, 1);
+    starfieldDataset = std::clamp(starfieldDataset, 0, 3);
+    bloomIntensity = std::clamp(bloomIntensity, 0.1f, 1.2f);
+    bloomThreshold = std::clamp(bloomThreshold, 0.5f, 1.2f);
+    exposure = std::clamp(exposure, 0.5f, 2.5f);
+    freeSpeed = std::clamp(freeSpeed, 2.0f, 120.0f);
+    mouseSensitivity = std::clamp(mouseSensitivity, 0.02f, 0.35f);
     getF("masterVolume", masterVolume);
     getF("musicVolume", musicVolume);
     getF("sfxVolume", sfxVolume);
@@ -64,7 +110,11 @@ void AppSettings::apply(const std::unordered_map<std::string, std::string>& kv) 
         // Integer tier with deterministic fallback to High on garbage.
         auto it = kv.find("qualityPreset");
         if (it != kv.end()) {
-            try { qualityPreset = std::stoi(it->second); } catch (...) { qualityPreset = 2; }
+            try {
+                size_t used = 0;
+                const int parsed = std::stoi(it->second, &used);
+                qualityPreset = used == it->second.size() ? parsed : 2;
+            } catch (...) { qualityPreset = 2; }
         }
     }
 
@@ -83,14 +133,11 @@ void AppSettings::apply(const std::unordered_map<std::string, std::string>& kv) 
 }
 
 bool saveSettings(const std::string& path, const AppSettings& s) {
-    std::ofstream f(path);
-    if (!f) return false;
-    f << s.serialize();
-    return true;
+    return safeWriteFile(std::filesystem::u8path(path), s.serialize());
 }
 
 bool loadSettings(const std::string& path, AppSettings& s) {
-    std::ifstream f(path);
+    std::ifstream f(std::filesystem::u8path(path));
     if (!f) return false;
     std::unordered_map<std::string, std::string> kv;
     std::string line;
@@ -99,6 +146,7 @@ bool loadSettings(const std::string& path, AppSettings& s) {
         if (eq == std::string::npos) continue;
         kv[line.substr(0, eq)] = line.substr(eq + 1);
     }
+    if (f.bad()) return false;
     s.apply(kv);
     return true;
 }

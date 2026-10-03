@@ -16,7 +16,9 @@ struct PlanetSurfaceCapabilities {
 };
 
 // Scientific and educational data for celestial bodies in the Solar System
+enum class AtmosphericEnvironment { None, Exosphere, Atmosphere };
 struct CelestialBodyData {
+    AtmosphericEnvironment atmosphericEnvironment = AtmosphericEnvironment::None;
     std::string name;
     std::string type;              // e.g. "Yellow Dwarf Star", "Terrestrial Planet", "Gas Giant", "Ice Giant", "Natural Satellite"
     std::string subtitle;          // e.g. "The Ringed Jewel", "The Red Planet"
@@ -39,6 +41,7 @@ struct CelestialBodyData {
     bool hasMeanTemperatureData = true;
     int knownMoons = 0;               // Confirmed moons count
     float surfaceGravityMs2 = 0.0f;   // Surface gravity in m/s^2 (Earth = 9.8)
+    std::string temperatureReference = "Mean temperature";
     float meanTemperatureC = 0.0f;    // Mean surface/cloud-top temperature in Celsius
     float minTemperatureC = 0.0f;
     float maxTemperatureC = 0.0f;

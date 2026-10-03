@@ -98,11 +98,11 @@ void main() {
 
         // Radial opacity falloff (sharp at inner edge, soft fade at outer edge)
         float innerFade = smoothstep(0.0, 0.06, normR);
-        float outerFade = smoothstep(1.0, 0.75, normR);
+        float outerFade = (1.0 - smoothstep(0.75, 1.0, normR));
         float alpha = innerFade * outerFade * 0.95;
 
         // Inner Photon Ring Glow Accent
-        float photonProximity = smoothstep(0.08, 0.0, normR);
+        float photonProximity = (1.0 - smoothstep(0.0, 0.08, normR));
         diskColor += vec3(1.0, 0.95, 0.85) * photonProximity * 2.2;
         alpha = max(alpha, photonProximity * 0.98);
 
@@ -141,7 +141,7 @@ void main() {
         vec3 jetColor = mix(vec3(0.3, 0.6, 1.0), vec3(0.8, 0.9, 1.0), core) * 2.5;
         jetColor += vec3(0.4, 0.7, 1.0) * pulse * 1.2;
 
-        float heightFade = smoothstep(22.0, 5.0, h);
+        float heightFade = (1.0 - smoothstep(5.0, 22.0, h));
         float alpha = core * heightFade * 0.75;
 
         FragColor = vec4(jetColor, alpha);

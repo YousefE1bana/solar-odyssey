@@ -23,6 +23,9 @@ enum AsteroidTier {
 };
 
 struct LODSphereMesh {
+    LODSphereMesh() = default;
+    LODSphereMesh(const LODSphereMesh&) = delete;
+    LODSphereMesh& operator=(const LODSphereMesh&) = delete;
     GLuint vao = 0, vbo = 0, ibo = 0;
     int indexCount = 0;
     int vertexCount = 0;
@@ -46,6 +49,11 @@ struct BodyLODTelemetry {
 class LODManager {
 public:
     static LODManager& instance();
+    // Release only the current context's cache before GLFW destroys it.
+    static void releaseCurrentContext();
+    ~LODManager() = default; // static destruction must never call OpenGL
+    LODManager(const LODManager&) = delete;
+    LODManager& operator=(const LODManager&) = delete;
 
     void init();
     void destroy();
@@ -83,7 +91,6 @@ public:
 
 private:
     LODManager();
-    ~LODManager();
 
     LODSphereMesh sphereMeshes[SPHERE_TIER_COUNT];
     LODSphereMesh asteroidMeshes[ASTEROID_TIER_COUNT];

@@ -1,0 +1,263 @@
+{
+  "verified_on": "2026-10-03",
+  "method": "Official downloads compared against unchanged local masters or decoded/resized RGB pixels. Only successful matches are listed.",
+  "verified_sources": [
+    {
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/hipp8.tif",
+      "source_sha256": "1741b80aaf139496cd2d08a3adc53f01b87d05305784b73dfaf38eb813f6540c",
+      "matches_local_source": true
+    },
+    {
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/tycho8.tif",
+      "source_sha256": "fed5049312ef340ba6c3492166b51be3a796f4cf42d6265ab8f883c3b010bb8e",
+      "matches_local_source": true
+    },
+    {
+      "source_url": "https://www.solarsystemscope.com/textures/download/8k_stars.jpg",
+      "local_file": "Textures\\8k_stars.jpg",
+      "source_sha256": "80c2259d7d020f47e7d16d38a75a3ad932f32ab8b99b55be03f23e64bc970f62",
+      "matches_local_source": true,
+      "same_pixels": true
+    },
+    {
+      "source_url": "https://www.solarsystemscope.com/textures/download/8k_earth_daymap.jpg",
+      "local_file": "Textures\\earth_daymap.jpg",
+      "source_sha256": "88ab060b6e7d241cfc590c69f528fab2b3247b738d40124cb590999a6fe44abc",
+      "matches_local_source": true,
+      "same_pixels": true
+    },
+    {
+      "local": "Textures/earth_nightmap.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_earth_nightmap.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/earth_clouds.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_earth_clouds.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/moon.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_moon.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/mars.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_mars.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/mercury.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_mercury.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/venus_surface.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_venus_surface.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/venus_atmosphere.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/4k_venus_atmosphere.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        4096,
+        2048
+      ],
+      "local_dimensions": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "local": "Textures/uranus.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_uranus.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        2048,
+        1024
+      ],
+      "local_dimensions": [
+        2048,
+        1024
+      ]
+    },
+    {
+      "local": "Textures/neptune.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_neptune.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        2048,
+        1024
+      ],
+      "local_dimensions": [
+        2048,
+        1024
+      ]
+    },
+    {
+      "local": "Textures/stars_milky_way.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_stars_milky_way.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        4096
+      ],
+      "local_dimensions": [
+        8192,
+        4096
+      ]
+    },
+    {
+      "local": "Textures/saturn_ring_alpha.png",
+      "url": "https://www.solarsystemscope.com/textures/download/8k_saturn_ring_alpha.png",
+      "matches": true,
+      "remote_dimensions": [
+        8192,
+        500
+      ],
+      "local_dimensions": [
+        8192,
+        500
+      ]
+    },
+    {
+      "local": "Textures/4k_ceres_fictional.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/4k_ceres_fictional.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        4096,
+        2048
+      ],
+      "local_dimensions": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "local": "Textures/4k_haumea_fictional.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/4k_haumea_fictional.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        4096,
+        2048
+      ],
+      "local_dimensions": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "local": "Textures/4k_makemake_fictional.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/4k_makemake_fictional.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        4096,
+        2048
+      ],
+      "local_dimensions": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "local": "Textures/4k_eris_fictional.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/4k_eris_fictional.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        4096,
+        2048
+      ],
+      "local_dimensions": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "local": "Textures/jupiter.jpg",
+      "url": "https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg",
+      "matches": true,
+      "remote_dimensions": [
+        2048,
+        1024
+      ],
+      "local_dimensions": [
+        2048,
+        1024
+      ]
+    },
+    {
+      "local": "Textures/sun.jpg",
+      "source": "https://www.solarsystemscope.com/textures/download/8k_sun.jpg",
+      "comparison": "8k source resized to local 4k with Lanczos",
+      "mean_absolute_pixel_error": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "local": "Textures/saturn.jpg",
+      "source": "https://www.solarsystemscope.com/textures/download/8k_saturn.jpg",
+      "comparison": "8k source resized to local 4k with Lanczos",
+      "mean_absolute_pixel_error": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "source_url": "https://maps.jpl.nasa.gov/tmaps/pix/yale8.tif",
+      "source_sha256": "9b4288d5f1fccdb6a61b693ca9719f1da924275ed57b0ef69434ac57b8313773",
+      "matches_local_source": true
+    }
+  ]
+}

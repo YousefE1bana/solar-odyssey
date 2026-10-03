@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <GLFW/glfw3.h>
 
 std::string readFileText(const char* path) {
     std::ifstream f(path, std::ios::in);
@@ -15,7 +16,9 @@ std::string readFileText(const char* path) {
 }
 
 GLuint compileShader(GLenum type, const std::string& src) {
+    if (!glfwGetCurrentContext() || !glCreateShader) return 0;
     GLuint sh = glCreateShader(type);
+    if (!sh) return 0;
     const char* c = src.c_str();
     glShaderSource(sh, 1, &c, nullptr);
     glCompileShader(sh);
@@ -40,6 +43,11 @@ GLuint linkProgram(GLuint vs, GLuint fs) {
         return 0;
     }
     GLuint p = glCreateProgram();
+    if (!p) {
+        glDeleteShader(vs);
+        glDeleteShader(fs);
+        return 0;
+    }
     glAttachShader(p, vs);
     glAttachShader(p, fs);
     glLinkProgram(p);

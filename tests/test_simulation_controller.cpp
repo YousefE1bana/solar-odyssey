@@ -4,6 +4,47 @@
 #include "camera_controller.h"
 #include <glm/glm.hpp>
 #include <cmath>
+#include <tuple>
+
+TEST_CASE("Simulation clock follows accepted numerical steps", "[simulation][clock]") {
+    SimulationController sim;
+    sim.init();
+    sim.setPhysicsMode(PHYSICS_NBODY);
+    sim.update(0.001);
+    REQUIRE(sim.getSimTime() == 0.0);
+    sim.update(0.0015);
+    REQUIRE(sim.getSimTime() == Approx(0.0025));
+    const double before = sim.getSimTime();
+    sim.setTimeMultiplier(10000.0);
+    sim.update(10.0);
+    REQUIRE(sim.getSimTime() - before <= 0.5);
+    REQUIRE(sim.getElapsedSimDays() == Approx(sim.getSimTime() * 5.0));
+    const auto* moon = sim.getBodyState("Moon");
+    auto local = OrbitalPhysics::computeMoonPosition(glm::dvec3(0.0), sim.getSimTime(),
+        moon->orbitSpeed, sim.getOrbitSpeedScale(), moon->orbitRadius, moon->initialAngle);
+    REQUIRE(glm::length(sim.getBodyPositionDouble("Moon") - sim.getBodyPositionDouble("Earth") - local) < 1e-9);
+}
+
+TEST_CASE("Physics switches preserve every live position and saved analytic phase", "[simulation][restore]") {
+    SimulationController sim;
+    sim.init();
+    sim.setPhysicsMode(PHYSICS_NBODY);
+    for (int i = 0; i < 100; ++i) sim.update(0.02);
+    auto before = sim.getAllBodies();
+    sim.setPhysicsMode(PHYSICS_KEPLERIAN);
+    for (const auto& b : before) REQUIRE(glm::length(sim.getBodyPositionDouble(b.name) - b.position) < 1e-9);
+    sim.update(0.05);
+    auto continuation = sim.captureContinuation();
+    SimulationController restored;
+    restored.init();
+    REQUIRE(restored.restoreSession(sim.getSimTime(), 1.0, false, PHYSICS_KEPLERIAN, &continuation));
+    sim.update(0.02);
+    restored.update(0.02);
+    for (const auto& b : sim.getAllBodies()) REQUIRE(glm::length(restored.getBodyPositionDouble(b.name) - b.position) < 1e-9);
+    before = sim.getAllBodies();
+    sim.setPhysicsMode(PHYSICS_NBODY);
+    for (const auto& b : before) REQUIRE(glm::length(sim.getBodyPositionDouble(b.name) - b.position) < 1e-9);
+}
 
 TEST_CASE("SimulationController - Clock and Keplerian Kinematics", "[simulation]") {
     SimulationController sim;
@@ -56,6 +97,82 @@ TEST_CASE("SimulationController - N-Body Mode Transition and Gravity", "[simulat
     sim.setPhysicsMode(PHYSICS_KEPLERIAN);
     REQUIRE(sim.getPhysicsMode() == PHYSICS_KEPLERIAN);
     REQUIRE(sim.getGravityAtDouble(probePos) == glm::dvec3(0.0));
+}
+
+// FINAL HOLD Defect 2 — hybrid N-body coherence regression. Roots integrate
+// numerically with circularized velocities (planets hold shells for 60
+// sim-days; previously dispersed 100x+ within days); the six parented moons
+// ride analytic phase-2 around live parents, so each stays exactly at its
+// configured orbital radius. Switching back restores the analytic system.
+TEST_CASE("SimulationController - N-Body hybrid coherence over 60 sim-days", "[simulation][nbody]") {
+    SimulationController sim;
+    sim.init();
+
+    // Contract counts: 31 runtime objects, 13 numerical roots, 18 moons.
+    REQUIRE(sim.getAllBodies().size() == 31);
+    REQUIRE(sim.getNBodySimulation().bodies.size() == 13);
+
+    sim.setSimTime(0.0);
+    sim.setPhysicsMode(PHYSICS_NBODY);
+
+    // Seed state: every body finite, no moon at origin.
+    for (const auto& b : sim.getAllBodies()) {
+        INFO("Seed body: " << b.name);
+        REQUIRE(std::isfinite(b.position.x));
+        REQUIRE(std::isfinite(b.position.y));
+        REQUIRE(std::isfinite(b.position.z));
+        if (b.isMoon) REQUIRE(glm::length(b.position) > 1e-6);
+    }
+
+    // Advance 60 sim-days (12 simTime units) at 60 fps, as Engine drives it.
+    const double frameDt = 1.0 / 60.0;
+    for (int step = 0; step < 720; ++step) sim.update(frameDt);
+    REQUIRE(sim.getElapsedSimDays() == Approx(60.0).margin(1.0));
+
+    // Planets hold their heliocentric shells (generous 10% tolerance).
+    const std::vector<std::pair<std::string, double>> shells = {
+        {"Mercury", 5.0}, {"Venus", 7.5}, {"Earth", 10.0}, {"Mars", 12.5},
+        {"Jupiter", 21.0}, {"Saturn", 27.0}, {"Uranus", 33.5}, {"Neptune", 39.5}
+    };
+    for (const auto& [name, r] : shells) {
+        double got = glm::length(sim.getBodyPositionDouble(name));
+        INFO("Planet shell: " << name << " R=" << got);
+        REQUIRE(got == Approx(r).epsilon(0.10));
+    }
+
+    // Moons stay parent-relative at their configured orbital radii (analytic
+    // phase-2 around live parents — exact up to float noise), finite and
+    // off-origin across all eighteen moons.
+    const std::vector<std::tuple<std::string, std::string, double>> moonOrbits = {
+        {"Moon", "Earth", 1.4}, {"Enceladus", "Saturn", 2.5},
+        {"Europa", "Jupiter", 2.45}, {"Ganymede", "Jupiter", 3.90},
+        {"Callisto", "Jupiter", 6.86}, {"Tethys", "Saturn", 3.10},
+        {"Phobos", "Mars", 0.8}, {"Deimos", "Mars", 1.3},
+        {"Mimas", "Saturn", 2.2}, {"Dione", "Saturn", 3.95},
+        {"Rhea", "Saturn", 5.53}, {"Iapetus", "Saturn", 8.5},
+        {"Miranda", "Uranus", 1.2}, {"Ariel", "Uranus", 1.76},
+        {"Umbriel", "Uranus", 2.46}, {"Titania", "Uranus", 4.03},
+        {"Oberon", "Uranus", 5.39}, {"Triton", "Neptune", 1.29}
+    };
+    for (const auto& [name, parent, r] : moonOrbits) {
+        glm::dvec3 pos = sim.getBodyPositionDouble(name);
+        double rel = glm::length(pos - sim.getBodyPositionDouble(parent));
+        INFO("Moon orbit: " << name << " rel=" << rel);
+        REQUIRE(std::isfinite(pos.x));
+        REQUIRE(std::isfinite(pos.y));
+        REQUIRE(std::isfinite(pos.z));
+        REQUIRE(glm::length(pos) > 1e-6);
+        REQUIRE(rel == Approx(r).epsilon(0.03));
+    }
+
+    // Switching back restores the analytic Keplerian shells exactly.
+    sim.setPhysicsMode(PHYSICS_KEPLERIAN);
+    sim.update(frameDt);
+    REQUIRE(glm::length(sim.getBodyPositionDouble("Earth")) == Approx(10.0).epsilon(0.01));
+    REQUIRE(glm::length(sim.getBodyPositionDouble("Moon") - sim.getBodyPositionDouble("Earth")) ==
+            Approx(1.4).epsilon(0.01));
+    REQUIRE(glm::length(sim.getBodyPositionDouble("Enceladus") - sim.getBodyPositionDouble("Saturn")) ==
+            Approx(2.5).epsilon(0.01));
 }
 
 TEST_CASE("Precision - Float vs Double Keplerian Equivalence over 100k Steps", "[precision]") {

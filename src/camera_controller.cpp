@@ -1,4 +1,5 @@
 #include "camera_controller.h"
+#include "save_state.h"
 #include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -6,6 +7,50 @@
 
 CameraController::CameraController() {
     resetToDefault();
+}
+
+void CameraController::restoreBookmark(const CameraBookmark& b) {
+    mode = static_cast<CameraMode>(b.mode);
+    previousMode = mode;
+    currentEye = glm::vec3(b.eye);
+    currentTarget = glm::vec3(b.target);
+    currentUp = glm::normalize(glm::vec3(b.up));
+    orbitDistance = static_cast<float>(b.orbitDistance);
+    orbitAngleX = static_cast<float>(b.orbitAngleX);
+    orbitAngleY = static_cast<float>(b.orbitAngleY);
+    focusedBodyName = b.focusedBodyName;
+    focusedPlanetIndex = -1; // Stable names, never a saved vector index.
+    focusDistance = static_cast<float>(b.focusDistance);
+    focusAngleX = static_cast<float>(b.focusAngleX);
+    focusAngleY = static_cast<float>(b.focusAngleY);
+    minFocusDistance = static_cast<float>(b.minFocusDistance);
+    maxFocusDistance = static_cast<float>(b.maxFocusDistance);
+    freePos = glm::vec3(b.freePos);
+    freeYaw = static_cast<float>(b.freeYaw);
+    freePitch = static_cast<float>(b.freePitch);
+    freeSpeed = static_cast<float>(b.freeSpeed);
+    freeVelocity = glm::vec3(0.0f);
+    tourActive = false;
+    tourCurrentStep = 0;
+    tourDwellTimer = 0.0f;
+    transitionProgress = 1.0f;
+    startEye = destEye = currentEye;
+    startTarget = destTarget = currentTarget;
+    // A bookmark cannot resume a tour/interpolation without its missing
+    // timeline. Resume at its saved pose as a stationary free camera.
+    if (mode == CAM_TRANSITION || mode == CAM_TOUR) enterFreeCam();
+    previousMode = postTransitionMode = mode;
+    freeTargetYaw = freeYaw;
+    freeTargetPitch = freePitch;
+    const float yaw = glm::radians(freeYaw), pitch = glm::radians(freePitch);
+    freeFront = glm::normalize(glm::vec3(cosf(yaw) * cosf(pitch), sinf(pitch), sinf(yaw) * cosf(pitch)));
+    freeRight = glm::normalize(glm::cross(freeFront, glm::vec3(0.0f, 1.0f, 0.0f)));
+    freeUp = glm::normalize(glm::cross(freeRight, freeFront));
+    if (mode == CAM_FREE) currentUp = freeUp;
+    povHeight = static_cast<float>(b.povHeight);
+    povOrbitAngle = static_cast<float>(b.povOrbitAngle);
+    fieldOfView = targetFieldOfView = static_cast<float>(b.fov);
+    photoModeActive = false;
 }
 
 void CameraController::enterFreeCam() {

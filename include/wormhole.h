@@ -74,6 +74,9 @@ public:
 
     Wormhole();
     ~Wormhole();
+    Wormhole(const Wormhole&) = delete;
+    Wormhole& operator=(const Wormhole&) = delete;
+    void cleanup(); // cachedProgram is borrowed; geometry/batch are owned here
 
     void initParticles(int count);
     void initGeometry();

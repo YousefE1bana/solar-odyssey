@@ -6,6 +6,8 @@
 #include "wormhole.h"
 #include "render_context.h"
 #include "post_processing.h"
+#include "gl_primitives.h"
+#include "lod_manager.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 #include <vector>
@@ -44,6 +46,11 @@ struct OffscreenPortalGLContext {
 
     ~OffscreenPortalGLContext() {
         if (window) {
+            glfwMakeContextCurrent(window);
+            if (valid) {
+                lod::LODManager::releaseCurrentContext();
+                glprims::destroySharedResources();
+            }
             glfwDestroyWindow(window);
             window = nullptr;
         }
@@ -530,7 +537,6 @@ TEST_CASE("Wormhole - Simulation Side-Effect Free Invariant", "[wormhole_portal]
     double simTimeBefore = 123.456789;
     glm::vec3 planetPosBefore(12.5f, 0.0f, -8.3f);
     glm::vec3 shipPosBefore(0.0f, 6.0f, 22.0f);
-    int missionProgressBefore = 3;
 
     SceneRenderContext mainCtx;
     mainCtx.passType = RenderPassType::Main;
@@ -552,12 +558,10 @@ TEST_CASE("Wormhole - Simulation Side-Effect Free Invariant", "[wormhole_portal]
     double simTimeAfter = 123.456789;
     glm::vec3 planetPosAfter(12.5f, 0.0f, -8.3f);
     glm::vec3 shipPosAfter(0.0f, 6.0f, 22.0f);
-    int missionProgressAfter = 3;
 
     REQUIRE(simTimeBefore == simTimeAfter);
     REQUIRE(planetPosBefore == planetPosAfter);
     REQUIRE(shipPosBefore == shipPosAfter);
-    REQUIRE(missionProgressBefore == missionProgressAfter);
 
     renderer.cleanup();
 }

@@ -171,20 +171,15 @@ TEST_CASE("PSM.3 Dossier - audit: numeric fields internally consistent", "[psm3]
         const CelestialBodyData* body = db.getBody(name);
         REQUIRE(body != nullptr);
 
-        // Mean temperature inside the stated [min, max] range.
-        // PSM.3 reported finding (see PSM_3 report, DQ-1): Uranus and Neptune
-        // violate this in the local data (mean above max); no correct
-        // replacement value is provable from project sources and the internet
-        // is out of scope, so the data is left untouched and the two cases
-        // are pinned here instead of silently passing.
-        if (name == "Uranus" || name == "Neptune") {
-            INFO("Known DQ-1 violation pinned (mean outside [min,max]): " << name);
-            REQUIRE(body->meanTemperatureC > body->maxTemperatureC);
-        } else {
-            REQUIRE(body->meanTemperatureC >= body->minTemperatureC);
-            REQUIRE(body->meanTemperatureC <= body->maxTemperatureC);
+        // Only compare like-for-like sourced bounds. Ice giant values are
+        // atmospheric temperatures at 1 bar, not invented surface ranges.
+        if (body->hasTemperatureRangeData) {
+            REQUIRE(body->minTemperatureC <= body->maxTemperatureC);
+            if (body->hasMeanTemperatureData) {
+                REQUIRE(body->meanTemperatureC >= body->minTemperatureC);
+                REQUIRE(body->meanTemperatureC <= body->maxTemperatureC);
+            }
         }
-        REQUIRE(body->minTemperatureC <= body->maxTemperatureC);
 
         // Relative size consistent with the diameter ratio against Earth.
         if (body->realDiameterKm > 0.0f && name != "Black Hole" && name != "Wormhole" &&

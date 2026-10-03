@@ -5,12 +5,18 @@
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
+#include <GLFW/glfw3.h>
 
 Wormhole::Wormhole() {
     initParticles(140);
 }
 
 Wormhole::~Wormhole() {
+    cleanup();
+}
+
+void Wormhole::cleanup() {
+    particleBatch.destroy();
     if (sphereVAO) glDeleteVertexArrays(1, &sphereVAO);
     if (sphereVBO) glDeleteBuffers(1, &sphereVBO);
     if (sphereEBO) glDeleteBuffers(1, &sphereEBO);
@@ -18,6 +24,10 @@ Wormhole::~Wormhole() {
     if (diskVBO) glDeleteBuffers(1, &diskVBO);
     if (archVAO) glDeleteVertexArrays(1, &archVAO);
     if (archVBO) glDeleteBuffers(1, &archVBO);
+    sphereVAO = sphereVBO = sphereEBO = diskVAO = diskVBO = archVAO = archVBO = 0;
+    sphereIndexCount = diskVertexCount = archVertexCount = 0;
+    cachedProgram = 0;
+    isInitialized = false;
 }
 
 void Wormhole::initParticles(int count) {
@@ -43,6 +53,8 @@ void Wormhole::initParticles(int count) {
 }
 
 void Wormhole::initGeometry() {
+    if (!glfwGetCurrentContext() || !glCreateVertexArrays) return;
+    cleanup();
     std::vector<float> sphereVerts;
     std::vector<unsigned int> sphereIndices;
     int stacks = 32;
@@ -91,6 +103,7 @@ void Wormhole::initGeometry() {
 
     glCreateVertexArrays(1, &sphereVAO);
     glCreateBuffers(1, &sphereVBO);
+    if (!sphereVAO || !sphereVBO) { cleanup(); return; }
     glNamedBufferData(sphereVBO, sphereVerts.size() * sizeof(float), sphereVerts.data(), GL_STATIC_DRAW);
     glVertexArrayVertexBuffer(sphereVAO, 0, sphereVBO, 0, 8 * sizeof(float));
 
@@ -107,6 +120,7 @@ void Wormhole::initGeometry() {
     glVertexArrayAttribBinding(sphereVAO, 2, 0);
 
     glCreateBuffers(1, &sphereEBO);
+    if (!sphereEBO) { cleanup(); return; }
     glNamedBufferData(sphereEBO, sphereIndices.size() * sizeof(unsigned int), sphereIndices.data(), GL_STATIC_DRAW);
     glVertexArrayElementBuffer(sphereVAO, sphereEBO);
 
@@ -138,6 +152,7 @@ void Wormhole::initGeometry() {
 
     glCreateVertexArrays(1, &diskVAO);
     glCreateBuffers(1, &diskVBO);
+    if (!diskVAO || !diskVBO) { cleanup(); return; }
     glNamedBufferData(diskVBO, diskVerts.size() * sizeof(float), diskVerts.data(), GL_STATIC_DRAW);
     glVertexArrayVertexBuffer(diskVAO, 0, diskVBO, 0, 8 * sizeof(float));
 
@@ -179,6 +194,7 @@ void Wormhole::initGeometry() {
 
     glCreateVertexArrays(1, &archVAO);
     glCreateBuffers(1, &archVBO);
+    if (!archVAO || !archVBO) { cleanup(); return; }
     glNamedBufferData(archVBO, archVerts.size() * sizeof(float), archVerts.data(), GL_STATIC_DRAW);
     glVertexArrayVertexBuffer(archVAO, 0, archVBO, 0, 8 * sizeof(float));
 
@@ -317,8 +333,9 @@ bool Wormhole::checkTraversal(const glm::vec3& shipPos, float threshold) {
 void Wormhole::ensureInitialized() {
     if (!isInitialized) {
         initGeometry();
+        if (!sphereVAO || !diskVAO || !archVAO) return;
         if (!particleBatch.isReady()) particleBatch.init(kFlatVS, kFlatFS);
-        isInitialized = true;
+        isInitialized = particleBatch.isReady();
     }
 }
 
@@ -447,9 +464,9 @@ void Wormhole::render(GLuint shaderProgram, const glm::mat4& view, const glm::ma
                       GLuint portalTex, bool portalAvailable,
                       const glm::vec3& cameraUp) {
     if (!shaderProgram) return;
-    cacheUniforms(shaderProgram);
-
     ensureInitialized();
+    if (!isInitialized) return;
+    cacheUniforms(shaderProgram);
 
     // Exact RAII OpenGL pipeline state capture and restoration guard
     WormholeGLStateGuard stateGuard;

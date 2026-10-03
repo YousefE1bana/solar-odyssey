@@ -14,9 +14,9 @@ if errorlevel 1 (
 )
 
 if defined VCPKG_ROOT (
-  cmake -S . -B "%BUILD_DIR%" -G %GENERATOR% -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
+  cmake -S . -B "%BUILD_DIR%" -G %GENERATOR% -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
 ) else (
-  cmake -S . -B "%BUILD_DIR%" -G %GENERATOR%
+  cmake -S . -B "%BUILD_DIR%" -G %GENERATOR% -DCMAKE_BUILD_TYPE=Release
 )
 if errorlevel 1 goto :err
 

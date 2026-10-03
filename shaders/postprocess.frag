@@ -27,6 +27,14 @@ vec3 ACESFilm(vec3 x) {
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
+// All scene, portal and bloom buffers contain linear radiance. Only this
+// final RGBA8 pass encodes sRGB; ImGui is composited afterwards.
+vec3 linearToSRGB(vec3 linearColor) {
+    vec3 c = max(linearColor, vec3(0.0));
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
+               step(vec3(0.0031308), c));
+}
+
 void main() {
     // PASS 0: BRIGHT PASS EXTRACTION
     if (uPass == 0) {
@@ -102,5 +110,5 @@ void main() {
     // Apply fade alpha (for cinematic startup sequence or transitions)
     sceneColor *= uFadeAlpha;
 
-    FragColor = vec4(sceneColor, 1.0);
+    FragColor = vec4(linearToSRGB(sceneColor), 1.0);
 }

@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include "instance_buffer_ring.h"
 
 class AsteroidBelt {
 public:
@@ -38,6 +39,8 @@ public:
         float maxInstanceFenceWaitMs = 0.0f;
         int   ringBackpressureFrames = 0;
         int   ringWaitTimeouts = 0;
+        int   ringSyncFailures = 0;
+        int   reusedFrameDraws = 0;
         float renderSubmitMs = 0.0f;
         float totalUpdateMs = 0.0f;
         float gpuUpdateTimeMs = 0.0f;
@@ -49,10 +52,14 @@ public:
         std::string backendName = "Persistent-Mapped Triple Buffer (glBufferStorage + GLsync)";
     };
 
-    static constexpr int kBufferRingSize = 3;
+    static constexpr int kBufferRingSize = InstanceBufferRing::kSize;
 
     AsteroidBelt(int count = 800, float inR = 15.0f, float outR = 17.8f, const char* texturePath = "Textures/rock.jpg");
     ~AsteroidBelt();
+    AsteroidBelt(const AsteroidBelt&) = delete;
+    AsteroidBelt& operator=(const AsteroidBelt&) = delete;
+    // Requires the owning context current; safe to repeat after release.
+    void cleanup();
 
     void update(float deltaTime, float planetSpeed = 1.0f, const glm::vec3& blackHolePos = glm::vec3(0.0f), float blackHoleStrength = 0.0f);
     void updateCPU(float deltaTime, float planetSpeed);
@@ -68,6 +75,10 @@ public:
     const ComputeTelemetry& getTelemetry() const { return telemetry; }
 
     const std::vector<Asteroid>& getAsteroids() const { return allAsteroids; }
+
+    // Cycle 4 Pass 2: belt band for the resonance-region anomaly check.
+    float getInnerRadius() const { return innerRadius; }
+    float getOuterRadius() const { return outerRadius; }
 
 private:
     void generateAsteroids(int totalCapacity);
@@ -87,7 +98,7 @@ private:
     GLuint instanceVBO = 0;
     AsteroidInstanceData* mappedInstancePtr = nullptr;
     GLsync ringFences[kBufferRingSize] = { nullptr, nullptr, nullptr };
-    int currentRingIndex = 0;
+    InstanceBufferRing instanceFrames;
     bool persistentStorageSupported = false;
 
     ComputeTelemetry telemetry;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(SolarOdyssey LANGUAGES CXX RC)
+project(SolarOdyssey VERSION 1.0.0 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,6 +8,7 @@ option(BUILD_IMGUI "Build bundled Dear ImGui sources" ON)
 
 add_executable(SolarOdyssey
   src/main.cpp
+  src/runtime_paths.cpp
   src/stb_image_impl.cpp
   src/shader_utils.cpp
   src/settings_persistence.cpp
@@ -27,7 +28,7 @@ add_executable(SolarOdyssey
   src/planet_pov.cpp
   src/warp_system.cpp
   src/spaceship.cpp
-  src/mission_system.cpp
+  src/science_progression.cpp
   src/solar_ui.cpp
   src/nbody_simulation.cpp
   src/audio_loader.cpp
@@ -96,10 +97,15 @@ else()
 endif()
 
 if (WIN32)
-  list(APPEND LINK_LIBS opengl32)
+  list(APPEND LINK_LIBS opengl32 shell32)
 endif()
 
 target_link_libraries(SolarOdyssey PRIVATE ${LINK_LIBS})
+if(WIN32)
+  # Launch as a desktop application, without a second console window.
+  # Redirected tool output remains available through inherited standard handles.
+  set_target_properties(SolarOdyssey PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
 
 # GLM is header-only
 if (TARGET glm::glm)
@@ -110,18 +116,16 @@ endif()
 
 target_compile_definitions(SolarOdyssey PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
-# Copy assets to runtime dir
-add_custom_command(TARGET SolarOdyssey POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SolarOdyssey>/Textures
-  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SolarOdyssey>/Sound
-  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SolarOdyssey>/shaders
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Textures $<TARGET_FILE_DIR:SolarOdyssey>/Textures
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Sound $<TARGET_FILE_DIR:SolarOdyssey>/Sound
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:SolarOdyssey>/shaders
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.jpg $<TARGET_FILE_DIR:SolarOdyssey>/icon.jpg
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.png $<TARGET_FILE_DIR:SolarOdyssey>/icon.png
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/icon.ico $<TARGET_FILE_DIR:SolarOdyssey>/icon.ico
+# Refresh the complete runtime asset set on EVERY build, not only on relink.
+add_custom_target(StageRuntimeAssets ALL
+  COMMAND ${CMAKE_COMMAND}
+    -DSOURCE_ROOT=${CMAKE_SOURCE_DIR}
+    -DDESTINATION_ROOT=$<TARGET_FILE_DIR:SolarOdyssey>
+    -P ${CMAKE_SOURCE_DIR}/cmake/StageRuntimeAssets.cmake
+  COMMENT "Staging curated runtime assets (textures, shaders, fonts, audio, notices)"
+  VERBATIM
 )
+add_dependencies(SolarOdyssey StageRuntimeAssets)
 
 # ==============================================================================
 # Unit Test Suite (Catch2)
@@ -130,10 +134,10 @@ enable_testing()
 
 add_executable(SolarOdysseyTests
   tests/test_main.cpp
+  src/runtime_paths.cpp
   tests/test_planet_data.cpp
   tests/test_picking.cpp
   tests/test_camera_math.cpp
-  tests/test_missions.cpp
   tests/test_settings.cpp
   tests/test_orbital_physics.cpp
   tests/test_spaceship_physics.cpp
@@ -154,6 +158,7 @@ add_executable(SolarOdysseyTests
   tests/test_black_hole_pipeline.cpp
   tests/test_black_hole_lensing.cpp
   tests/test_wormhole_portal.cpp
+  tests/test_frame_statistics.cpp
   tests/test_quality_tiers.cpp
   tests/test_presentation_controller.cpp
   tests/test_body_framing.cpp
@@ -161,6 +166,8 @@ add_executable(SolarOdysseyTests
   tests/test_body_layers.cpp
   tests/test_venus_layers.cpp
   tests/test_science_layers.cpp
+  tests/test_observation_integrity.cpp
+  tests/test_gpu_resource_lifetime.cpp
   tests/test_moon_navigation.cpp
   tests/test_moon_roster.cpp
   src/post_processing.cpp
@@ -172,7 +179,7 @@ add_executable(SolarOdysseyTests
   src/canonical_inventory.cpp
   src/picking.cpp
   src/camera_controller.cpp
-  src/mission_system.cpp
+  src/science_progression.cpp
   src/settings_persistence.cpp
   src/spaceship.cpp
   src/warp_system.cpp
@@ -213,4 +220,5 @@ elseif (glm_INCLUDE_DIRS)
 endif()
 
 add_test(NAME UnitTests COMMAND SolarOdysseyTests)
+set_tests_properties(UnitTests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 

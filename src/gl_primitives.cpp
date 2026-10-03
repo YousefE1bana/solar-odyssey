@@ -2,11 +2,23 @@
 #include "render_profiler.h"
 #include <vector>
 #include <cmath>
+#include <GLFW/glfw3.h>
+#include <map>
+#include <cassert>
 
 namespace glprims {
 
+namespace {
+struct ContextPrimitives { ModernSphere sphere; FullscreenQuad quad; };
+std::map<GLFWwindow*, ContextPrimitives>& contexts() {
+    static std::map<GLFWwindow*, ContextPrimitives> registry;
+    return registry; // POD handle wrappers: no GL work at static destruction
+}
+}
+
 void ModernSphere::ensure(int slices, int stacks) {
     if (vao) return;
+    if (!glfwGetCurrentContext() || !glCreateVertexArrays) return;
     const int vertsPerRow = slices + 1;
     std::vector<float> verts;
     verts.reserve((size_t)(stacks + 1) * vertsPerRow * 8);
@@ -40,6 +52,7 @@ void ModernSphere::ensure(int slices, int stacks) {
 
     glCreateVertexArrays(1, &vao);
     glCreateBuffers(1, &vbo);
+    if (!vao || !vbo) { destroy(); return; }
     glNamedBufferData(vbo, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, 8 * sizeof(float));
 
@@ -56,12 +69,14 @@ void ModernSphere::ensure(int slices, int stacks) {
     glVertexArrayAttribBinding(vao, 2, 0);
 
     glCreateBuffers(1, &ibo);
+    if (!ibo) { destroy(); return; }
     glNamedBufferData(ibo, idx.size() * sizeof(unsigned short), idx.data(), GL_STATIC_DRAW);
     glVertexArrayElementBuffer(vao, ibo);
 }
 
 void ModernSphere::drawUnit() {
     if (!vao) ensure();
+    if (!vao) return;
     glBindVertexArray(vao);
     RenderProfiler::instance().recordDrawCall();
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
@@ -76,12 +91,13 @@ void ModernSphere::destroy() {
 }
 
 ModernSphere& sharedModernSphere() {
-    static ModernSphere s;
-    return s;
+    assert(glfwGetCurrentContext());
+    return contexts()[glfwGetCurrentContext()].sphere;
 }
 
 void FullscreenQuad::ensure() {
     if (vao) return;
+    if (!glfwGetCurrentContext() || !glCreateVertexArrays) return;
     float verts[] = {
         -1.0f, -1.0f,
          1.0f, -1.0f,
@@ -92,6 +108,7 @@ void FullscreenQuad::ensure() {
     };
     glCreateVertexArrays(1, &vao);
     glCreateBuffers(1, &vbo);
+    if (!vao || !vbo) { destroy(); return; }
     glNamedBufferData(vbo, sizeof(verts), verts, GL_STATIC_DRAW);
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, 2 * sizeof(float));
 
@@ -102,6 +119,7 @@ void FullscreenQuad::ensure() {
 
 void FullscreenQuad::draw() {
     if (!vao) ensure();
+    if (!vao) return;
     glBindVertexArray(vao);
     RenderProfiler::instance().recordDrawCall();
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -114,8 +132,16 @@ void FullscreenQuad::destroy() {
 }
 
 FullscreenQuad& sharedFullscreenQuad() {
-    static FullscreenQuad q;
-    return q;
+    assert(glfwGetCurrentContext());
+    return contexts()[glfwGetCurrentContext()].quad;
+}
+
+void destroySharedResources() {
+    const auto found = contexts().find(glfwGetCurrentContext());
+    if (found == contexts().end()) return;
+    found->second.sphere.destroy();
+    found->second.quad.destroy();
+    contexts().erase(found);
 }
 
 } // namespace glprims

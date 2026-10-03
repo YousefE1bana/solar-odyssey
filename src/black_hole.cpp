@@ -5,9 +5,23 @@
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
+#include <GLFW/glfw3.h>
 
 BlackHole::BlackHole() {
     initParticles();
+}
+
+BlackHole::~BlackHole() { cleanup(); }
+
+void BlackHole::cleanup() {
+    particleBatch.destroy();
+    // Explicitly release meshes while the context exists, before member dtors.
+    diskMeshes.clear();
+    jetMeshes.clear();
+    if (ownsProgram && program) glDeleteProgram(program);
+    if (ownsLensingProgram && lensingProgram) glDeleteProgram(lensingProgram);
+    program = lensingProgram = 0;
+    ownsProgram = ownsLensingProgram = false;
 }
 
 void BlackHole::initParticles() {
@@ -34,6 +48,11 @@ void BlackHole::resetParticle(InfallingParticle& p) {
 }
 
 void BlackHole::initShader(GLuint shaderProgram) {
+    if (!glfwGetCurrentContext() || !glCreateShader) return;
+    if (program == shaderProgram && shaderProgram != 0) return;
+    if (ownsProgram && program) glDeleteProgram(program);
+    program = 0;
+    ownsProgram = false;
     if (shaderProgram != 0) {
         program = shaderProgram;
     } else {
@@ -46,6 +65,7 @@ void BlackHole::initShader(GLuint shaderProgram) {
         GLuint v = compileShader(GL_VERTEX_SHADER, vs);
         GLuint f = compileShader(GL_FRAGMENT_SHADER, fs);
         program = linkProgram(v, f);
+        ownsProgram = program != 0;
     }
 
     if (program != 0) {
@@ -95,6 +115,9 @@ void BlackHole::update(float deltaTime, const glm::vec3& cameraPos) {
 
 void BlackHole::render(const glm::vec3& cameraPos, const glm::mat4& inViewMat, const glm::mat4& inProjMat) {
     if (!active) return;
+    // The deflection pass already integrates disk emission and the horizon.
+    // Overlaying a flat disk/sphere produces clipped wedges and a second shadow.
+    if (enableLensingPass && lensingProgram != 0) return;
 
     glm::mat4 baseMV;
     glm::mat4 projMat;
@@ -289,6 +312,11 @@ void BlackHole::renderJetCylinder(float height, float baseRadius, float topRadiu
 }
 
 void BlackHole::initLensingShader(GLuint shaderProgram) {
+    if (!glfwGetCurrentContext() || !glCreateShader) return;
+    if (lensingProgram == shaderProgram && shaderProgram != 0) return;
+    if (ownsLensingProgram && lensingProgram) glDeleteProgram(lensingProgram);
+    lensingProgram = 0;
+    ownsLensingProgram = false;
     if (shaderProgram != 0) {
         lensingProgram = shaderProgram;
     } else {
@@ -301,6 +329,7 @@ void BlackHole::initLensingShader(GLuint shaderProgram) {
         GLuint v = compileShader(GL_VERTEX_SHADER, vs);
         GLuint f = compileShader(GL_FRAGMENT_SHADER, fs);
         lensingProgram = linkProgram(v, f);
+        ownsLensingProgram = lensingProgram != 0;
     }
 
     if (lensingProgram != 0) {

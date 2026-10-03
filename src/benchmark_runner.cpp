@@ -1,4 +1,5 @@
 #include "benchmark_runner.h"
+#include "frame_statistics.h"
 #include "engine.h"
 #include <GL/glew.h>
 #include <iostream>
@@ -16,8 +17,12 @@
 
 void BenchmarkGPUTimer::init() {
     destroy();
-    if (glGenQueries != nullptr) {
+    if (glfwGetCurrentContext() && glGenQueries != nullptr) {
         glGenQueries(kQueryRingSize, queries);
+        if (std::any_of(queries, queries + kQueryRingSize, [](GLuint query) { return query == 0; })) {
+            destroy();
+            return;
+        }
         isSupported = true;
         for (int i = 0; i < kQueryRingSize; ++i) {
             queryActive[i] = false;
@@ -28,31 +33,40 @@ void BenchmarkGPUTimer::init() {
 }
 
 void BenchmarkGPUTimer::destroy() {
-    if (isSupported && queries[0] && glDeleteQueries != nullptr) {
-        glDeleteQueries(kQueryRingSize, queries);
-        for (int i = 0; i < kQueryRingSize; ++i) queries[i] = 0;
+    if (inQuery) glEndQuery(GL_TIME_ELAPSED);
+    for (int i = 0; i < kQueryRingSize; ++i) {
+        if (queries[i]) glDeleteQueries(1, &queries[i]);
+        queries[i] = 0;
+        queryActive[i] = false;
     }
+    queryIndex = 0;
     isSupported = false;
     inQuery = false;
     lastGpuTimeMs = -1.0;
 }
 
 void BenchmarkGPUTimer::beginFrame() {
-    if (!isSupported || !queries[0]) return;
-
-    // Check availability of the oldest active query in ring without stalling
-    int oldestIdx = (queryIndex + 1) % kQueryRingSize;
-    if (queryActive[oldestIdx]) {
-        GLuint available = 0;
-        glGetQueryObjectuiv(queries[oldestIdx], GL_QUERY_RESULT_AVAILABLE, &available);
-        if (available) {
-            GLuint64 timeElapsedNs = 0;
-            glGetQueryObjectui64v(queries[oldestIdx], GL_QUERY_RESULT, &timeElapsedNs);
-            lastGpuTimeMs = static_cast<double>(timeElapsedNs) / 1000000.0;
-            queryActive[oldestIdx] = false;
+    if (!isSupported || !queries[0] || inQuery) return;
+    lastGpuTimeMs = -1.0;
+    int reusable = -1;
+    // Never begin into a pending query. Poll every slot without blocking;
+    // when the GPU is behind, omit this frame's timer rather than overwrite it.
+    for (int i = 0; i < kQueryRingSize; ++i) {
+        const int slot = (queryIndex + i) % kQueryRingSize;
+        if (queryActive[slot]) {
+            GLuint available = 0;
+            glGetQueryObjectuiv(queries[slot], GL_QUERY_RESULT_AVAILABLE, &available);
+            if (available) {
+                GLuint64 elapsed = 0;
+                glGetQueryObjectui64v(queries[slot], GL_QUERY_RESULT, &elapsed);
+                lastGpuTimeMs = static_cast<double>(elapsed) / 1000000.0;
+                queryActive[slot] = false;
+            }
         }
+        if (!queryActive[slot] && reusable < 0) reusable = slot;
     }
-
+    if (reusable < 0) return;
+    queryIndex = reusable;
     glBeginQuery(GL_TIME_ELAPSED, queries[queryIndex]);
     inQuery = true;
 }
@@ -72,6 +86,10 @@ void BenchmarkGPUTimer::endFrame() {
 BenchmarkRunner::BenchmarkRunner() {}
 
 BenchmarkRunner::~BenchmarkRunner() {
+    cleanupGL();
+}
+
+void BenchmarkRunner::cleanupGL() {
     gpuTimer.destroy();
 }
 
@@ -136,6 +154,7 @@ bool BenchmarkRunner::initFromArgs(int argc, char** argv) {
 }
 
 void BenchmarkRunner::onSetup(Engine* engine) {
+    if (engine) engine->excludePlayerPersistence();
     if (!engine || !engine->window) return;
 
     // Initialize real OpenGL timer query ring buffer
@@ -149,12 +168,13 @@ void BenchmarkRunner::onSetup(Engine* engine) {
     engine->postPipeline.currentFadeAlpha = 1.0f;
 
     // Strict Determinism Protocol
-    // 1. Force VSync OFF to uncap framerate
+    // 1. Force VSync OFF to uncap framerate. Pass 4: this ALWAYS overrides
+    // the user's persisted VSync setting for benchmark runs (uncapped is a
+    // benchmark invariant, not a user preference).
     glfwSwapInterval(0);
 
     // 2. Hide all non-benchmark UI elements
     engine->solarUI.showLabels = false;
-    engine->solarUI.showMissionModal = false;
     engine->solarUI.showPlanetCard = false;
     engine->solarUI.showSettingsModal = false;
     engine->solarUI.showDiagnostics = false;
@@ -703,6 +723,7 @@ void BenchmarkRunner::onSetup(Engine* engine) {
         engine->cameraCtrl.transitionProgress = 1.0f;
     }
 
+    glfwGetFramebufferSize(engine->window, &result.framebufferWidth, &result.framebufferHeight);
     currentFrame = 0;
     measuredMetrics.clear();
 
@@ -715,14 +736,18 @@ void BenchmarkRunner::onSetup(Engine* engine) {
 }
 
 void BenchmarkRunner::onFrameBegin() {
-    frameStartTime = std::chrono::high_resolution_clock::now();
+    frameStartTime = std::chrono::steady_clock::now();
     gpuTimer.beginFrame();
 }
 
-void BenchmarkRunner::onFrameEnd(int drawCalls, int triangles, double gpuTimeMs, Engine* engine) {
+void BenchmarkRunner::onRenderEnd() {
     gpuTimer.endFrame();
-    auto frameEndTime = std::chrono::high_resolution_clock::now();
-    double cpuTimeMs = std::chrono::duration<double, std::milli>(frameEndTime - frameStartTime).count();
+    submittedCpuTimeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameStartTime).count();
+}
+
+void BenchmarkRunner::onFrameEnd(int drawCalls, int triangles, double gpuTimeMs, Engine* engine) {
+    const double wallFrameMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - frameStartTime).count();
+    const double cpuTimeMs = submittedCpuTimeMs;
 
     currentFrame++;
 
@@ -769,6 +794,7 @@ void BenchmarkRunner::onFrameEnd(int drawCalls, int triangles, double gpuTimeMs,
     // Measurement phase
     FrameMetric metric;
     metric.cpuTimeMs = cpuTimeMs;
+    metric.wallFrameMs = wallFrameMs;
     // Use real measured asynchronous GPU time or -1.0 if query pending/unsupported
     metric.gpuTimeMs = (gpuTimeMs > 0.0) ? gpuTimeMs : gpuTimer.getElapsedGpuTimeMs();
     metric.drawCalls = drawCalls;
@@ -793,6 +819,7 @@ void BenchmarkRunner::computeResults() {
     result.measuredFrames = (int)measuredMetrics.size();
 
     std::vector<double> cpuTimes;
+    std::vector<double> wallTimes;
     std::vector<double> validGpuTimes;
     std::vector<int> draws;
     std::vector<int> tris;
@@ -804,6 +831,7 @@ void BenchmarkRunner::computeResults() {
 
     for (const auto& m : measuredMetrics) {
         cpuTimes.push_back(m.cpuTimeMs);
+        wallTimes.push_back(m.wallFrameMs);
         if (m.gpuTimeMs > 0.0) {
             validGpuTimes.push_back(m.gpuTimeMs);
         }
@@ -821,12 +849,15 @@ void BenchmarkRunner::computeResults() {
     size_t p999Idx = (size_t)std::min((double)(n - 1), std::floor(n * 0.999));
 
     result.medianCpuTimeMs = cpuTimes[medianIdx];
-    result.medianFps = (result.medianCpuTimeMs > 0.0) ? (1000.0 / result.medianCpuTimeMs) : 0.0;
+    const auto completeFrames = FrameStatistics::summarize(std::move(wallTimes));
+    result.medianWallFrameMs = completeFrames.medianMs;
+    result.medianFps = completeFrames.medianFps();
 
     result.p1LowCpuTimeMs = cpuTimes[p99Idx];
     result.p01LowCpuTimeMs = cpuTimes[p999Idx];
-    result.p1LowFps = (result.p1LowCpuTimeMs > 0.0) ? (1000.0 / result.p1LowCpuTimeMs) : 0.0;
-    result.p01LowFps = (result.p01LowCpuTimeMs > 0.0) ? (1000.0 / result.p01LowCpuTimeMs) : 0.0;
+    result.p1LowFps = completeFrames.p1LowFps();
+    result.p01LowFps = completeFrames.p01LowFps();
+    result.gpuSamples = static_cast<int>(validGpuTimes.size());
 
     if (!validGpuTimes.empty()) {
         std::sort(validGpuTimes.begin(), validGpuTimes.end());
@@ -854,14 +885,14 @@ void BenchmarkRunner::printReport() const {
     std::cout << "-------------------------------------------------------------------------------\n";
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "  Median FPS:          " << result.medianFps << " FPS\n";
-    std::cout << "  Median CPU Time:     " << result.medianCpuTimeMs << " ms\n";
+    std::cout << "  CPU submission:     " << result.medianCpuTimeMs << " ms\n";
     if (result.gpuTimeAvailable) {
         std::cout << "  Median GPU Time:     " << result.medianGpuTimeMs << " ms (GL_TIME_ELAPSED Async Query)\n";
     } else {
         std::cout << "  Median GPU Time:     N/A (Query Unavailable)\n";
     }
-    std::cout << "  1% Low FPS:          " << result.p1LowFps << " FPS (Frame Time: " << result.p1LowCpuTimeMs << " ms)\n";
-    std::cout << "  0.1% Low FPS:        " << result.p01LowFps << " FPS (Frame Time: " << result.p01LowCpuTimeMs << " ms)\n";
+    std::cout << "  1% Low FPS:          " << result.p1LowFps << " FPS (complete wall frames)\n";
+    std::cout << "  0.1% Low FPS:        " << result.p01LowFps << " FPS (complete wall frames)\n";
     std::cout << "  Median Draw Calls:   " << result.medianDrawCalls << " (Software-instrumented actual)\n";
     std::cout << "  Median Triangles:    " << result.medianTriangles << "\n";
     std::cout << "  Status:              " << (result.passed ? "PASS" : "FAIL") << "\n";
@@ -881,6 +912,11 @@ bool BenchmarkRunner::exportJson(const std::string& filepath) const {
     out << std::fixed << std::setprecision(4);
     out << "  \"median_fps\": " << result.medianFps << ",\n";
     out << "  \"median_cpu_ms\": " << result.medianCpuTimeMs << ",\n";
+    out << "  \"median_wall_frame_ms\": " << result.medianWallFrameMs << ",\n";
+    out << "  \"framebuffer_width\": " << result.framebufferWidth << ",\n";
+    out << "  \"framebuffer_height\": " << result.framebufferHeight << ",\n";
+    out << "  \"gpu_samples\": " << result.gpuSamples << ",\n";
+    out << "  \"fps_measurement\": \"complete_frame_including_swap_and_poll\",\n";
     if (result.gpuTimeAvailable) {
         out << "  \"median_gpu_ms\": " << result.medianGpuTimeMs << ",\n";
     } else {

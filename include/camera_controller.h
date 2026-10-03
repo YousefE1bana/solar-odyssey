@@ -18,6 +18,8 @@ enum CameraMode {
     CAM_WORMHOLE      // Cinematic wormhole observation
 };
 
+struct CameraBookmark;
+
 class CameraController {
 public:
     // Core parameters
@@ -91,6 +93,7 @@ public:
     bool photoModeActive = false;
 
     CameraController();
+    void restoreBookmark(const CameraBookmark& bookmark);
 
     void enterFreeCam();
     void toggleFreeCam();

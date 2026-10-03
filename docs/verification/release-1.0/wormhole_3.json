@@ -1,0 +1,23 @@
+{
+  "scene": "wormhole",
+  "type": "OFFICIAL_BASELINE",
+  "warmup_frames": 300,
+  "measured_frames": 1000,
+  "bypass_copy": false,
+  "median_fps": 764.8184,
+  "median_cpu_ms": 0.5121,
+  "median_wall_frame_ms": 1.3075,
+  "framebuffer_width": 1920,
+  "framebuffer_height": 1061,
+  "gpu_samples": 1000,
+  "fps_measurement": "complete_frame_including_swap_and_poll",
+  "median_gpu_ms": 1.1899,
+  "gpu_time_available": true,
+  "p1_low_fps": 701.2131,
+  "p01_low_fps": 675.4931,
+  "p1_low_cpu_ms": 0.8460,
+  "p01_low_cpu_ms": 0.9506,
+  "median_draw_calls": 90,
+  "median_triangles": 146624,
+  "passed": true
+}

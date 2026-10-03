@@ -4,19 +4,25 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cmath>
+#include <GLFW/glfw3.h>
 
 AtmosphereEffects::AtmosphereEffects() {
     initAtmosphereData();
-    if (glCreateShader != nullptr) {
+    if (glfwGetCurrentContext() && glCreateShader != nullptr) {
         initShader();
     }
 }
 
 AtmosphereEffects::~AtmosphereEffects() {
+    cleanup();
+}
+
+void AtmosphereEffects::cleanup() {
     if (atmoProgram && glDeleteProgram != nullptr) {
         glDeleteProgram(atmoProgram);
         atmoProgram = 0;
     }
+    shaderReady = false;
 }
 
 void AtmosphereEffects::initAtmosphereData() {
@@ -143,33 +149,32 @@ void AtmosphereEffects::initAtmosphereData() {
 
 void AtmosphereEffects::initShader() {
     if (shaderReady) return;
-    if (glCreateShader == nullptr) return;
+    if (!glfwGetCurrentContext() || glCreateShader == nullptr) return;
 
     std::string vs = readFileText("shaders/atmosphere.vert");
     std::string fs = readFileText("shaders/atmosphere.frag");
     if (!vs.empty() && !fs.empty()) {
         GLuint v = compileShader(GL_VERTEX_SHADER, vs);
         GLuint f = compileShader(GL_FRAGMENT_SHADER, fs);
-        if (v && f) {
-            atmoProgram = linkProgram(v, f);
-            if (atmoProgram) {
-                uAtmoColorLoc = glGetUniformLocation(atmoProgram, "uAtmoColor");
-                uDensityLoc = glGetUniformLocation(atmoProgram, "uDensity");
-                uGlowIntensityLoc = glGetUniformLocation(atmoProgram, "uGlowIntensity");
-                uSunEyePosLoc = glGetUniformLocation(atmoProgram, "uSunEyePos");
-                uModelViewLoc = glGetUniformLocation(atmoProgram, "uModelView");
-                uProjectionLoc = glGetUniformLocation(atmoProgram, "uProjection");
-                uNormalMatrixLoc = glGetUniformLocation(atmoProgram, "uNormalMatrix");
-                uRayleighCoeffLoc = glGetUniformLocation(atmoProgram, "uRayleighCoeff");
-                uMieCoeffLoc = glGetUniformLocation(atmoProgram, "uMieCoeff");
-                uMieGLoc = glGetUniformLocation(atmoProgram, "uMieG");
-                uRayleighScaleHLoc = glGetUniformLocation(atmoProgram, "uRayleighScaleH");
-                uMieScaleHLoc = glGetUniformLocation(atmoProgram, "uMieScaleH");
-                uSampleCountLoc = glGetUniformLocation(atmoProgram, "uSampleCount");
-                uPlanetRadiusLoc = glGetUniformLocation(atmoProgram, "uPlanetRadius");
-                uAtmoRadiusLoc = glGetUniformLocation(atmoProgram, "uAtmoRadius");
-                shaderReady = true;
-            }
+        // linkProgram consumes both shaders, including one-sided failures.
+        atmoProgram = linkProgram(v, f);
+        if (atmoProgram) {
+            uAtmoColorLoc = glGetUniformLocation(atmoProgram, "uAtmoColor");
+            uDensityLoc = glGetUniformLocation(atmoProgram, "uDensity");
+            uGlowIntensityLoc = glGetUniformLocation(atmoProgram, "uGlowIntensity");
+            uSunEyePosLoc = glGetUniformLocation(atmoProgram, "uSunEyePos");
+            uModelViewLoc = glGetUniformLocation(atmoProgram, "uModelView");
+            uProjectionLoc = glGetUniformLocation(atmoProgram, "uProjection");
+            uNormalMatrixLoc = glGetUniformLocation(atmoProgram, "uNormalMatrix");
+            uRayleighCoeffLoc = glGetUniformLocation(atmoProgram, "uRayleighCoeff");
+            uMieCoeffLoc = glGetUniformLocation(atmoProgram, "uMieCoeff");
+            uMieGLoc = glGetUniformLocation(atmoProgram, "uMieG");
+            uRayleighScaleHLoc = glGetUniformLocation(atmoProgram, "uRayleighScaleH");
+            uMieScaleHLoc = glGetUniformLocation(atmoProgram, "uMieScaleH");
+            uSampleCountLoc = glGetUniformLocation(atmoProgram, "uSampleCount");
+            uPlanetRadiusLoc = glGetUniformLocation(atmoProgram, "uPlanetRadius");
+            uAtmoRadiusLoc = glGetUniformLocation(atmoProgram, "uAtmoRadius");
+            shaderReady = true;
         }
     }
 }
@@ -193,7 +198,7 @@ void AtmosphereEffects::renderAtmosphere(const std::string& planetName, float pl
         glUseProgram(atmoProgram);
         glUniform3f(uAtmoColorLoc, atmo.color.r, atmo.color.g, atmo.color.b);
         glUniform1f(uDensityLoc, atmo.densityMultiplier);
-        glUniform1f(uGlowIntensityLoc, atmo.glowIntensity);
+        glUniform1f(uGlowIntensityLoc, atmo.glowIntensity * glowScale);
         glUniform3f(uSunEyePosLoc, sunEyePos.x, sunEyePos.y, sunEyePos.z);
         glUniform3f(uRayleighCoeffLoc, atmo.rayleighScatteringCoeff.r, atmo.rayleighScatteringCoeff.g, atmo.rayleighScatteringCoeff.b);
         glUniform1f(uMieCoeffLoc, atmo.mieScatteringCoeff);

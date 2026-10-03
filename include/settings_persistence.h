@@ -36,6 +36,26 @@ struct AppSettings {
     // Persisted in solar_odyssey_settings.ini only; SaveState v2 untouched.
     int   qualityPreset = 2;
 
+    // Pass 4: ONE authoritative source for first-launch default values.
+    // Derived from the member initializers above (same definition, no
+    // parallel table): fresh installs and Reset All Settings both use this.
+    static AppSettings defaults() { return AppSettings{}; }
+    void resetToDefaults() { *this = defaults(); }
+
+    bool showParticles = true;
+    bool enableMeshLOD = true;
+    bool effectsEnabled = true;
+    bool toneMappingEnabled = true;
+    bool vignetteEnabled = true;
+    bool autoSaveOnExit = true;
+    float bloomIntensity = .45f;
+    float bloomThreshold = .82f;
+    float exposure = 1.05f;
+    float freeSpeed = 20.0f;
+    float mouseSensitivity = .12f;
+    int starfieldStyle = 0;
+    int starfieldDataset = 0;
+
     std::string serialize() const;
     void apply(const std::unordered_map<std::string, std::string>& kv);
 };

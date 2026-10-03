@@ -38,8 +38,11 @@ struct TargetPlanetInfo {
     bool inProximityWarning;
 };
 
+struct SimulationSaveState;
+
 class Spaceship {
 public:
+    void restoreSession(const SimulationSaveState& state);
     bool active = false;
     SpaceshipFlightMode flightMode = FLIGHT_MANUAL;
     SpaceshipCameraView cameraView = SHIP_CAM_CHASE;
@@ -88,6 +91,8 @@ public:
     float nearestPlanetDist = 9999.0f;
     float nearestPlanetRadius = 1.0f;
     bool proximityAlertActive = false;
+    // Physical contact reported before collision response moves the ship out.
+    std::vector<std::string> collisionBodiesThisFrame;
 
     float orbitAssistAngle = 0.0f;
     float orbitAssistRadius = 4.0f;
@@ -106,6 +111,7 @@ public:
     glm::mat4 shipModelMat = glm::mat4(1.0f);
 
     Spaceship();
+    void cleanupGL(); // geometry only; flight/session state is unchanged
 
     void resetToSpawnNearEarth();
     void toggleActive();

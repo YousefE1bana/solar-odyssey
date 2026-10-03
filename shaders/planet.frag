@@ -68,7 +68,7 @@ float calculateRingShadowOnPlanet(vec3 localPos, vec3 sunDir) {
 
         if (uC37Active == 0) {
             // C3.6 Legacy polynomial formula
-            float cassiniGap = smoothstep(0.02, 0.0, abs(normDist - 0.76));
+            float cassiniGap = (1.0 - smoothstep(0.0, 0.02, abs(normDist - 0.76)));
             float ringDensity = (1.0 - cassiniGap * 0.75) * 0.90;
             float edgeFade = smoothstep(uRingInnerRadius, uRingInnerRadius + 0.04, dist) *
                              (1.0 - smoothstep(uRingOuterRadius - 0.04, uRingOuterRadius, dist));

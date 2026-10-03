@@ -1,214 +1,115 @@
-# Solar Odyssey 🌌
+<p align="center"><img src="assets/branding/logo.png" alt="Solar Odyssey" width="620"></p>
 
-**Author:** Yousef Osama  
-**Position:** Cybersecurity Engineer  
-**University:** Egyptian Chinese University  
+<p align="center">A solar system. Your curiosity.</p>
 
-*A high-performance, modern OpenGL 4.5 Core solar system simulation, space exploration sandbox, and 6-DOF flight engine.*
+**Solar Odyssey 1.0** is a Windows scientific exploration sandbox and C++17/OpenGL graphics showcase by **Yousef Osama**. Explore 31 celestial bodies, pilot a spacecraft, make observations and build a persistent discovery Codex. Choose your own path: there is no campaign, currency or unlock grind.
 
----
+[Download 1.0 for Windows](https://github.com/YousefE1bana/solar-odyssey/releases/tag/v1.0.0) · [Player guide](docs/PLAYER_GUIDE.md) · [Verification and limitations](docs/RELEASE_1.0_VERIFICATION.md) · [Release notes](docs/RELEASE_NOTES_1.0.0.md)
 
-## Overview
+![Main Menu](docs/screenshots/1.0.0/main-menu.png)
 
-**Solar Odyssey** is a physically-grounded interactive celestial simulation and space exploration engine. Powered by a modern **OpenGL 4.5 Core profile** renderer utilizing **Direct State Access (DSA)** and **HDR post-processing**, Solar Odyssey bridges scientific accuracy with cinematic visual fidelity.
+## Explore, observe, discover
 
-Navigate through 13 accurately-scaled celestial bodies, pilot a 6-DOF spacecraft with warp capabilities, plunge into the gravitational lensing of a supermassive black hole, traverse an Einstein-Rosen wormhole, and complete planetary navigation missions across the solar system.
+**Explore → Observe → Detect → Visit → Scan → Survey → Photograph → Discover → Learn.**
 
----
+- Search the roster with **Find world**. Move between Explorer, System and Body presentations with context-preserving selection.
+- Inspect planetary dossiers and available Natural, Surface, Atmosphere, Night and Scientific layers. Unsupported layers and unknown facts stay unavailable.
+- Fly a 6-DOF spacecraft with cockpit/chase cameras, boost, warp autopilot and orbit assist. Free camera provides another physical observer.
+- Detect visible bodies; physically visit, scan, survey, measure gravity and complete flybys. Viewing a distant body never counts as visiting it.
+- Photograph genuinely framed targets. Credit follows successful capture/write, and the Codex stores activities, best-photo scores and anomalies.
+- Switch independently between Classic stars/Milky Way and catalog-derived Yale, Hipparcos, Tycho or combined Scientific skies.
 
-## Key Features
+| Earth and its dossier | Saturn |
+| --- | --- |
+| ![Earth](docs/screenshots/1.0.0/earth-dossier.png) | ![Saturn](docs/screenshots/1.0.0/saturn.png) |
 
-### 🪐 1. Celestial & Orbital Physics Simulation
-- **13 Database Bodies & 14 N-Body Registry Objects**: The Sun, 8 major planets (Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune), Earth's Moon (natural satellite), and 4 dwarf planets (Ceres, Haumea, Makemake, Eris). *Pluto is strictly excluded from runtime simulation.*
-- **Physical Keplerian Orbits**: Real orbital eccentricities, semi-major axes, revolution rates, and rotational periods.
-- **Physical Axial Tilts**: True obliquities to orbit (Earth 23.4°, Mars 25.2°, Saturn 26.7°, Uranus 97.8° retrograde).
-- **Planetary Atmospheres**: Multi-spectral Rayleigh and Mie atmospheric limb scattering with custom day/night dynamic terminator blending.
-- **Asteroid Belt**: GPU-instanced simulation of main belt asteroids modeling gravitational **Kirkwood resonance gaps** induced by Jupiter.
-- **Dynamic Particle Systems**: Solar corona flare ejections and a hyperbolic comet with dual decoupled ion and dust tails.
+| Spacecraft | Discovery Codex |
+| --- | --- |
+| ![Flight](docs/screenshots/1.0.0/spacecraft.png) | ![Codex](docs/screenshots/1.0.0/codex.png) |
 
-### 🚀 2. 6-DOF Flight Simulator & Warp Mechanics
-- **6 Degrees of Freedom (6-DOF)**: Pitch, yaw, roll, directional translation, inertial damping, and warp boost.
-- **Multiple Camera Modes**: Orbital Explorer, First-Person Surface POV, 6-DOF Free Flight, Cockpit View with HUD Horizon, Chase Camera, and Close Chase.
-- **Orbit Assist Autopilot**: Computes and executes prograde/retrograde orbital circularization burns.
-- **Interstellar Warp Drive**: Relativistic warp cruise with field distortion, space dilation, and target locking.
+Screenshots come from the actual application. The isolated QA profile includes explicit demonstration records in the Codex; fresh player sessions start empty. Captures are converted from BMP to PNG without retouching.
 
-### 🕳️ 3. Relativistic Shaders & Exotic Astrophysics
-- **Supermassive Black Hole**: Raymarched gravitational lensing with photon sphere warping, event horizon shadow, and a Doppler-boosted accretion disk.
-- **Traversable Wormhole**: Ellis-Bronnikov metric spacetime throat shader connecting disparate regions of space.
+## Install and play
 
-### 🎯 4. Mission System & Telemetry
-- **Campaign Objectives**: Multi-tier exploration missions spanning orbital insertion, asteroid belt navigation, and deep-space survey.
-- **Telemetry HUD**: Real-time relative distance, approach velocity, proximity alert warnings, and campaign progress trackers.
-- **Planetary Dossier**: Rich scientific database displaying physical diameters, surface gravities, atmospheric compositions, temperatures, and exploration history.
+**Windows 10/11 x64**, an OpenGL **4.5 Core** graphics driver and writable user storage are required. The release was exercised on Windows with an NVIDIA RTX 3050 Laptop GPU; other hardware has not been certified.
 
-### 🎨 5. Modern Post-Processing & Audio Pipeline
-- **HDR Framebuffer Pipeline**: High-precision 16-bit floating-point (`GL_RGBA16F`) rendering.
-- **Cinematic Bloom**: Multi-pass ping-pong Gaussian blur for luminous coronas and glowing accretion disks.
-- **ACES Filmic Tone Mapping**: Industry-standard dynamic range compression curve.
-- **OpenAL 3D Spatial Audio**: Procedural resonant planetary harmonic tones and environmental soundscapes.
-- **Settings Persistence**: Saves graphics presets, audio levels, and display configuration to `solar_odyssey_settings.ini`.
+- **Installer:** run `SolarOdyssey-1.0.0-Windows-Setup.exe`. It installs for the current user, creates Desktop/Start Menu shortcuts and provides an uninstaller.
+- **Portable:** extract the entire `SolarOdyssey-1.0.0-Windows-Portable.zip`; launch `SolarOdyssey.exe` inside the extracted folder. Keep its runtime folders and DLLs together. No compiler or developer environment is required.
+- Compare downloaded files with `SHA256SUMS.txt` on the release page. The application and installer are unsigned.
 
----
+Normal launch opens the Main Menu. **Continue** requires a validated save; **Start Exploration** creates a fresh sandbox with confirmation when progress exists. **Esc** opens Pause. Settings belongs to Main Menu/Pause, and pause freezes flight, simulation and observation timers.
 
-## Master Controls & Keybinds
+Player files are stored in `%LOCALAPPDATA%\SolarOdyssey`: `save_state.json`, `settings.ini` and `Screenshots`. Uninstall preserves them. Installed and portable versions share that profile. `--user-data "C:\path\to\profile"` selects an independent profile.
 
-| Key / Input | Context | Action |
-| :--- | :--- | :--- |
-| **`F11`** | Global | Toggle Fullscreen / Windowed Mode |
-| **`Left Click`** | Global / Explorer | Raycast-select celestial body & open Planetary Dossier |
-| **`Mouse Drag`** | Explorer | Orbit around focused celestial body / Pan view |
-| **`Mouse Scroll`** | Explorer / Free Cam | Zoom camera / Adjust flight cruising speed |
-| **`Space`** | Explorer | Pause / Resume planetary simulation clock |
-| **`R`** | Explorer | Reset camera to default solar system orbital overview |
-| **`0` .. `8`** | Explorer | Quick-focus celestial body (`0`=Sun, `1`=Mercury ... `8`=Neptune) |
-| **`F`** | Explorer | Enter / Exit 6-DOF Free Flight Camera |
-| **`X` / `Esc`** | Flight / Free Cam | Enter / Exit Spaceship Flight Mode |
-| **`W` / `S`** | Spaceship Flight | Main Thrusters (Forward Acceleration / Reverse Braking) |
-| **`A` / `D`** | Spaceship Flight | Yaw Left / Right |
-| **`Q` / `E`** | Spaceship Flight | Roll Counter-Clockwise / Clockwise |
-| **`R` / `F`** | Spaceship Flight | Pitch Up / Down |
-| **`Left Shift`** | Spaceship Flight | Warp Boost (Consumes boost energy reservoir) |
-| **`C`** | Spaceship Flight | Cycle Camera View (`Cockpit` $\leftrightarrow$ `Chase` $\leftrightarrow$ `Close`) |
-| **`J`** | Spaceship Flight | Engage / Cancel Autopilot Warp Intercept |
-| **`H`** | Spaceship Flight | Engage / Disengage Orbital Assist Circularization |
-| **`Left Alt` (Hold)** | Free Cam / Spaceship | Temporarily release captured mouse cursor for UI interaction |
-| **`M`** | Global | Open Interstellar Mission Log |
-| **`N`** | Global | Track Next Mission Objective |
-| **`O`** | Global | Toggle Keplerian Orbit Paths |
-| **`L`** | Global | Toggle 3D Projected Planet Labels |
-| **`P`** | Global | Enter / Exit Clean Photo Mode (FOV Slider + Screenshot) |
+## Essential controls
 
----
+| Input | Action |
+| --- | --- |
+| Mouse drag / wheel | Orbit / zoom |
+| Click / double-click | Select / enter Body view |
+| Find world; Y; V | Search; System; selected Body view |
+| F; R outside ship | Leave Body or toggle free camera; reset Explorer |
+| X; W/S | Enter/leave ship; thrust/reverse |
+| A/D; Q/E; R/F in ship | Yaw; roll; pitch |
+| C; J; H in ship | Camera; warp autopilot; orbit assist |
+| G; H outside ship / Shift+H in ship | Atmospheric scan; gravity measurement |
+| P; F5/F9; F11 | Photography; save/load; fullscreen |
+| Hold Alt in flight | Release cursor for UI |
+| Esc | Pause / navigate back / resume |
 
-## Hardware & System Requirements
+[The complete guide](docs/PLAYER_GUIDE.md) explains layers, science eligibility and storage. Space pauses the simulation timeline separately from the application Pause Menu.
 
-- **Operating System**: Windows 10 / 11 (64-bit).
-- **Graphics API**: **OpenGL 4.5 Core Profile** (Requires Direct State Access support).
-- **GPU Recommendation**: Dedicated discrete GPU (NVIDIA GeForce GTX 1050 / AMD Radeon RX 560 or higher recommended for 60+ FPS at 1080p).
-- **Audio**: OpenAL compatible sound card / device.
+## Engineering
 
-### ⚡ Hybrid-Graphics Laptops (NVIDIA Optimus & AMD PowerXpress)
-Solar Odyssey embeds the standard high-performance GPU driver hints:
-```cpp
-extern "C" {
-    __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
-    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
-```
-The executable automatically runs on your discrete NVIDIA / AMD graphics card by default. If you wish to override this behavior, you can manually assign the GPU profile in **Windows Settings $\to$ Display $\to$ Graphics Settings**.
+The renderer uses camera-relative positions, modern OpenGL buffers, HDR targets, bloom and a single final sRGB output transfer. Color textures decode from sRGB; masks/scientific scalar maps remain linear data. Black-hole lensing and wormhole destination passes use explicit render-camera contexts. GPU instance slots retain matching draw ranges and latest-reader fences under timeout.
 
----
+`SimulationController` owns a double-precision accepted clock and world state. Numerical mode integrates **13 roots**; **18 moons** remain analytic children of current live parents, including retrograde Triton. Bounded integration advances the clock only by accepted steps. Mode changes preserve current positions through analytic phase anchors.
 
-## Build & Installation
+Save version **5** records authoritative continuation, including numerical roots/integration state and analytic anchors. Versions 1–4 remain readable without silently reinterpreting historical time units. Restoration validates before applying through the owning systems and clears transient scans, flybys, scoring history, warp and camera smoothing. Checked same-filesystem replacement protects preceding save/settings files on failure. Tool and partial-startup sessions cannot overwrite player persistence.
 
-### Option 1: CMake + Ninja Build (Recommended)
+Resource owners release GL objects before GLFW context teardown. Automated coverage includes multiple contexts, partial initialization, FBO output, readback, fence state, observation geometry, session pause, science records and save compatibility.
 
-#### Prerequisites:
-- CMake 3.20 or newer
-- MSYS2 MinGW-w64 (or Visual Studio C++ toolchain)
-- Required packages: `mingw-w64-x86_64-gcc`, `mingw-w64-x86_64-glew`, `mingw-w64-x86_64-glfw`, `mingw-w64-x86_64-glm`, `mingw-w64-x86_64-openal`.
+![Black hole](docs/screenshots/1.0.0/black-hole.png)
 
-#### Build Commands:
-```bash
-# 1. Configure CMake project
-cmake -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
+## Scientific boundaries
 
-# 2. Compile Solar Odyssey binary and unit tests
-cmake --build build-cmake --config Release
+This is an educational sandbox, **not a dated ephemeris or research instrument**. Analytic orbits are simplified circular motion; scene distances/radii/speeds are stylized. The historical timeline displays five sandbox days per accepted simulation second. It does not predict the real sky.
 
-# 3. Run Automated Unit Tests (Catch2)
-ctest --test-dir build-cmake --output-on-failure
+Physical facts are distinct from render geometry and sourced where practical. Missing values are N/A; Uranus/Neptune temperatures identify their atmospheric 1-bar reference. Black holes, wormholes and warp are bounded cinematic approximations. Audio is synthesized. Scientific stars are a catalog-derived visualization, not an Earth-location planetarium.
 
-# 4. Launch Solar Odyssey
-.\build-cmake\SolarOdyssey.exe
+Natural moon imagery is approval-gated: partial/projection-uncertain mosaics never become full sphere maps. Four moons have approved maps; fourteen retain neutral albedo. Some approved maps retain source seams. Dwarf-planet art is illustrative/fictional. [Asset notices](THIRD_PARTY_NOTICES.md) identify INOVE's CC BY 4.0 adaptations and JPL/USGS source products; illustrative imagery is not calibrated quantitative data.
+
+## Build from source
+
+Dependencies: CMake 3.20+, Ninja, a C++17 compiler, OpenGL, GLEW, GLFW, GLM and OpenAL. Dear ImGui, Catch2, stb and dr_libs sources are bundled.
+
+For the tested Windows MSYS2 **MINGW64** toolchain:
+
+```sh
+pacman -S --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake \
+  mingw-w64-x86_64-ninja mingw-w64-x86_64-glew mingw-w64-x86_64-glfw \
+  mingw-w64-x86_64-glm mingw-w64-x86_64-openal mingw-w64-x86_64-nsis
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release -j 8
+ctest --test-dir build-release --output-on-failure
 ```
 
----
+CMake refreshes the complete curated runtime asset set on every build, including shaders, fonts, audio and licenses. Source TIFFs, unapproved maps and legacy MP3s are excluded. Do not build directly over the source asset directories.
 
-### Option 2: Direct MinGW Batch Build (`build.bat`)
+From PowerShell, with the MSYS2 runtime available:
 
-1. Open a terminal with MSYS2 MinGW 64-bit tools in `PATH` (or default `C:\msys64\mingw64\bin`).
-2. Run the provided batch file:
-```cmd
-.\build.bat
-```
-3. The compiled binary, resource icons, required DLLs, and shader assets will be assembled into the `build/` directory:
-```cmd
-.\build\SolarOdyssey.exe
+```powershell
+.\tools\package_windows.ps1 -BuildDirectory build-release
 ```
 
----
+This checks the Release configuration and executable version, resolves the actual DLL import graph, stages owned runtime files, builds an NSIS installer and writes the ZIP and SHA-256 manifest under `build-release/artifacts`. Paths to the runtime prefix and NSIS can be overridden.
 
-## Testing & Quality Assurance
+## Verification and performance
 
-Solar Odyssey includes a decoupled **Catch2 unit testing suite** covering 9 isolated logic domains:
-```bash
-ctest --test-dir build --verbose
-```
-Test suites include:
-- `OrbitalPhysicsTests`: Keplerian position solving, circular velocity, and orbital period math.
-- `SpaceshipPhysicsTests`: 6-DOF velocity damping, acceleration, boost drain, and yaw/pitch/roll integration.
-- `WarpSystemTests`: Warp trajectory, distance attenuation, and state machine transitions.
-- `AsteroidBeltTests`: Spatial distribution, Keplerian velocities, Kirkwood resonance boundaries, and segmented compute telemetry.
-- `SettingsPersistenceTests`: INI serialization, float/bool parsing, and clamp bounds.
-- `MissionSystemTests`: Objective tracking, proximity evaluation, and campaign completion logic.
-- `CameraMathTests`: Raycast unprojection, viewport aspect ratio calculations, and orbit clamping.
-- `PickingTests`: Bounding sphere raycast hit detection.
-- `PlanetDataTests`: Celestial database validation, N-body canonical registry, Moon satellite verification, and Pluto absence assertion.
+The 1.0 verification report records the actual build, tests, native captures, packaged dependency isolation, persistence restart, installer/uninstaller checks and uncapped benchmark samples. FPS uses complete wall frames including swap/poll; CPU submission and asynchronous GPU time are reported separately. These short uncapped samples are not a performance guarantee. See [reproducible commands and measured results](docs/RELEASE_1.0_VERIFICATION.md).
 
-### Automated Visual Regression Suite
-Runs deterministic golden captures and computes RMSE/SSIM perceptual stability metrics across 4 canonical scenes (`overview`, `earth`, `saturn`, `black_hole`):
-```bash
-python tools/visual_regression/run_regression.py
-```
+Historical cycle reports remain in the repository as development records. They do not describe the 1.0 acceptance state.
 
-### Deterministic Performance Benchmarks
-Executes 1000-frame deterministic profiling (300 warmup frames discarded, VSync disabled, fixed 1920x1080 resolution):
-```bash
-# Run full benchmark suite across all 8 canonical scenes:
-python tools/run_benchmarks.py
+## License and credits
 
-# Or run individual scene benchmark:
-build/SolarOdyssey.exe --benchmark-scene overview --benchmark-frames 1000 --warmup-frames 300 --benchmark-out build/benchmark_overview.json
-```
-
----
-
-## Technical Architecture
-
-```
-SolarOdyssey/
-├── include/                 # Subsystem header interfaces
-│   ├── asteroid_belt.h      # GPU-instanced asteroid belt simulation
-│   ├── atmosphere_effects.h # Rayleigh/Mie atmospheric limb rendering
-│   ├── black_hole.h         # Relativistic black hole & accretion disk
-│   ├── camera_controller.h  # 6-DOF camera manager and interpolator
-│   ├── gl_primitives.h      # Cached VBO unit sphere and geometric meshes
-│   ├── modern_mesh.h        # OpenGL 4.5 VAO/VBO Direct State Access mesh
-│   ├── mission_system.h     # Objective tracking and campaign state machine
-│   ├── planet_data.h        # Celestial metrics database and orbital params
-│   ├── post_processing.h    # HDR framebuffer, ACES tone mapping, and Bloom
-│   ├── settings_persistence.h # INI file settings loader/serializer
-│   ├── solar_ui.h           # Dear ImGui telemetry, HUD, and dossier panels
-│   ├── spaceship.h          # 6-DOF flight physics and warp drive engine
-│   └── wormhole.h           # Ellis-Bronnikov spacetime throat renderer
-├── src/                     # C++ implementation files
-├── shaders/                 # GLSL 450 Core vertex and fragment shaders
-├── tests/                   # Catch2 unit test suites
-├── Textures/                # High-resolution NASA planetary textures
-├── Sound/                   # Audio soundscapes and effects
-├── CMakeLists.txt           # Modern CMake build configuration
-├── build.bat                # MSYS2 MinGW-w64 compilation script
-└── app_icon.rc              # Multi-resolution Windows resource icon
-```
-
----
-
-## Copyright & Credits
-
-**© 2025–2026 Yousef Osama**  
-Cybersecurity Engineer, Egyptian Chinese University  
-*All source code, shaders, simulation mathematics, and architecture are original work.*
-
-- **Celestial Textures**: NASA Jet Propulsion Laboratory (Public Domain).
-- **Libraries**: GLFW, GLEW, GLM, Dear ImGui, stb_image, OpenAL Soft, Catch2.
+Original code and branding: [MIT](LICENSE), © 2025–2026 **Yousef Osama**, Egyptian Chinese University. Third-party software, font and imagery retain their respective licenses. See [complete credits](THIRD_PARTY_NOTICES.md). Solar Odyssey is not affiliated with NASA, JPL, INOVE or Solar System Scope.

@@ -76,11 +76,15 @@ private:
 public:
     AtmosphereEffects();
     ~AtmosphereEffects();
+    AtmosphereEffects(const AtmosphereEffects&) = delete;
+    AtmosphereEffects& operator=(const AtmosphereEffects&) = delete;
+    void cleanup();
 
     void initShader();
     void setQualitySamples(int samples) { qualitySamples = samples; }
     int getQualitySamples() const { return qualitySamples; }
 
+    float glowScale = 1.0f;
     void renderAtmosphere(const std::string& planetName, float planetRadius, float time,
                           const glm::vec3& sunEyePos = glm::vec3(0.0f),
                           const glm::mat4& inModelView = glm::mat4(0.0f),

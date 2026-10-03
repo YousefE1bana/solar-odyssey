@@ -1,3 +1,4 @@
+#include "canonical_inventory.h"
 #include "planet_data.h"
 
 CelestialDatabase::CelestialDatabase() {
@@ -442,6 +443,566 @@ void CelestialDatabase::initDatabase() {
         tethys.hasRings = false;
         bodies[tethys.name] = tethys;
 
+        // --- PHOBOS (Texture Source Completion 1/4) ---
+        // Sourced from JPL MAR097 physical parameters (mean radius 11.08 km,
+        // GM 0.0007087) + mean elements (a = 9375 km, P = 0.3187 d) and NASA
+        // science pages. Heliocentric distances are parent-derived (Mars's
+        // canonical dossier values, copied exactly). Axial tilt unsourced ->
+        // flag false ("N/A"). No authorized global mean exists -> mean flag
+        // false ("N/A"); min/max are the SOURCED Mars Global Surveyor
+        // day/night extremes (-112 C shadowed, -4 C sunlit), range flag true.
+        // Tidally locked (same face to Mars). Bodies map only, NOT in `order`.
+        CelestialBodyData phobos;
+        phobos.name = "Phobos";
+        phobos.type = "Natural Satellite";
+        phobos.subtitle = "Mars's Doomed Inner Moon";
+        phobos.realDiameterKm = 22.16f; // Sourced: 2 x 11.08 km mean radius (MAR097)
+        phobos.relativeSizeToEarth = 0.00174f; // Derived: 22.16 / 12756.2 = 0.001737 (in-repo Earth diameter)
+        phobos.distanceFromSunAU = 1.524f; // Parent-derived: Mars's canonical value (approximate heliocentric)
+        phobos.distanceFromSunMillionKm = 227.9f; // Parent-derived: Mars's canonical value
+        phobos.orbitalPeriodDays = 0.3187f; // Sourced (MAR097 mean elements; ~7.65 hours, 3 orbits per day)
+        phobos.rotationPeriodHours = 7.6488f; // Sourced: synchronous/tidally locked (0.3187 * 24)
+        phobos.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        phobos.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        phobos.knownMoons = 0;
+        phobos.surfaceGravityMs2 = 0.00577f; // Derived: GM/radius^2 x 1000 = 0.0007087 / 11.08^2 * 1000
+        phobos.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        phobos.hasMeanTemperatureData = false; // Generic semantic: no authorized global mean
+        phobos.minTemperatureC = -112.0f; // Sourced MGS shadowed-side extreme
+        phobos.maxTemperatureC = -4.0f; // Sourced MGS sunlit-side extreme
+        phobos.hasTemperatureRangeData = true; // Sourced extremes (defaults true; explicit for clarity)
+        phobos.atmosphericComposition = "No atmosphere; Phobos is an airless body with too little gravity to retain one";
+        phobos.surfaceFeatures = "Stickney crater (~9 km, nearly half the moon), tidal grooves and streaks, boulder-strewn slopes, fine impact-pulverized dust.";
+        phobos.discoveryInfo = "Discovered by Asaph Hall on 17 August 1877 at the US Naval Observatory.";
+        phobos.description = "Phobos is the larger, inner moon of Mars and orbits closer to its planet than any other known moon. It circles Mars three times a day while spiraling inward, and will either crash into Mars or break apart into a ring within about 50 million years. Its dark carbonaceous surface is dominated by Stickney crater and mysterious tidal grooves.";
+        phobos.keyFacts = {
+            "Orbits closer to Mars than any other known moon to its planet, circling three times per day.",
+            "Spiraling inward about 1.8 meters per century toward eventual breakup or impact.",
+            "Stickney crater spans roughly half the moon and likely nearly shattered it.",
+            "Tidally locked, dark carbonaceous surface resembling C-type asteroids."
+        };
+        phobos.themeColor = glm::vec3(0.55f, 0.50f, 0.48f);
+        phobos.visualSize = 0.008f; // Readability floor (true Moon-relative ratio 0.000957 is sub-pixel; recorded in inventory)
+        phobos.visualOrbitRadius = 0.8f; // Mirrors inventory presentation orbit (outside Mars globe, inside Deimos)
+        phobos.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        phobos.visualOrbitSpeed = 247.0f; // Mirrors inventory stylistic speed
+        phobos.textureFile = "Textures/Derived/phobos_jpl_1440.jpg";
+        phobos.hasRings = false;
+        bodies[phobos.name] = phobos;
+
+        // --- DEIMOS (Texture Source Completion 1/4) ---
+        // Sourced from JPL MAR097 (mean radius 6.2 km, GM 0.0000962; a =
+        // 23457 km, P = 1.2625 d) + NASA. Parent-derived heliocentric (Mars).
+        // Smallest runtime body: size is the readability floor (true ratio
+        // 0.000535, see Phobos note). No authorized mean or min/max
+        // temperature set exists -> all three temperature flags false ("N/A"),
+        // stored zeros inert (Callisto precedent). Tidally locked. Bodies map
+        // only, NOT in `order`.
+        CelestialBodyData deimos;
+        deimos.name = "Deimos";
+        deimos.type = "Natural Satellite";
+        deimos.subtitle = "Mars's Quiet Outer Moon";
+        deimos.realDiameterKm = 12.4f; // Sourced: 2 x 6.2 km mean radius (MAR097)
+        deimos.relativeSizeToEarth = 0.00097f; // Derived: 12.4 / 12756.2 = 0.000972 (in-repo Earth diameter)
+        deimos.distanceFromSunAU = 1.524f; // Parent-derived: Mars's canonical value (approximate heliocentric)
+        deimos.distanceFromSunMillionKm = 227.9f; // Parent-derived: Mars's canonical value
+        deimos.orbitalPeriodDays = 1.2625f; // Sourced (MAR097 mean elements; ~30.3 hours)
+        deimos.rotationPeriodHours = 30.3f; // Sourced: synchronous/tidally locked (1.2625 * 24)
+        deimos.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        deimos.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        deimos.knownMoons = 0;
+        deimos.surfaceGravityMs2 = 0.00250f; // Derived: 0.0000962 / 6.2^2 * 1000
+        deimos.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        deimos.hasMeanTemperatureData = false; // Generic semantic: dossier renders "N/A"
+        deimos.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        deimos.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        deimos.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        deimos.atmosphericComposition = "No atmosphere; Deimos is an airless body with too little gravity to retain one";
+        deimos.surfaceFeatures = "Smooth dust-mantled surface with subdued craters including Swift and Voltaire, loose rocks and regolith.";
+        deimos.discoveryInfo = "Discovered by Asaph Hall on 12 August 1877 at the US Naval Observatory.";
+        deimos.description = "Deimos is the smaller, outer moon of Mars and one of the smallest known moons. Its smooth dust-covered surface and carbonaceous makeup resemble dark asteroids. Like Phobos it is tidally locked, always showing the same face to Mars, and takes about 30 hours to complete one orbit.";
+        deimos.keyFacts = {
+            "Among the smallest known moons, measuring about 12.6 km across.",
+            "Smooth dust mantle softens its craters, unlike heavily cratered Phobos.",
+            "Tidally locked with a ~30-hour orbit, rising slowly in the Martian sky.",
+            "Dark carbonaceous surface consistent with captured-asteroid or impact-debris origin theories."
+        };
+        deimos.themeColor = glm::vec3(0.60f, 0.57f, 0.55f);
+        deimos.visualSize = 0.008f; // Readability floor (true ratio 0.000535; recorded in inventory)
+        deimos.visualOrbitRadius = 1.3f; // Mirrors inventory presentation orbit (outside Mars globe and Phobos)
+        deimos.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        deimos.visualOrbitSpeed = 236.0f; // Mirrors inventory stylistic speed
+        deimos.textureFile = "Textures/Derived/deimos_jpl_1440.jpg";
+        deimos.hasRings = false;
+        bodies[deimos.name] = deimos;
+
+        // --- MIMAS (Texture Source Completion 1/4) ---
+        // Sourced from JPL SAT441 (mean radius 198.20 km, GM 2.50349; a =
+        // 185520 km, P = 0.9424218 d) + NASA/Cassini. Parent-derived
+        // heliocentric (Saturn). Axial tilt unsourced -> flag false ("N/A").
+        // No authorized global mean -> mean flag false; min/max are SOURCED
+        // Cassini CIRS daytime bounds (77 K cold / 92 K warm), range flag
+        // true (Ganymede daytime-range precedent). Tidally locked (S).
+        // Bodies map only, NOT in `order`.
+        CelestialBodyData mimas;
+        mimas.name = "Mimas";
+        mimas.type = "Natural Satellite";
+        mimas.subtitle = "Saturn's Death-Star Moon";
+        mimas.realDiameterKm = 396.4f; // Sourced: 2 x 198.20 km mean radius (SAT441)
+        mimas.relativeSizeToEarth = 0.031f; // Derived: 396.4 / 12756.2 (in-repo Earth diameter)
+        mimas.distanceFromSunAU = 9.582f; // Parent-derived: Saturn's canonical value (approximate heliocentric)
+        mimas.distanceFromSunMillionKm = 1433.5f; // Parent-derived: Saturn's canonical value
+        mimas.orbitalPeriodDays = 0.9424218f; // Sourced (SAT441 mean elements)
+        mimas.rotationPeriodHours = 22.6181f; // Sourced: synchronous/tidally locked (0.9424218 * 24)
+        mimas.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        mimas.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        mimas.knownMoons = 0;
+        mimas.surfaceGravityMs2 = 0.06373f; // Derived: 2.50349 / 198.20^2 * 1000
+        mimas.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        mimas.hasMeanTemperatureData = false; // Generic semantic: no authorized global mean
+        mimas.minTemperatureC = -196.0f; // Sourced CIRS daytime cold bound (~77 K)
+        mimas.maxTemperatureC = -181.0f; // Sourced CIRS daytime warm bound (~92 K)
+        mimas.hasTemperatureRangeData = true; // Sourced daytime bounds (defaults true; explicit for clarity)
+        mimas.atmosphericComposition = "No substantial atmosphere; Mimas is an airless icy moon";
+        mimas.surfaceFeatures = "Herschel crater (~130 km, one-third of the moon), Pac-Man thermal anomaly, E-ring-coated ice with dark debris streaks on crater walls.";
+        mimas.discoveryInfo = "Discovered by William Herschel on 17 September 1789.";
+        mimas.description = "Mimas is Saturn's innermost major icy moon, famous for the giant Herschel crater that gives it a Death-Star resemblance. Cassini revealed bizarre thermal patterns including a Pac-Man-shaped warm region. Its low density and cratered water-ice surface record an ancient battered history.";
+        mimas.keyFacts = {
+            "Herschel crater spans ~130 km, nearly one-third of the moon's diameter.",
+            "Cassini mapped a Pac-Man-shaped daytime thermal anomaly (warm ~92 K, cold ~77 K).",
+            "Low-density water-ice body, continually dusted by Saturn's E ring.",
+            "Tidally locked, completing one orbit in about 22.6 hours."
+        };
+        mimas.themeColor = glm::vec3(0.82f, 0.84f, 0.86f);
+        mimas.visualSize = 0.017f; // Mirrors inventory derived size (Moon-relative true ratio)
+        mimas.visualOrbitRadius = 2.2f; // Mirrors inventory presentation orbit (clears rings, inside Enceladus)
+        mimas.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        mimas.visualOrbitSpeed = 246.0f; // Mirrors inventory stylistic speed
+        mimas.textureFile = "Textures/Derived/mimas_jpl_1440.jpg";
+        mimas.hasRings = false;
+        bodies[mimas.name] = mimas;
+
+        // --- DIONE (Texture Source Completion 1/4) ---
+        // Sourced from JPL SAT441 (mean radius 561.40 km, GM 73.11607; a =
+        // 377400 km, P = 2.736915 d) + NASA/Cassini. Parent-derived
+        // heliocentric (Saturn). Axial tilt unsourced -> flag false. No
+        // authorized mean or min/max set -> all three temperature flags false
+        // ("N/A"), stored zeros inert (Callisto precedent). Tidally locked
+        // (S). Gravity data hint at a possible deep interior ocean; stated
+        // as investigated hypothesis, not fact. Bodies map only, NOT in `order`.
+        CelestialBodyData dione;
+        dione.name = "Dione";
+        dione.type = "Natural Satellite";
+        dione.subtitle = "Saturn's Wispy Fractured Moon";
+        dione.realDiameterKm = 1122.8f; // Sourced: 2 x 561.40 km mean radius (SAT441)
+        dione.relativeSizeToEarth = 0.088f; // Derived: 1122.8 / 12756.2 (in-repo Earth diameter)
+        dione.distanceFromSunAU = 9.582f; // Parent-derived: Saturn's canonical value (approximate heliocentric)
+        dione.distanceFromSunMillionKm = 1433.5f; // Parent-derived: Saturn's canonical value
+        dione.orbitalPeriodDays = 2.736915f; // Sourced (SAT441 mean elements)
+        dione.rotationPeriodHours = 65.686f; // Sourced: synchronous/tidally locked (2.736915 * 24)
+        dione.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        dione.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        dione.knownMoons = 0;
+        dione.surfaceGravityMs2 = 0.23199f; // Derived: 73.11607 / 561.40^2 * 1000
+        dione.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        dione.hasMeanTemperatureData = false; // Generic semantic: dossier renders "N/A"
+        dione.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        dione.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        dione.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        dione.atmosphericComposition = "Extremely tenuous oxygen exosphere detected by Cassini; no substantial atmosphere";
+        dione.surfaceFeatures = "Bright wispy fracture networks (tectonic, not ice deposits), heavily cratered trailing plains, smoother leading hemisphere.";
+        dione.discoveryInfo = "Discovered by Giovanni Domenico Cassini on 21 March 1684.";
+        dione.description = "Dione is a mid-sized icy moon of Saturn whose bright wispy streaks proved to be tectonic fracture networks rather than surface frost. Its cratered water-ice crust overlies a rocky interior, and Cassini gravity measurements hint it may harbor a deep subsurface ocean. A tenuous oxygen exosphere clings to the moon.";
+        dione.keyFacts = {
+            "Bright wispy markings are tectonic fractures, not frost deposits.",
+            "Cassini gravity data hint at a possible deep subsurface ocean.",
+            "Possesses an extremely tenuous oxygen exosphere.",
+            "Tidally locked, orbiting Saturn every ~2.74 days; in resonance interplay with Enceladus."
+        };
+        dione.themeColor = glm::vec3(0.78f, 0.79f, 0.80f);
+        dione.visualSize = 0.048f; // Mirrors inventory derived size (Moon-relative true ratio)
+        dione.visualOrbitRadius = 3.95f; // Mirrors inventory Enceladus-scale orbit (outside Tethys)
+        dione.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        dione.visualOrbitSpeed = 229.0f; // Mirrors inventory stylistic speed
+        dione.textureFile = "Textures/Derived/dione_jpl_1440.jpg";
+        dione.hasRings = false;
+        bodies[dione.name] = dione;
+
+        // --- RHEA (Texture Source Completion 1/4) ---
+        // Sourced from JPL SAT441 (mean radius 763.50 km, GM 153.94175; a =
+        // 527040 km, P = 4.517500 d) + NASA/Cassini. Parent-derived
+        // heliocentric (Saturn). Axial tilt unsourced -> flag false. No
+        // authorized mean or min/max set -> all three temperature flags false
+        // ("N/A"), stored zeros inert (Callisto precedent). Tidally locked
+        // (S). Tenuous O2/CO2 exosphere measured by Cassini INMS (field text
+        // only — no Atmosphere layer: airless-body matrix preserved). Bodies
+        // map only, NOT in `order`.
+        CelestialBodyData rhea;
+        rhea.name = "Rhea";
+        rhea.type = "Natural Satellite";
+        rhea.subtitle = "Saturn's Heavily Cratered Giant";
+        rhea.realDiameterKm = 1527.0f; // Sourced: 2 x 763.50 km mean radius (SAT441)
+        rhea.relativeSizeToEarth = 0.120f; // Derived: 1527.0 / 12756.2 (in-repo Earth diameter)
+        rhea.distanceFromSunAU = 9.582f; // Parent-derived: Saturn's canonical value (approximate heliocentric)
+        rhea.distanceFromSunMillionKm = 1433.5f; // Parent-derived: Saturn's canonical value
+        rhea.orbitalPeriodDays = 4.5175f; // Sourced (SAT441 mean elements)
+        rhea.rotationPeriodHours = 108.42f; // Sourced: synchronous/tidally locked (4.5175 * 24)
+        rhea.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        rhea.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        rhea.knownMoons = 0;
+        rhea.surfaceGravityMs2 = 0.26408f; // Derived: 153.94175 / 763.50^2 * 1000
+        rhea.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        rhea.hasMeanTemperatureData = false; // Generic semantic: dossier renders "N/A"
+        rhea.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        rhea.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        rhea.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        rhea.atmosphericComposition = "Tenuous oxygen and carbon-dioxide exosphere measured by Cassini; no substantial atmosphere";
+        rhea.surfaceFeatures = "Densely cratered ancient ice, Inktomi bright-ray crater (~49 km), wispy fracture systems, equatorial blue-pearl spots from collapsed ring-debris hypothesis.";
+        rhea.discoveryInfo = "Discovered by Giovanni Domenico Cassini on 23 December 1672.";
+        rhea.description = "Rhea is Saturn's second-largest moon, a heavily cratered ball of water ice and rock. Cassini found a tenuous oxygen and carbon-dioxide exosphere and mapped the brilliant Inktomi ray crater. Bluish spots along its equator may be debris from a collapsed ancient ring. A dedicated search confirmed Rhea has no ring system today.";
+        rhea.keyFacts = {
+            "Saturn's second-largest moon and one of the most cratered worlds known.",
+            "Inktomi crater's rays stretch hundreds of kilometers across the surface.",
+            "Tenuous oxygen and carbon-dioxide exosphere detected by Cassini.",
+            "Equatorial blue pearls may record a collapsed former debris ring."
+        };
+        rhea.themeColor = glm::vec3(0.86f, 0.87f, 0.89f);
+        rhea.visualSize = 0.066f; // Mirrors inventory derived size (Moon-relative true ratio)
+        rhea.visualOrbitRadius = 5.53f; // Mirrors inventory Enceladus-scale orbit (outside Dione)
+        rhea.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        rhea.visualOrbitSpeed = 221.0f; // Mirrors inventory stylistic speed
+        rhea.textureFile = "Textures/Derived/rhea_jpl_1440.jpg";
+        rhea.hasRings = false;
+        bodies[rhea.name] = rhea;
+
+        // --- IAPETUS (Texture Source Completion 1/4) ---
+        // Sourced from JPL SAT441 (mean radius 734.30 km, GM 120.51511; a =
+        // 3561300 km, P = 79.330183 d) + NASA/Cassini. Parent-derived
+        // heliocentric (Saturn). Axial tilt unsourced -> flag false ("N/A").
+        // NOTE: JPL "Tilt = 14.8 deg" is Laplace-plane geometry, NOT physical
+        // axial tilt — deliberately not used (Ganymede/Callisto precedent).
+        // No authorized mean or min/max set -> all three temperature flags
+        // false ("N/A"), stored zeros inert. Tidally locked (S). Two-tone
+        // albedo dichotomy (dark Cassini Regio / bright Roncevaux Terra) from
+        // Phoebe-ring dust + thermal ice migration; equatorial ridge up to
+        // ~20 km high spanning ~75% of circumference. Bodies map only, NOT
+        // in `order`.
+        CelestialBodyData iapetus;
+        iapetus.name = "Iapetus";
+        iapetus.type = "Natural Satellite";
+        iapetus.subtitle = "Saturn's Two-Faced Moon";
+        iapetus.realDiameterKm = 1468.6f; // Sourced: 2 x 734.30 km mean radius (SAT441)
+        iapetus.relativeSizeToEarth = 0.115f; // Derived: 1468.6 / 12756.2 (in-repo Earth diameter)
+        iapetus.distanceFromSunAU = 9.582f; // Parent-derived: Saturn's canonical value (approximate heliocentric)
+        iapetus.distanceFromSunMillionKm = 1433.5f; // Parent-derived: Saturn's canonical value
+        iapetus.orbitalPeriodDays = 79.330183f; // Sourced (SAT441 mean elements)
+        iapetus.rotationPeriodHours = 1903.9244f; // Sourced: synchronous/tidally locked (79.330183 * 24)
+        iapetus.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        iapetus.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        iapetus.knownMoons = 0;
+        iapetus.surfaceGravityMs2 = 0.22351f; // Derived: 120.51511 / 734.30^2 * 1000
+        iapetus.meanTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasMeanTemperatureData = false)
+        iapetus.hasMeanTemperatureData = false; // Generic semantic: dossier renders "N/A"
+        iapetus.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        iapetus.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        iapetus.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        iapetus.atmosphericComposition = "No substantial atmosphere; Iapetus is an essentially airless icy moon";
+        iapetus.surfaceFeatures = "Global two-tone dichotomy (dark Cassini Regio vs bright Roncevaux Terra), globe-girdling equatorial ridge up to ~20 km high, organics and CO2 in dark material.";
+        iapetus.discoveryInfo = "Discovered by Giovanni Domenico Cassini on 25 October 1671; its brightness dichotomy puzzled astronomers from 1677 until Cassini solved it.";
+        iapetus.description = "Iapetus is Saturn's two-faced moon: one hemisphere is dark as coal, the other bright as snow. Dust spiraling in from distant Phoebe paints the leading side, and migrating water ice sharpens the contrast. A colossal equatorial ridge — up to 20 km high and spanning three-quarters of the globe — remains unexplained.";
+        iapetus.keyFacts = {
+            "Most extreme brightness contrast of any large solar-system body.",
+            "Dark coating is Phoebe-ring dust only meters thick, reddened and ice-migrated.",
+            "Equatorial ridge up to ~20 km high with no agreed formation mechanism.",
+            "Tidally locked on a distant 79.3-day orbit, inclined to Saturn's equator."
+        };
+        iapetus.themeColor = glm::vec3(0.70f, 0.65f, 0.58f);
+        iapetus.visualSize = 0.063f; // Mirrors inventory derived size (Moon-relative true ratio)
+        iapetus.visualOrbitRadius = 8.5f; // Mirrors inventory presentation choice (readability cap, outside Rhea)
+        iapetus.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        iapetus.visualOrbitSpeed = 195.0f; // Mirrors inventory stylistic speed
+        iapetus.textureFile = "Textures/Derived/iapetus_jpl_1440.jpg";
+        iapetus.hasRings = false;
+        bodies[iapetus.name] = iapetus;
+
+        // --- MIRANDA (Texture Source Completion 2/4) ---
+        // Sourced from JPL URA111 (mean radius 235.8 km, GM 4.3; a = 129872
+        // km, P = 1.414 d) + NASA/Voyager + published mean surface
+        // temperatures (60-70 K). Heliocentric parent-derived (Uranus).
+        // Axial tilt unsourced -> flag false ("N/A"). Mean TRUE at the
+        // midpoint of the published 60-70 K mean range (-208 C, documented
+        // derivation, Europa-approx precedent); no authorized min/max
+        // extremes -> range flag false ("N/A"), stored zeros inert. Tidally
+        // locked. Source map preserves inherited Voyager partial-coverage
+        // bands (documented limitation, never painted over). Bodies map only,
+        // NOT in `order`.
+        CelestialBodyData miranda;
+        miranda.name = "Miranda";
+        miranda.type = "Natural Satellite";
+        miranda.subtitle = "Uranus's Fractured Patchwork Moon";
+        miranda.realDiameterKm = 471.6f; // Sourced: 2 x 235.8 km mean radius (URA111)
+        miranda.relativeSizeToEarth = 0.037f; // Derived: 471.6 / 12756.2 (in-repo Earth diameter)
+        miranda.distanceFromSunAU = 19.20f; // Parent-derived: Uranus's canonical value (approximate heliocentric)
+        miranda.distanceFromSunMillionKm = 2872.5f; // Parent-derived: Uranus's canonical value
+        miranda.orbitalPeriodDays = 1.414f; // Sourced (URA111/JPL Horizons consensus)
+        miranda.rotationPeriodHours = 33.936f; // Sourced: synchronous/tidally locked (1.414 * 24)
+        miranda.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        miranda.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        miranda.knownMoons = 0;
+        miranda.surfaceGravityMs2 = 0.07734f; // Derived: 4.3 / 235.8^2 * 1000
+        miranda.meanTemperatureC = -208.0f; // Derived midpoint of published 60-70 K mean range (always displayed)
+        miranda.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        miranda.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        miranda.hasTemperatureRangeData = false; // Generic semantic: no authorized extremes
+        miranda.atmosphericComposition = "No substantial atmosphere; Miranda is an airless icy moon";
+        miranda.surfaceFeatures = "Three giant coronae (Arden, Elsinore, Inverness) of ridges and valleys, Verona Rupes cliffs among the tallest known, starkly varied terrain types side by side.";
+        miranda.discoveryInfo = "Discovered by Gerard Kuiper on 16 February 1948.";
+        miranda.description = "Miranda is the smallest and innermost of Uranus's major moons, with the most varied surface in the solar system. Towering Verona Rupes cliffs and three huge grooved coronae sit beside ancient cratered plains, as if mismatched terrains were stitched together. Its chaotic geology may record a past shattering and reassembly.";
+        miranda.keyFacts = {
+            "Most geologically varied surface known: coronae, cliffs and cratered plains collide.",
+            "Verona Rupes cliffs rise up to ~20 km, among the tallest scarps known.",
+            "Three enormous coronae suggest past internal upheaval or reassembly.",
+            "Tidally locked, orbiting Uranus every ~1.41 days."
+        };
+        miranda.themeColor = glm::vec3(0.72f, 0.70f, 0.66f);
+        miranda.visualSize = 0.020f; // Mirrors inventory derived size (Moon-relative true ratio)
+        miranda.visualOrbitRadius = 1.2f; // Mirrors inventory Uranus-scale anchor (outside globe)
+        miranda.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        miranda.visualOrbitSpeed = 245.0f; // Mirrors inventory stylistic speed
+        miranda.textureFile = "Textures/Derived/miranda_jpl_1440.jpg";
+        miranda.hasRings = false;
+        bodies[miranda.name] = miranda;
+
+        // --- ARIEL (Texture Source Completion 2/4) ---
+        // Sourced from JPL URA111 (mean radius 578.9 km, GM 83.5; a = 190941
+        // km, P = 2.521 d) + NASA/Voyager + published mean surface
+        // temperatures (60-70 K). Parent-derived heliocentric (Uranus).
+        // Brightest large Uranian moon. Axial tilt unsourced -> false. Mean
+        // TRUE at published-range midpoint (-208 C, documented); no
+        // authorized extremes -> range false. Tidally locked. Bodies map
+        // only, NOT in `order`.
+        CelestialBodyData ariel;
+        ariel.name = "Ariel";
+        ariel.type = "Natural Satellite";
+        ariel.subtitle = "Uranus's Brightest Moon";
+        ariel.realDiameterKm = 1157.8f; // Sourced: 2 x 578.9 km mean radius (URA111)
+        ariel.relativeSizeToEarth = 0.091f; // Derived: 1157.8 / 12756.2 (in-repo Earth diameter)
+        ariel.distanceFromSunAU = 19.20f; // Parent-derived: Uranus's canonical value (approximate heliocentric)
+        ariel.distanceFromSunMillionKm = 2872.5f; // Parent-derived: Uranus's canonical value
+        ariel.orbitalPeriodDays = 2.521f; // Sourced (URA111/JPL Horizons consensus)
+        ariel.rotationPeriodHours = 60.504f; // Sourced: synchronous/tidally locked (2.521 * 24)
+        ariel.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        ariel.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        ariel.knownMoons = 0;
+        ariel.surfaceGravityMs2 = 0.24916f; // Derived: 83.5 / 578.9^2 * 1000
+        ariel.meanTemperatureC = -208.0f; // Derived midpoint of published 60-70 K mean range (always displayed)
+        ariel.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        ariel.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        ariel.hasTemperatureRangeData = false; // Generic semantic: no authorized extremes
+        ariel.atmosphericComposition = "No substantial atmosphere; Ariel is an airless icy moon";
+        ariel.surfaceFeatures = "Relatively bright water-ice surface cut by fault valleys and canyons, smooth resurfaced plains, carbon-dioxide ice deposits.";
+        ariel.discoveryInfo = "Discovered by William Lassell on 24 October 1851.";
+        ariel.description = "Ariel is the brightest of Uranus's large moons, its icy surface grooved by fault valleys that hint at past resurfacing, possibly cryovolcanic. Carbon-dioxide ice glints in its canyons. Of the Uranian moons it shows the strongest signs of geologically recent activity.";
+        ariel.keyFacts = {
+            "Brightest large Uranian moon, coated in relatively fresh water ice.",
+            "Fault valleys and smooth plains record past resurfacing episodes.",
+            "Carbon-dioxide ice concentrated in canyon floors.",
+            "Tidally locked, orbiting Uranus every ~2.52 days."
+        };
+        ariel.themeColor = glm::vec3(0.84f, 0.86f, 0.88f);
+        ariel.visualSize = 0.050f; // Mirrors inventory derived size (Moon-relative true ratio)
+        ariel.visualOrbitRadius = 1.76f; // Mirrors inventory Miranda-relative true spacing
+        ariel.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        ariel.visualOrbitSpeed = 232.0f; // Mirrors inventory stylistic speed
+        ariel.textureFile = "Textures/Derived/ariel_jpl_1440.jpg";
+        ariel.hasRings = false;
+        bodies[ariel.name] = ariel;
+
+        // --- UMBRIEL (Texture Source Completion 2/4) ---
+        // Sourced from JPL URA111 (mean radius 584.7 km, GM 85.1; a = 266012
+        // km, P = 4.145 d) + NASA/Voyager + published mean surface
+        // temperature (70 K). Parent-derived heliocentric (Uranus). Darkest
+        // large Uranian moon. Axial tilt unsourced -> false. Mean TRUE at
+        // published 70 K (-203 C); no authorized extremes -> range false.
+        // Tidally locked. Bodies map only, NOT in `order`.
+        CelestialBodyData umbriel;
+        umbriel.name = "Umbriel";
+        umbriel.type = "Natural Satellite";
+        umbriel.subtitle = "Uranus's Dark Cratered Moon";
+        umbriel.realDiameterKm = 1169.4f; // Sourced: 2 x 584.7 km mean radius (URA111)
+        umbriel.relativeSizeToEarth = 0.092f; // Derived: 1169.4 / 12756.2 (in-repo Earth diameter)
+        umbriel.distanceFromSunAU = 19.20f; // Parent-derived: Uranus's canonical value (approximate heliocentric)
+        umbriel.distanceFromSunMillionKm = 2872.5f; // Parent-derived: Uranus's canonical value
+        umbriel.orbitalPeriodDays = 4.145f; // Sourced (URA111/JPL Horizons consensus)
+        umbriel.rotationPeriodHours = 99.48f; // Sourced: synchronous/tidally locked (4.145 * 24)
+        umbriel.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        umbriel.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        umbriel.knownMoons = 0;
+        umbriel.surfaceGravityMs2 = 0.24893f; // Derived: 85.1 / 584.7^2 * 1000
+        umbriel.meanTemperatureC = -203.0f; // Sourced published mean surface temperature (~70 K; always displayed)
+        umbriel.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        umbriel.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        umbriel.hasTemperatureRangeData = false; // Generic semantic: no authorized extremes
+        umbriel.atmosphericComposition = "No substantial atmosphere; Umbriel is an airless icy moon";
+        umbriel.surfaceFeatures = "Dark ancient heavily cratered surface, bright-floored Wunda crater with a central peak ring, subtle polygonal terrain.";
+        umbriel.discoveryInfo = "Discovered by William Lassell on 24 October 1851.";
+        umbriel.description = "Umbriel is the darkest of Uranus's large moons, its ancient surface saturated with impact craters. The bright ring inside Wunda crater stands out against the gloom. Its uniform darkness suggests a thin veil of carbon-rich material over water ice, undisturbed for billions of years.";
+        umbriel.keyFacts = {
+            "Darkest large Uranian moon, among the least reflective large bodies known.",
+            "Wunda crater sports a striking bright floor ring around its central peak.",
+            "Surface records billions of years of impacts with little resurfacing.",
+            "Tidally locked, orbiting Uranus every ~4.15 days."
+        };
+        umbriel.themeColor = glm::vec3(0.45f, 0.44f, 0.43f);
+        umbriel.visualSize = 0.050f; // Mirrors inventory derived size (true ratio; honest rounding matches Ariel)
+        umbriel.visualOrbitRadius = 2.46f; // Mirrors inventory Miranda-relative true spacing
+        umbriel.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        umbriel.visualOrbitSpeed = 219.0f; // Mirrors inventory stylistic speed
+        umbriel.textureFile = "Textures/Derived/umbriel_jpl_1440.jpg";
+        umbriel.hasRings = false;
+        bodies[umbriel.name] = umbriel;
+
+        // --- TITANIA (Texture Source Completion 2/4) ---
+        // Sourced from JPL URA111 (mean radius 788.9 km, GM 226.9; a = 436295
+        // km, P = 8.706 d — the ura111 consensus; a stale 8.796 value in one
+        // secondary table is not used) + NASA/Voyager + published mean
+        // surface temperature (75 K). Parent-derived heliocentric (Uranus).
+        // Largest Uranian moon. Axial tilt unsourced -> false. Mean TRUE at
+        // published 75 K (-198 C); no authorized extremes -> range false.
+        // Tidally locked. No ocean claim made (stays a hypothesis; dossier
+        // makes none). Bodies map only, NOT in `order`.
+        CelestialBodyData titania;
+        titania.name = "Titania";
+        titania.type = "Natural Satellite";
+        titania.subtitle = "Uranus's Largest Moon";
+        titania.realDiameterKm = 1577.8f; // Sourced: 2 x 788.9 km mean radius (URA111)
+        titania.relativeSizeToEarth = 0.124f; // Derived: 1577.8 / 12756.2 (in-repo Earth diameter)
+        titania.distanceFromSunAU = 19.20f; // Parent-derived: Uranus's canonical value (approximate heliocentric)
+        titania.distanceFromSunMillionKm = 2872.5f; // Parent-derived: Uranus's canonical value
+        titania.orbitalPeriodDays = 8.706f; // Sourced (URA111 consensus; NOT the stale 8.796 secondary-table value)
+        titania.rotationPeriodHours = 208.944f; // Sourced: synchronous/tidally locked (8.706 * 24)
+        titania.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        titania.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        titania.knownMoons = 0;
+        titania.surfaceGravityMs2 = 0.36458f; // Derived: 226.9 / 788.9^2 * 1000
+        titania.meanTemperatureC = -198.0f; // Sourced published mean surface temperature (~75 K; always displayed)
+        titania.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        titania.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        titania.hasTemperatureRangeData = false; // Generic semantic: no authorized extremes
+        titania.atmosphericComposition = "No substantial atmosphere; Titania is an airless icy-rocky moon";
+        titania.surfaceFeatures = "Icy-rocky crust with fault scarps and canyons (e.g. Messina Chasma), mixed cratered plains, highest rock fraction of the Uranian moons.";
+        titania.discoveryInfo = "Discovered by William Herschel on 11 January 1787.";
+        titania.description = "Titania is the largest moon of Uranus, a dense world of water ice and rock nearly the size of Australia. Enormous fault canyons gash its surface, evidence of ancient crustal stretching. It holds the greatest share of rock among its siblings, hinting at a complex differentiated interior.";
+        titania.keyFacts = {
+            "Largest Uranian moon and the eighth-largest moon in the solar system.",
+            "Giant fault canyons record powerful ancient tectonic stretching.",
+            "Highest rock fraction of the Uranian moons, suggesting differentiation.",
+            "Tidally locked, orbiting Uranus every ~8.71 days."
+        };
+        titania.themeColor = glm::vec3(0.78f, 0.76f, 0.72f);
+        titania.visualSize = 0.068f; // Mirrors inventory derived size (Moon-relative true ratio)
+        titania.visualOrbitRadius = 4.03f; // Mirrors inventory Miranda-relative true spacing
+        titania.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        titania.visualOrbitSpeed = 210.0f; // Mirrors inventory stylistic speed
+        titania.textureFile = "Textures/Derived/titania_jpl_1440.jpg";
+        titania.hasRings = false;
+        bodies[titania.name] = titania;
+
+        // --- OBERON (Texture Source Completion 2/4) ---
+        // Sourced from JPL URA111 (mean radius 761.4 km, GM 205.3; a = 583552
+        // km, P = 13.468 d) + NASA/Voyager + published mean surface
+        // temperatures (70-80 K). Parent-derived heliocentric (Uranus).
+        // Outermost major Uranian moon. Axial tilt unsourced -> false. Mean
+        // TRUE at published-range midpoint (-198 C, documented); no
+        // authorized extremes -> range false. Tidally locked. Bodies map
+        // only, NOT in `order`.
+        CelestialBodyData oberon;
+        oberon.name = "Oberon";
+        oberon.type = "Natural Satellite";
+        oberon.subtitle = "Uranus's Outer Cratered Moon";
+        oberon.realDiameterKm = 1522.8f; // Sourced: 2 x 761.4 km mean radius (URA111)
+        oberon.relativeSizeToEarth = 0.119f; // Derived: 1522.8 / 12756.2 (in-repo Earth diameter)
+        oberon.distanceFromSunAU = 19.20f; // Parent-derived: Uranus's canonical value (approximate heliocentric)
+        oberon.distanceFromSunMillionKm = 2872.5f; // Parent-derived: Uranus's canonical value
+        oberon.orbitalPeriodDays = 13.468f; // Sourced (URA111/JPL Horizons consensus)
+        oberon.rotationPeriodHours = 323.232f; // Sourced: synchronous/tidally locked (13.468 * 24)
+        oberon.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        oberon.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        oberon.knownMoons = 0;
+        oberon.surfaceGravityMs2 = 0.35413f; // Derived: 205.3 / 761.4^2 * 1000
+        oberon.meanTemperatureC = -198.0f; // Derived midpoint of published 70-80 K mean range (always displayed)
+        oberon.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        oberon.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        oberon.hasTemperatureRangeData = false; // Generic semantic: no authorized extremes
+        oberon.atmosphericComposition = "No substantial atmosphere; Oberon is an airless icy-rocky moon";
+        oberon.surfaceFeatures = "Heavily cratered ancient surface, dark-floored craters with bright ejecta, a large limb mountain, faint wispy markings.";
+        oberon.discoveryInfo = "Discovered by William Herschel on 11 January 1787.";
+        oberon.description = "Oberon is the outermost major moon of Uranus, a dark cratered world of ice and rock. Its surface preserves some of the oldest terrain in the Uranian system, scarred by eons of impacts. A mountain on its limb rises far above the icy plains, among the tallest reliefs on any Uranian moon.";
+        oberon.keyFacts = {
+            "Outermost of Uranus's five major moons, orbiting every ~13.47 days.",
+            "Ancient heavily cratered crust with dark crater floors and bright rays.",
+            "Limb mountain relief among the tallest in the Uranian system.",
+            "Tidally locked, keeping one face toward Uranus."
+        };
+        oberon.themeColor = glm::vec3(0.66f, 0.63f, 0.60f);
+        oberon.visualSize = 0.066f; // Mirrors inventory derived size (Moon-relative true ratio)
+        oberon.visualOrbitRadius = 5.39f; // Mirrors inventory Miranda-relative true spacing (outermost)
+        oberon.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        oberon.visualOrbitSpeed = 203.0f; // Mirrors inventory stylistic speed
+        oberon.textureFile = "Textures/Derived/oberon_jpl_1440.jpg";
+        oberon.hasRings = false;
+        bodies[oberon.name] = oberon;
+
+        // --- TRITON (Texture Source Completion 2/4) ---
+        // Sourced from JPL NEP097 (mean radius 1352.60 km, GM 1428.49546;
+        // a = 354760 km, |P| = 5.877 d, RETROGRADE sense) + NASA/Voyager 2.
+        // Heliocentric parent-derived (Neptune). Axial tilt unsourced ->
+        // flag false ("N/A"). Mean TRUE at the SOURCED Voyager measurement
+        // (-235 C, coldest directly measured surface in the solar system);
+        // no authorized min/max set -> range flag false ("N/A"), stored zeros
+        // inert. Synchronous rotation (5.877 d). Retrograde captured-KBO
+        // interpretation stated as the supported scientific consensus, with
+        // the N2/methane atmosphere and active geysers as sourced facts; no
+        // ocean/habitability claims made. Atmosphere text is dossier-only —
+        // NO Atmosphere render resource is registered (airless-body layer
+        // matrix preserved). Bodies map only, NOT in `order`.
+        CelestialBodyData triton;
+        triton.name = "Triton";
+        triton.type = "Natural Satellite";
+        triton.subtitle = "Neptune's Captured Retrograde World";
+        triton.realDiameterKm = 2705.2f; // Sourced: 2 x 1352.60 km mean radius (NEP097)
+        triton.relativeSizeToEarth = 0.212f; // Derived: 2705.2 / 12756.2 (in-repo Earth diameter)
+        triton.distanceFromSunAU = 30.05f; // Parent-derived: Neptune's canonical value (approximate heliocentric)
+        triton.distanceFromSunMillionKm = 4495.1f; // Parent-derived: Neptune's canonical value
+        triton.orbitalPeriodDays = 5.877f; // Sourced magnitude (NEP097); SENSE carried generically by orbitDirection
+        triton.rotationPeriodHours = 141.048f; // Sourced: synchronous (5.877 * 24), same face to Neptune
+        triton.axialTiltDeg = 0.0f; // Inert storage, NEVER displayed (hasAxialTiltData = false)
+        triton.hasAxialTiltData = false; // Generic semantic: dossier renders "N/A"
+        triton.knownMoons = 0;
+        triton.surfaceGravityMs2 = 0.78080f; // Derived: 1428.49546 / 1352.60^2 * 1000
+        triton.meanTemperatureC = -235.0f; // Sourced Voyager 2 measurement (coldest measured surface; always displayed)
+        triton.minTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        triton.maxTemperatureC = 0.0f; // Inert storage, NEVER displayed (hasTemperatureRangeData = false)
+        triton.hasTemperatureRangeData = false; // Generic semantic: dossier renders "N/A"
+        triton.atmosphericComposition = "Thin nitrogen atmosphere with small amounts of methane, fed by seasonal volatile activity; dossier text only, no render layer";
+        triton.surfaceFeatures = "Cantaloupe-textured nitrogen-ice plains, active nitrogen geysers venting kilometers high, smooth volcanic plains, sparse craters, high-albedo frost.";
+        triton.discoveryInfo = "Discovered by William Lassell on 10 October 1846, seventeen days after Neptune itself.";
+        triton.description = "Triton is Neptune's giant captured moon and the only large moon that orbits backwards. This Pluto-like Kuiper Belt world is wrapped in frozen nitrogen, erupts geysers 8 km into a thin nitrogen sky, and at -235 C holds the coldest directly measured surface in the solar system. Tidal drag is slowly pulling it inward toward eventual breakup.";
+        triton.keyFacts = {
+            "Only large moon with a retrograde orbit — best evidence it was captured from the Kuiper Belt.",
+            "Active nitrogen geysers vent plumes 8 km high that snow back onto the surface.",
+            "Cantaloupe terrain and ice volcanism rank it among the few active worlds.",
+            "Coldest directly measured surface in the solar system (-235 C); slowly spiraling toward Neptune."
+        };
+        triton.themeColor = glm::vec3(0.87f, 0.79f, 0.77f);
+        triton.visualSize = 0.117f; // Mirrors inventory derived size (Moon-relative true ratio)
+        triton.visualOrbitRadius = 1.29f; // Mirrors inventory absolute-scale orbit
+        triton.visualSpinSpeed = 20.0f; // Moon db convention for synchronous moons
+        triton.visualOrbitSpeed = 213.0f; // Mirrors inventory stylistic speed magnitude
+        triton.textureFile = "Textures/Derived/triton_jpl_1440.jpg";
+        triton.hasRings = false;
+        bodies[triton.name] = triton;
+
         // --- MARS ---
         CelestialBodyData mars;
         mars.name = "Mars";
@@ -511,7 +1072,7 @@ void CelestialDatabase::initDatabase() {
         jupiter.visualOrbitRadius = 21.0f;
         jupiter.visualSpinSpeed = 40.0f;
         jupiter.visualOrbitSpeed = 50.0f;
-        jupiter.textureFile = "Textures/sun.jpg"; // Using sun texture fallback as in original project
+        jupiter.textureFile = "Textures/jupiter.jpg";
         jupiter.hasRings = false;
         bodies[jupiter.name] = jupiter;
         order.push_back(jupiter.name);
@@ -569,9 +1130,11 @@ void CelestialDatabase::initDatabase() {
         uranus.axialTiltDeg = 97.77f; // Rotates on its side
         uranus.knownMoons = 28; // Miranda, Ariel, Umbriel, Titania, Oberon
         uranus.surfaceGravityMs2 = 8.69f;
-        uranus.meanTemperatureC = -195.0f;
+        uranus.temperatureReference = "Atmosphere at 1 bar";
+        uranus.meanTemperatureC = 76.0f - 273.15f; // NASA 1-bar temperature, not surface mean
         uranus.minTemperatureC = -224.0f;
-        uranus.maxTemperatureC = -197.0f;
+        uranus.maxTemperatureC = 0.0f;
+        uranus.hasTemperatureRangeData = false;
         uranus.atmosphericComposition = "82.5% Hydrogen, 15.2% Helium, 2.3% Methane, trace Water and Ammonia ices";
         uranus.surfaceFeatures = "Featureless cyan haze in visible light, faint narrow ring system, seasonal storm bands.";
         uranus.discoveryInfo = "Discovered by Sir William Herschel with a telescope on March 13, 1781.";
@@ -606,9 +1169,11 @@ void CelestialDatabase::initDatabase() {
         neptune.axialTiltDeg = 28.32f;
         neptune.knownMoons = 16; // Triton, Proteus, Nereid
         neptune.surfaceGravityMs2 = 11.15f;
-        neptune.meanTemperatureC = -200.0f;
+        neptune.temperatureReference = "Atmosphere at 1 bar";
+        neptune.meanTemperatureC = 72.0f - 273.15f; // NASA 1-bar temperature, not surface mean
         neptune.minTemperatureC = -218.0f;
-        neptune.maxTemperatureC = -201.0f;
+        neptune.maxTemperatureC = 0.0f;
+        neptune.hasTemperatureRangeData = false;
         neptune.atmosphericComposition = "80% Hydrogen, 19% Helium, 1.5% Methane, trace Ammonia and Deuterium";
         neptune.surfaceFeatures = "Vivid azure blue atmosphere, high-altitude white methane clouds, Great Dark Spot storms.";
         neptune.discoveryInfo = "Predicted mathematically by Urbain Le Verrier and observed by Johann Galle on September 23, 1846.";
@@ -854,4 +1419,20 @@ void CelestialDatabase::initDatabase() {
         wormhole.ringOuterRadius = 14.0f;
         bodies[wormhole.name] = wormhole;
         bodies["Einstein-Rosen Bridge"] = wormhole;
+        // CanonicalInventory owns runtime geometry, hierarchy and texture identity.
+        // The dossier owns sourced physical facts, never another visual model.
+        for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
+            auto it = bodies.find(def.name);
+            if (it == bodies.end()) continue;
+            auto& data = it->second;
+            data.visualSize = def.size;
+            data.visualOrbitRadius = def.orbitRadius;
+            data.visualSpinSpeed = def.spinSpeed;
+            data.visualOrbitSpeed = def.orbitSpeed;
+            if (!def.texture.empty()) data.textureFile = def.texture;
+        }
+        for (const char* name : {"Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Triton"})
+            bodies[name].atmosphericEnvironment = AtmosphericEnvironment::Atmosphere;
+        for (const char* name : {"Mercury", "Moon", "Europa", "Ganymede", "Callisto", "Dione", "Rhea", "Ceres", "Enceladus"})
+            bodies[name].atmosphericEnvironment = AtmosphericEnvironment::Exosphere;
     }

@@ -1,4 +1,5 @@
 #include "scene_renderer.h"
+#include "texture_variants.h"
 #include "shader_utils.h"
 #include "gl_primitives.h"
 #include "render_profiler.h"
@@ -7,6 +8,7 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
+#include <GLFW/glfw3.h>
 
 static void uploadCoreMatrices(GLint mvLoc, GLint pLoc, GLint nLoc, const glm::mat4& mv, const glm::mat4& p) {
     if (mvLoc >= 0) glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mv));
@@ -52,6 +54,7 @@ void SceneRenderer::initRings() {
 
     glGenVertexArrays(1, &ringVAO);
     glGenBuffers(1, &ringVBO);
+    if (!ringVAO || !ringVBO) return; // cleanup owns any successful allocation
 
     glBindVertexArray(ringVAO);
     glBindBuffer(GL_ARRAY_BUFFER, ringVBO);
@@ -89,22 +92,24 @@ static void makeTextureSeamlessHorizontal(unsigned char* data, int width, int he
     }
 }
 
-GLuint loadTexture(const char* filename) {
+GLuint loadTexture(const char* filename, TextureSpace space) {
+    if (!glfwGetCurrentContext() || !glGenTextures || !filename || !*filename) return 0;
     int width, height, channels;
-    unsigned char* image = stbi_load(filename, &width, &height, &channels, 0);
+    unsigned char* image = stbi_load(filename, &width, &height, &channels, 4);
     if (!image) {
         fprintf(stderr, "[Texture] Failed to load: %s\n", filename);
         return 0;
     }
 
     if (filename && strstr(filename, "earth_clouds") != nullptr) {
-        makeTextureSeamlessHorizontal(image, width, height, channels, 32);
+        makeTextureSeamlessHorizontal(image, width, height, 4, 32);
     }
 
-    GLenum format = (channels == 4) ? GL_RGBA : (channels == 1 ? GL_RED : GL_RGB);
-    GLenum internalFormat = (channels == 1) ? GL_R8 : format;
-    GLuint texture;
+    const GLenum format = GL_RGBA;
+    const GLenum internalFormat = space == TextureSpace::ColorSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
+    GLuint texture = 0;
     glGenTextures(1, &texture);
+    if (!texture) { stbi_image_free(image); return 0; }
     glBindTexture(GL_TEXTURE_2D, texture);
 
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, image);
@@ -118,11 +123,11 @@ GLuint loadTexture(const char* filename) {
     return texture;
 }
 
-GLuint loadTextureOrFallback(const char* primary, const char* fallback) {
-    GLuint tex = loadTexture(primary);
+GLuint loadTextureOrFallback(const char* primary, const char* fallback, TextureSpace space) {
+    GLuint tex = loadTexture(primary, space);
     if (tex == 0 && fallback && fallback[0] != '\0') {
         fprintf(stderr, "[Texture] Using fallback for %s -> %s\n", primary, fallback);
-        tex = loadTexture(fallback);
+        tex = loadTexture(fallback, space);
     }
     return tex;
 }
@@ -138,64 +143,37 @@ Planet::Planet(const std::string& name, float size, float orbitRadius,
 }
 
 Moon::Moon(const std::string& name, float size, float orbitRadius, float orbitSpeed,
-           const std::string& texturePath, const std::string& parentPlanet, float initAngle)
+           const std::string& texturePath, const std::string& parentPlanet, float initAngle,
+           float dir)
     : name(name), size(size), orbitRadius(orbitRadius), orbitSpeed(orbitSpeed),
-      initialAngle(initAngle), parentPlanet(parentPlanet) {
-    texture = loadTexture(texturePath.c_str());
+      initialAngle(initAngle), orbitDirection(dir), texturePath(texturePath), parentPlanet(parentPlanet) {
+    if (!texturePath.empty()) texture = loadTexture(texturePath.c_str());
 }
 
-void SceneRenderer::initStarfield() {
-    struct StarVertex {
-        float x, y, z;
-        float r, g, b, a;
-        float size;
-    };
-
-    const int kNumStars = 4000;
-    std::vector<StarVertex> stars;
-    stars.reserve(kNumStars);
-
-    srand(1337);
-    for (int i = 0; i < kNumStars; ++i) {
-        float theta = (float)(rand()) / RAND_MAX * 2.0f * 3.14159265f;
-        float phi = acosf(2.0f * (float)(rand()) / RAND_MAX - 1.0f);
-        float dist = 420.0f + (float)(rand()) / RAND_MAX * 50.0f;
-
-        float x = dist * sinf(phi) * cosf(theta);
-        float y = dist * sinf(phi) * sinf(theta);
-        float z = dist * cosf(phi);
-
-        float brightness = 0.5f + (float)(rand()) / RAND_MAX * 0.5f;
-        float colorTint = (float)(rand()) / RAND_MAX;
-        glm::vec3 col(brightness);
-        if (colorTint < 0.25f) col = glm::vec3(brightness * 0.75f, brightness * 0.85f, brightness * 1.15f);
-        else if (colorTint < 0.40f) col = glm::vec3(brightness * 1.15f, brightness * 0.95f, brightness * 0.75f);
-
-        float starSize = 1.2f + (float)(rand()) / RAND_MAX * 1.8f;
-        stars.push_back({x, y, z, col.r, col.g, col.b, 0.9f, starSize});
-    }
-
-    glGenVertexArrays(1, &starfieldVAO);
-    glGenBuffers(1, &starfieldVBO);
-
-    glBindVertexArray(starfieldVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, starfieldVBO);
-    glBufferData(GL_ARRAY_BUFFER, stars.size() * sizeof(StarVertex), stars.data(), GL_STATIC_DRAW);
-
-    GLsizei stride = sizeof(StarVertex);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(StarVertex, x));
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(StarVertex, r));
-
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(StarVertex, size));
-
-    glBindVertexArray(0);
+void SceneRenderer::initNeutralMoonTexture() {
+    if (neutralMoonTexture != 0) return;
+    // Constant RGB albedo, not measured terrain or a body-specific color.
+    const unsigned char neutralPixel[] = {128, 128, 128};
+    GLint previousBinding = 0, previousAlignment = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousBinding);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+    glGenTextures(1, &neutralMoonTexture);
+    if (!neutralMoonTexture) return;
+    glBindTexture(GL_TEXTURE_2D, neutralMoonTexture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, neutralPixel);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousBinding));
 }
 
-bool SceneRenderer::init() {
+
+bool SceneRenderer::init(int textureTier) {
+    if (!glfwGetCurrentContext() || !glCreateShader) return false;
+    cleanup();
     sunProgram = loadProgramFromFiles("shaders/sun.vert", "shaders/sun.frag");
     planetProgram = loadProgramFromFiles("shaders/planet.vert", "shaders/planet.frag");
     asteroidProgram = loadProgramFromFiles("shaders/asteroid.vert", "shaders/asteroid.frag");
@@ -222,7 +200,7 @@ bool SceneRenderer::init() {
             out vec4 FragColor;
             uniform sampler2D uStarTex;
             void main() {
-                vec3 col = texture(uStarTex, vTexCoord).rgb;
+                vec3 col = texture(uStarTex, vTexCoord).rgb * 0.38;
                 FragColor = vec4(col, 1.0);
             }
         )";
@@ -236,13 +214,22 @@ bool SceneRenderer::init() {
         }
     }
 
+    initNeutralMoonTexture();
+
+    brandMarkTexture = loadTexture("assets/branding/mark.png");
+
     // Textures with fallbacks
     sunTexture = loadTextureOrFallback("Textures/sun.jpg", "Textures/earth_daymap.jpg");
     saturnRingTexture = loadTextureOrFallback("Textures/saturn_ring_alpha.png", "Textures/venus_atmosphere.jpg");
-    starfieldTexture = loadTextureOrFallback("Textures/stars_milky_way.jpg", "Textures/earth_nightmap.jpg");
+    // Pass 3: scientific catalog starfield selected by texture tier (Low =
+    // Yale bright, Medium = Hipparcos, High = Tycho dense, Ultra = full
+    // union composite). Replaces the legacy non-catalog Milky Way art with
+    // real Yale/Hipparcos/Tycho resources.
+    starfieldPath = TextureVariants::starfieldForStyle(0, 0);
+    starfieldTexture = loadTextureOrFallback(starfieldPath.c_str(), "");
     earthDayTexture = loadTextureOrFallback("Textures/earth_daymap.jpg", "Textures/earth_nightmap.jpg");
     earthNightTexture = loadTextureOrFallback("Textures/earth_nightmap.jpg", "Textures/earth_daymap.jpg");
-    earthCloudsTexture = loadTextureOrFallback("Textures/earth_clouds.jpg", "Textures/venus_atmosphere.jpg");
+    earthCloudsTexture = loadTextureOrFallback("Textures/earth_clouds.jpg", "Textures/venus_atmosphere.jpg", TextureSpace::LinearData);
     venusAtmosphereTexture = loadTextureOrFallback("Textures/venus_atmosphere.jpg", "Textures/venus_surface.jpg");
     // PSM.6 scientific-layer datasets: strict loads (empty fallback) into the
     // generic body+layer map. A missing file stores nothing, so has()/lookup
@@ -251,14 +238,26 @@ bool SceneRenderer::init() {
     // Mars Viking. Inherited JPL mosaic seam in the Earth asset is a known
     // source limitation (see PSM.6 report); the file is loaded unaltered.
     auto loadScienceLayer = [&](const char* body, BodyLayerId layer, const char* path) {
-        GLuint tex = loadTextureOrFallback(path, "");
-        if (tex != 0) scienceLayers.textures[{body, layer}] = tex;
+        // Pass 3: entries with registered alternates (currently Venus
+        // Surface only) resolve through the variant table at the active
+        // tier; everything else loads its canonical path unchanged.
+        std::string effective(path);
+        if (const TextureVariants::LayerVariantSet* variants =
+                TextureVariants::findLayerVariants(body, layer)) {
+            const std::vector<std::string>& paths = variants->paths;
+            effective = paths[TextureVariants::variantIndex(paths.size(), textureTier)];
+        }
+        GLuint tex = loadTextureOrFallback(effective.c_str(), "", TextureSpace::LinearData);
+        if (tex != 0) {
+            scienceLayers.textures[{body, layer}] = tex;
+            scienceLayerPaths[{body, layer}] = effective;
+        }
     };
     loadScienceLayer("Venus", BodyLayerId::Surface, "Textures/Derived/venus_radar_jpl_1440.jpg");
     loadScienceLayer("Venus", BodyLayerId::Atmosphere, "Textures/Derived/venus_clouds_jpl_1440.jpg");
     loadScienceLayer("Earth", BodyLayerId::Surface, "Textures/Derived/earth_relief_jpl_1440.jpg");
     loadScienceLayer("Mars", BodyLayerId::Surface, "Textures/Derived/mars_viking_jpl_1440.jpg");
-    earthOceanMaskTexture = loadTextureOrFallback("Textures/earth_specular.png", "");
+    earthOceanMaskTexture = loadTextureOrFallback("Textures/earth_specular.png", "", TextureSpace::LinearData);
 
     // Cache Sun Uniforms
     if (sunProgram) {
@@ -312,15 +311,59 @@ bool SceneRenderer::init() {
         uShadowSamplesLoc = glGetUniformLocation(planetProgram, "uShadowSamples");
     }
 
-    initStarfield();
+    // Catalog sky only: no invented random point-star overlay.
     initRings();
+    if (!starfieldTexture || !starfieldProgram || !ringVAO || !ringVBO) {
+        cleanup();
+        return false;
+    }
     return true;
 }
 
+// Pass 3: re-resolve tier-selected texture variants. Every dataset swap
+// deletes the outgoing handle first, so exactly one version is resident.
+// No-ops whenever the resolved path already matches (single-resolution
+// assets, or a tier that selects the current file). No body names here:
+// variant sets come from the data-driven TextureVariants tables.
+void SceneRenderer::applyTextureTier(int tier) {
+    auto safeDeleteTex = [](GLuint& tex) {
+        if (tex != 0) { glDeleteTextures(1, &tex); tex = 0; }
+    };
+    for (const auto& entry : TextureVariants::layerVariantSets()) {
+        const std::string wanted =
+            entry.paths[TextureVariants::variantIndex(entry.paths.size(), tier)];
+        auto pathIt = scienceLayerPaths.find({entry.body, entry.layer});
+        const std::string current =
+            (pathIt != scienceLayerPaths.end()) ? pathIt->second : std::string();
+        if (wanted == current) continue;
+        GLuint reloaded = loadTextureOrFallback(wanted.c_str(), entry.paths.front().c_str(), TextureSpace::LinearData);
+        if (reloaded == 0) continue;
+        auto texIt = scienceLayers.textures.find({entry.body, entry.layer});
+        if (texIt != scienceLayers.textures.end()) safeDeleteTex(texIt->second);
+        scienceLayers.textures[{entry.body, entry.layer}] = reloaded;
+        scienceLayerPaths[{entry.body, entry.layer}] = wanted;
+    }
+}
+
+void SceneRenderer::applyStarfield(int style, int dataset) {
+    auto safeDeleteTex = [](GLuint& tex) { if (tex) { glDeleteTextures(1, &tex); tex = 0; } };
+    const std::string wantedSky = TextureVariants::starfieldForStyle(style, dataset);
+    if (!wantedSky.empty() && wantedSky != starfieldPath) {
+        GLuint reloaded = loadTextureOrFallback(wantedSky.c_str(), "");
+        if (reloaded != 0) {
+            safeDeleteTex(starfieldTexture);
+            starfieldTexture = reloaded;
+            starfieldPath = wantedSky;
+        }
+    }
+}
+
 void SceneRenderer::cleanup() {
+    batch.destroy();
     auto safeDeleteTex = [](GLuint &tex) {
         if (tex != 0) { glDeleteTextures(1, &tex); tex = 0; }
     };
+    safeDeleteTex(brandMarkTexture);
     safeDeleteTex(sunTexture);
     safeDeleteTex(saturnRingTexture);
     safeDeleteTex(starfieldTexture);
@@ -328,11 +371,14 @@ void SceneRenderer::cleanup() {
     safeDeleteTex(earthNightTexture);
     safeDeleteTex(earthCloudsTexture);
     safeDeleteTex(venusAtmosphereTexture);
+    safeDeleteTex(neutralMoonTexture);
     // PSM.6: deterministic teardown of every registered science dataset.
     for (auto& entry : scienceLayers.textures) {
         if (entry.second != 0) { glDeleteTextures(1, &entry.second); entry.second = 0; }
     }
     scienceLayers.textures.clear();
+    scienceLayerPaths.clear();
+    starfieldPath.clear();
     safeDeleteTex(earthOceanMaskTexture);
 
     if (starfieldVAO) { glDeleteVertexArrays(1, &starfieldVAO); starfieldVAO = 0; }
@@ -363,7 +409,7 @@ void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& p
         glUniform1i(uStarTexLoc, 0);
 
         glm::mat4 modelMat = glm::translate(glm::mat4(1.0f), cameraEye);
-        modelMat = glm::rotate(modelMat, glm::radians(60.0f), glm::vec3(1.0f, 0.2f, 0.4f));
+        // Fixed map orientation; no arbitrary aesthetic sky rotation.
         modelMat = glm::scale(modelMat, glm::vec3(450.0f));
         glm::mat4 mv = viewMat * modelMat;
 
@@ -375,23 +421,6 @@ void SceneRenderer::renderStarfield(const glm::mat4& viewMat, const glm::mat4& p
         glFrontFace(GL_CCW);
 
         glUseProgram(0);
-    }
-
-    // Dense glittering pinpoint stars across the entire sky sphere
-    if (starfieldVAO) {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-
-        if (!batch.isReady()) batch.init(kFlatVS, kFlatFS);
-        glm::mat4 starMV = glm::translate(viewMat, cameraEye);
-        batch.begin(GL_POINTS, projMat, starMV, 1.0f);
-        glBindVertexArray(starfieldVAO);
-        RenderProfiler::instance().recordDrawCall();
-        glDrawArrays(GL_POINTS, 0, 4000);
-        glBindVertexArray(0);
-        batch.end();
-
-        glDisable(GL_BLEND);
     }
 
     if (cullWasOn) glEnable(GL_CULL_FACE);
@@ -770,6 +799,7 @@ void SceneRenderer::renderPlanets(std::vector<Planet>& planets, const std::vecto
         if (bodyHasAtmo && !suppressShell && (solarUI.showAtmospheres ||
                             (layerOverrideActive && activeBodyLayer == BodyLayerId::Atmosphere))) {
             glm::mat4 atmoMV = viewMat * glm::translate(glm::mat4(1.0f), planet.currentPosition);
+            atmo->glowScale = solarUI.atmosphereGlowScale;
             atmo->renderAtmosphere(planet.name, effectiveSize, time, sunEyePos, atmoMV, projMat);
             if (planetProgram) glUseProgram(planetProgram);
         }
@@ -836,16 +866,32 @@ void SceneRenderer::renderMoons(std::vector<Moon>& moons, const std::vector<Plan
         float distToMoon = glm::distance(cameraCtrl.currentEye, moon.currentPosition);
         lod::SphereTier moonTier = lod::LODManager::instance().computeSphereTier(distToMoon, effectiveMoonSize, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
 
-        glm::mat4 moonModel = glm::translate(glm::mat4(1.0f), moon.currentPosition);
+        const auto parent = std::find_if(planets.begin(), planets.end(), [&](const Planet& p) { return p.name == moon.parentPlanet; });
+        const glm::vec3 parentOffset = parent != planets.end() ? parent->currentPosition - moon.currentPosition : glm::vec3(1,0,0);
+        // A stable parent-facing longitude for the simplified circular model.
+        const float lockedAngle = std::atan2(-parentOffset.z, parentOffset.x);
+        const glm::mat4 rotation = glm::rotate(glm::mat4(1), lockedAngle, glm::vec3(0,1,0));
+        glm::mat4 moonModel = glm::translate(glm::mat4(1.0f), moon.currentPosition) * rotation;
         moonModel = glm::scale(moonModel, glm::vec3(effectiveMoonSize));
         glm::mat4 moonMV = viewMat * moonModel;
 
         if (planetProgram) {
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, moon.texture);
+            glBindTexture(GL_TEXTURE_2D, moon.texture != 0 ? moon.texture : neutralMoonTexture);
             glUniform1i(uDayTexLoc, 0);
 
-            glm::vec3 moonSunLocalPos = sunWorldPos - moon.currentPosition;
+            const glm::mat3 worldToLocal = glm::transpose(glm::mat3(rotation));
+            glm::vec3 moonSunLocalPos = worldToLocal * (sunWorldPos - moon.currentPosition) / effectiveMoonSize;
+            if (uPlanetRadiusLoc >= 0) glUniform1f(uPlanetRadiusLoc, 1.0f);
+            if (uSunAngularRadiusLoc >= 0) glUniform1f(uSunAngularRadiusLoc, 2.0f / std::max(2.1f, glm::length(sunWorldPos - moon.currentPosition)));
+            if (uShadowSamplesLoc >= 0) glUniform1i(uShadowSamplesLoc, shadowSamples);
+            if (uC37ActiveLoc >= 0) glUniform1i(uC37ActiveLoc, c37Active ? 1 : 0);
+            if (uEclipseCountLoc >= 0) glUniform1i(uEclipseCountLoc, parent != planets.end() ? 1 : 0);
+            if (parent != planets.end() && uEclipseSpheresLoc >= 0) {
+                const glm::vec3 local = worldToLocal * parentOffset / effectiveMoonSize;
+                const glm::vec4 sphere(local, parent->size * solarUI.planetScale / effectiveMoonSize);
+                glUniform4fv(uEclipseSpheresLoc, 1, glm::value_ptr(sphere));
+            }
             glUniform3f(uSunLocalPosLoc, moonSunLocalPos.x, moonSunLocalPos.y, moonSunLocalPos.z);
 
             uploadCoreMatrices(uModelViewLoc, uProjectionLoc, uNormalMatrixLoc, moonMV, projMat);

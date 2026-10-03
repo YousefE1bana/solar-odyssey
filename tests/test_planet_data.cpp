@@ -78,13 +78,15 @@ TEST_CASE("CelestialDatabase Canonical Inventory & Validation", "[planet_data][c
         REQUIRE(moon->visualSize > 0.0f);
     }
 
-    SECTION("Validate all six expansion moons are present Natural Satellites") {
-        // Moon Expansion 1.6 reconciliation: absence inverted to presence for
-        // exactly the five expansion moons. Moon convention preserved: rows
-        // exist in the map but NOT in `order` (ordered navigation unchanged).
+    SECTION("Validate all seventeen expansion moons are present Natural Satellites") {
+        // Absence inverted to presence for the expansion moons. Moon
+        // convention preserved: rows exist in the map but NOT in `order`
+        // (ordered navigation unchanged).
         const auto& order = db.getOrder();
         REQUIRE(order.size() == 13);
-        for (const char* name : {"Enceladus", "Europa", "Ganymede", "Callisto", "Tethys"}) {
+        for (const char* name : {"Enceladus", "Europa", "Ganymede", "Callisto", "Tethys",
+                                 "Phobos", "Deimos", "Mimas", "Dione", "Rhea", "Iapetus",
+                                 "Miranda", "Ariel", "Umbriel", "Titania", "Oberon", "Triton"}) {
             INFO("Expansion moon present: " << name);
             const CelestialBodyData* body = db.getBody(name);
             REQUIRE(body != nullptr);
@@ -123,6 +125,42 @@ TEST_CASE("CelestialDatabase Canonical Inventory & Validation", "[planet_data][c
         REQUIRE(tethys->hasAxialTiltData == false);
         REQUIRE(tethys->hasTemperatureRangeData == false);
         REQUIRE(tethys->hasMeanTemperatureData == true);
+
+        // Pass 1+2 moons: tilt unsourced everywhere (false); means only where
+        // an authorized value exists; ranges only for sourced bounds.
+        const CelestialBodyData* phobos = db.getBody("Phobos");
+        REQUIRE(phobos != nullptr);
+        REQUIRE(phobos->hasAxialTiltData == false);
+        REQUIRE(phobos->hasTemperatureRangeData == true);
+        REQUIRE(phobos->hasMeanTemperatureData == false);
+
+        const CelestialBodyData* deimos = db.getBody("Deimos");
+        REQUIRE(deimos != nullptr);
+        REQUIRE(deimos->hasAxialTiltData == false);
+        REQUIRE(deimos->hasTemperatureRangeData == false);
+        REQUIRE(deimos->hasMeanTemperatureData == false);
+
+        const CelestialBodyData* mimas = db.getBody("Mimas");
+        REQUIRE(mimas != nullptr);
+        REQUIRE(mimas->hasAxialTiltData == false);
+        REQUIRE(mimas->hasTemperatureRangeData == true);
+        REQUIRE(mimas->hasMeanTemperatureData == false);
+
+        for (const char* name : {"Dione", "Rhea", "Iapetus"}) {
+            const CelestialBodyData* body = db.getBody(name);
+            REQUIRE(body != nullptr);
+            REQUIRE(body->hasAxialTiltData == false);
+            REQUIRE(body->hasTemperatureRangeData == false);
+            REQUIRE(body->hasMeanTemperatureData == false);
+        }
+
+        for (const char* name : {"Miranda", "Ariel", "Umbriel", "Titania", "Oberon", "Triton"}) {
+            const CelestialBodyData* body = db.getBody(name);
+            REQUIRE(body != nullptr);
+            REQUIRE(body->hasAxialTiltData == false);
+            REQUIRE(body->hasTemperatureRangeData == false);
+            REQUIRE(body->hasMeanTemperatureData == true);
+        }
     }
 
     SECTION("Validate Deep Space Objects (Black Hole and Wormhole)") {
@@ -179,29 +217,42 @@ TEST_CASE("CelestialDatabase Canonical Inventory & Validation", "[planet_data][c
 TEST_CASE("N-Body Registry Canonical Consistency", "[planet_data][nbody]") {
     NBodySimulation nbodySim;
     nbodySim.reset();
-    
-    // Populate standard simulation registry as initialized in Engine::initPlanetsAndMoons()
-    for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
-        nbodySim.addBody(def.name, def.mass, def.size, def.isStatic, def.parentPlanet);
-    }
 
-    SECTION("N-Body contains exactly 19 registered celestial bodies") {
-        REQUIRE(nbodySim.bodies.size() == 19);
-        
-        for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
-            const NBodyObject* obj = nbodySim.getBody(def.name);
-            REQUIRE(obj != nullptr);
-            REQUIRE(obj->name == def.name);
-            REQUIRE(obj->mass > 0.0f);
-            REQUIRE(obj->radius > 0.0f);
+    // Populate the numerical particle set with the production hybrid filter
+    // (roots only — same rule as SimulationController::init): Sun-parented
+    // entries integrate; parented moons stay analytic.
+    for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
+        if (def.parentPlanet.empty()) {
+            nbodySim.addBody(def.name, def.mass, def.size, def.isStatic, def.parentPlanet);
         }
     }
 
-    SECTION("Validate Moon is present with Earth as parent in N-Body") {
+    SECTION("N-Body contains exactly 13 numerical root bodies") {
+        REQUIRE(nbodySim.bodies.size() == 13);
+
+        for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
+            const NBodyObject* obj = nbodySim.getBody(def.name);
+            if (def.parentPlanet.empty()) {
+                REQUIRE(obj != nullptr);
+                REQUIRE(obj->name == def.name);
+                REQUIRE(obj->mass > 0.0f);
+                REQUIRE(obj->radius > 0.0f);
+            } else {
+                // Parented moons must NOT enter the numerical particle set.
+                INFO("Moon excluded from particles: " << def.name);
+                REQUIRE(obj == nullptr);
+            }
+        }
+    }
+
+    SECTION("Validate Moon is parented in the registry but absent from particles") {
         const NBodyObject* moon = nbodySim.getBody("Moon");
-        REQUIRE(moon != nullptr);
-        REQUIRE(moon->parentBody == "Earth");
-        REQUIRE_FALSE(moon->isStatic);
+        REQUIRE(moon == nullptr);
+        bool registryParented = false;
+        for (const auto& def : CanonicalInventory::getCanonicalNBodyObjects()) {
+            if (def.name == "Moon" && def.parentPlanet == "Earth") registryParented = true;
+        }
+        REQUIRE(registryParented);
     }
 
     SECTION("Explicit Assertion: Pluto is ABSENT from N-Body registry") {
@@ -229,11 +280,15 @@ TEST_CASE("Engine Runtime Planet & Moon Inventory Canonical Consistency", "[plan
         REQUIRE(dwarfCount == 4);
     }
 
-    SECTION("Canonical Moons contains exactly 6 moons with exact parents") {
-        REQUIRE(canonicalMoons.size() == 6);
+    SECTION("Canonical Moons contains exactly 18 moons with exact parents") {
+        REQUIRE(canonicalMoons.size() == 18);
         const std::vector<std::pair<std::string, std::string>> expected = {
             {"Moon", "Earth"}, {"Enceladus", "Saturn"}, {"Europa", "Jupiter"},
-            {"Ganymede", "Jupiter"}, {"Callisto", "Jupiter"}, {"Tethys", "Saturn"}
+            {"Ganymede", "Jupiter"}, {"Callisto", "Jupiter"}, {"Tethys", "Saturn"},
+            {"Phobos", "Mars"}, {"Deimos", "Mars"}, {"Mimas", "Saturn"},
+            {"Dione", "Saturn"}, {"Rhea", "Saturn"}, {"Iapetus", "Saturn"},
+            {"Miranda", "Uranus"}, {"Ariel", "Uranus"}, {"Umbriel", "Uranus"},
+            {"Titania", "Uranus"}, {"Oberon", "Uranus"}, {"Triton", "Neptune"}
         };
         for (size_t i = 0; i < expected.size(); ++i) {
             INFO("Moon roster entry " << i);
@@ -244,8 +299,8 @@ TEST_CASE("Engine Runtime Planet & Moon Inventory Canonical Consistency", "[plan
         }
     }
 
-    SECTION("Canonical N-Body objects contains exactly 19 objects") {
-        REQUIRE(canonicalNBody.size() == 19);
+    SECTION("Canonical N-Body objects contains exactly 31 objects") {
+        REQUIRE(canonicalNBody.size() == 31);
         REQUIRE(canonicalNBody[0].name == "Sun");
         REQUIRE(canonicalNBody[0].isStatic == true);
     }
@@ -263,3 +318,31 @@ TEST_CASE("Engine Runtime Planet & Moon Inventory Canonical Consistency", "[plan
 }
 
 
+
+TEST_CASE("Release scientific data has explicit authority and availability", "[planet_data][release]") {
+    CelestialDatabase db;
+    REQUIRE(db.getBody("Jupiter")->textureFile == "Textures/jupiter.jpg");
+    REQUIRE(db.getBody("Uranus")->meanTemperatureC == Approx(76.0 - 273.15));
+    REQUIRE(db.getBody("Neptune")->meanTemperatureC == Approx(72.0 - 273.15));
+    REQUIRE_FALSE(db.getBody("Uranus")->hasTemperatureRangeData);
+    REQUIRE_FALSE(db.getBody("Neptune")->hasTemperatureRangeData);
+    REQUIRE(db.getBody("Moon")->atmosphericEnvironment == AtmosphericEnvironment::Exosphere);
+    REQUIRE(db.getBody("Triton")->atmosphericEnvironment == AtmosphericEnvironment::Atmosphere);
+    // Independent JPL SAT441 GM / solar GM (km^3/s^2), not a second mass table.
+    const std::vector<std::pair<std::string, double>> gm = {
+        {"Mimas", 2.50349}, {"Dione", 73.11607}, {"Rhea", 153.94175}, {"Iapetus", 120.51511}};
+    for (const auto& [name, value] : gm) {
+        auto it = std::find_if(CanonicalInventory::getCanonicalMoons().begin(),
+            CanonicalInventory::getCanonicalMoons().end(), [&](const auto& body) { return body.name == name; });
+        REQUIRE(it != CanonicalInventory::getCanonicalMoons().end());
+        REQUIRE(it->mass == Approx(value / 1.32712440018e11).epsilon(0.00001));
+    }
+    for (const auto& body : CanonicalInventory::getCanonicalNBodyObjects()) {
+        const auto& source = body.parentPlanet.empty() ? CanonicalInventory::getCanonicalPlanets() : CanonicalInventory::getCanonicalMoons();
+        if (body.name == "Sun") continue;
+        auto it = std::find_if(source.begin(), source.end(), [&](const auto& item) { return item.name == body.name; });
+        REQUIRE(it != source.end());
+        REQUIRE(body.mass == it->mass);
+        REQUIRE(body.size == it->size);
+    }
+}

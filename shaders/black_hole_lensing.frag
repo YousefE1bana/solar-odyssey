@@ -101,10 +101,10 @@ vec4 evaluateDiskEmission(vec3 hitPos, vec3 rayDir, float rs, float rIn, float r
     diskColor *= (dopplerFactor * redshift);
 
     float innerFade = smoothstep(0.0, 0.06, normR);
-    float outerFade = smoothstep(1.0, 0.75, normR);
+    float outerFade = (1.0 - smoothstep(0.75, 1.0, normR));
     float alpha = innerFade * outerFade * 0.92;
 
-    float photonProximity = smoothstep(0.08, 0.0, normR);
+    float photonProximity = (1.0 - smoothstep(0.0, 0.08, normR));
     diskColor += vec3(1.0, 0.95, 0.85) * photonProximity * 2.2;
     alpha = max(alpha, photonProximity * 0.98);
 
@@ -156,7 +156,7 @@ void main() {
     vec4 secondaryDiskAcc = vec4(0.0);
     bool captured = false;
     int steps = max(uMaxSteps, 4);
-    float dtBase = (2.0 * rInfl) / float(steps);
+    float dtBase = (4.0 * rInfl) / float(steps);
 
     for (int i = 0; i < steps; ++i) {
         float r = length(rayPos);
@@ -186,22 +186,11 @@ void main() {
             vec3 hitPos = mix(rayPos, nextPos, clamp(tHit, 0.0, 1.0));
             float rHit = length(hitPos.xz);
 
-            // Topological classification:
-            // (a) Deflection occurred: dot(rayDir, initialDir) < 0.99
-            // (b) Post-periapsis: dot(rayPos, rayDir) >= -0.05
-            // (c) Hit radius within physical disk bounds
-            bool isDeflected = dot(rayDir, initialDir) < 0.99;
-            bool isPostPeriapsis = dot(rayPos, rayDir) >= -0.05;
-
-            // Supplementary far-side check if observer projection on disk plane has magnitude
-            bool farSideOk = true;
-            if (length(uCameraLocal.xz) > 0.5) {
-                farSideOk = dot(hitPos.xz, uCameraLocal.xz) < 0.0;
-            }
-
-            if (isDeflected && isPostPeriapsis && farSideOk && rHit >= uAccretionDiskInner && rHit <= uAccretionDiskOuter) {
+            // Every bounded ray/disk intersection contributes, including the
+            // directly visible near side. Deflection creates additional images.
+            if (rHit >= uAccretionDiskInner && rHit <= uAccretionDiskOuter) {
                 vec4 diskSample = evaluateDiskEmission(hitPos, rayDir, rs, uAccretionDiskInner, uAccretionDiskOuter);
-                secondaryDiskAcc.rgb += diskSample.rgb * (1.0 - secondaryDiskAcc.a);
+                secondaryDiskAcc.rgb += diskSample.rgb * diskSample.a * (1.0 - secondaryDiskAcc.a);
                 secondaryDiskAcc.a += diskSample.a * (1.0 - secondaryDiskAcc.a);
             }
         }

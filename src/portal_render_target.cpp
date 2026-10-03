@@ -5,6 +5,7 @@
 #include <fstream>
 #include <cmath>
 #include <algorithm>
+#include <GLFW/glfw3.h>
 
 PortalRenderTarget::PortalRenderTarget() = default;
 
@@ -44,6 +45,7 @@ PortalRenderTarget& PortalRenderTarget::operator=(PortalRenderTarget&& other) no
 }
 
 bool PortalRenderTarget::init(int w, int h) {
+    if (!glfwGetCurrentContext()) return false;
     cleanup();
 
     width = (w > 0) ? w : 512;
@@ -57,9 +59,11 @@ bool PortalRenderTarget::init(int w, int h) {
 
     // 1. Create Framebuffer
     glCreateFramebuffers(1, &fbo);
+    if (!fbo) return false;
 
     // 2. Create HDR Color Texture (RGBA16F)
     glCreateTextures(GL_TEXTURE_2D, 1, &colorTex);
+    if (!colorTex) { cleanup(); return false; }
     glTextureStorage2D(colorTex, 1, GL_RGBA16F, width, height);
     glTextureParameteri(colorTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(colorTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -69,6 +73,7 @@ bool PortalRenderTarget::init(int w, int h) {
 
     // 3. Create Depth Renderbuffer (DEPTH24)
     glCreateRenderbuffers(1, &depthRbo);
+    if (!depthRbo) { cleanup(); return false; }
     glNamedRenderbufferStorage(depthRbo, GL_DEPTH_COMPONENT24, width, height);
     glNamedFramebufferRenderbuffer(fbo, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRbo);
 
@@ -194,4 +199,3 @@ bool PortalRenderTarget::captureToBMP(const char* filepath) const {
 
     return true;
 }
-

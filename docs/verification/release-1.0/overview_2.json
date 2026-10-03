@@ -1,0 +1,23 @@
+{
+  "scene": "overview",
+  "type": "OFFICIAL_BASELINE",
+  "warmup_frames": 300,
+  "measured_frames": 1000,
+  "bypass_copy": false,
+  "median_fps": 961.2612,
+  "median_cpu_ms": 0.4369,
+  "median_wall_frame_ms": 1.0403,
+  "framebuffer_width": 1920,
+  "framebuffer_height": 1061,
+  "gpu_samples": 847,
+  "fps_measurement": "complete_frame_including_swap_and_poll",
+  "median_gpu_ms": 0.9103,
+  "gpu_time_available": true,
+  "p1_low_fps": 461.5740,
+  "p01_low_fps": 201.4180,
+  "p1_low_cpu_ms": 1.2332,
+  "p01_low_cpu_ms": 2.3690,
+  "median_draw_calls": 51,
+  "median_triangles": 69728,
+  "passed": true
+}

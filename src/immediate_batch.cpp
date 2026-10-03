@@ -1,5 +1,6 @@
 #include "immediate_batch.h"
 #include "shader_utils.h"
+#include <GLFW/glfw3.h>
 
 const char* kFlatVS = R"(
 #version 450 core
@@ -26,6 +27,8 @@ void main() {
 )";
 
 bool ImmediateBatch::init(const std::string& vsSource, const std::string& fsSource) {
+    if (!glfwGetCurrentContext() || !glCreateShader) return false;
+    destroy();
     GLuint vs = compileShader(GL_VERTEX_SHADER, vsSource);
     GLuint fs = compileShader(GL_FRAGMENT_SHADER, fsSource);
     program = linkProgram(vs, fs);
@@ -35,6 +38,7 @@ bool ImmediateBatch::init(const std::string& vsSource, const std::string& fsSour
 
     glCreateVertexArrays(1, &vao);
     glCreateBuffers(1, &vbo);
+    if (!vao || !vbo) { destroy(); return false; }
     glNamedBufferData(vbo, kCapacityBytes, nullptr, GL_STREAM_DRAW);
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, kStrideFloats * sizeof(float));
 
@@ -96,5 +100,7 @@ void ImmediateBatch::destroy() {
     if (vao) glDeleteVertexArrays(1, &vao);
     if (program) glDeleteProgram(program);
     vao = vbo = program = 0;
+    uProjLoc = uViewLoc = -1;
+    verts.clear();
     ready = false;
 }

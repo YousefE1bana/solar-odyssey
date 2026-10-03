@@ -38,7 +38,6 @@ struct FrameEvents {
     bool requestLoad = false;
     bool wormholeTraversed = false;
     bool photoCaptured = false;
-    bool missionCompleted = false;
     bool warpChargeTriggered = false;
     bool warpExitTriggered = false;
     std::string toastTitle;
@@ -49,7 +48,6 @@ struct FrameEvents {
         requestLoad = false;
         wormholeTraversed = false;
         photoCaptured = false;
-        missionCompleted = false;
         warpChargeTriggered = false;
         warpExitTriggered = false;
         toastTitle.clear();

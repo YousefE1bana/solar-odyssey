@@ -19,7 +19,6 @@ TEST_CASE("FrameEvents - Clear and Trigger Semantics", "[context]") {
     REQUIRE_FALSE(events.requestLoad);
     REQUIRE_FALSE(events.wormholeTraversed);
     REQUIRE_FALSE(events.photoCaptured);
-    REQUIRE_FALSE(events.missionCompleted);
     REQUIRE_FALSE(events.warpChargeTriggered);
     REQUIRE_FALSE(events.warpExitTriggered);
 

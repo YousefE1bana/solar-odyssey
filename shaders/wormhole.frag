@@ -199,7 +199,7 @@ void main() {
 
         // Radial opacity envelope
         float innerFade = smoothstep(0.22, 0.35, r);
-        float outerFade = smoothstep(1.0, 0.70, r);
+        float outerFade = (1.0 - smoothstep(0.70, 1.0, r));
         float radialMask = innerFade * outerFade;
 
         // Cosmic color gradient: Inner radiant cyan-white -> Mid violet -> Outer deep magenta
@@ -231,7 +231,7 @@ void main() {
         vec2 uv = (vTexCoord - 0.5) * 2.0;
         float r = length(uv);
 
-        float archMask = smoothstep(0.3, 0.6, r) * smoothstep(1.0, 0.75, r);
+        float archMask = smoothstep(0.3, 0.6, r) * (1.0 - smoothstep(0.75, 1.0, r));
         float pulse = 0.85 + 0.15 * sin(uTime * 3.0);
 
         vec3 haloColor = mix(vec3(0.0, 0.8, 1.0), vec3(0.8, 0.2, 1.0), r);

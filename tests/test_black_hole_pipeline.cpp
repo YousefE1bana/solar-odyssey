@@ -3,6 +3,8 @@
 #include <GLFW/glfw3.h>
 #include "post_processing.h"
 #include "black_hole.h"
+#include "gl_primitives.h"
+#include "lod_manager.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 #include <cstring>
@@ -41,6 +43,11 @@ struct OffscreenGLContext {
 
     ~OffscreenGLContext() {
         if (window) {
+            glfwMakeContextCurrent(window);
+            if (valid) {
+                lod::LODManager::releaseCurrentContext();
+                glprims::destroySharedResources();
+            }
             glfwDestroyWindow(window);
             window = nullptr;
         }
@@ -421,3 +428,30 @@ TEST_CASE("BlackHole - CPU Submission Overhead of transitionToLensed and copyPre
     REQUIRE(medianTransUs < 100.0);
 }
 
+TEST_CASE("Effects off still produces current sRGB capture and depth", "[black_hole_pipeline][release]") {
+    OffscreenGLContext ctx;
+    REQUIRE(ctx.valid);
+    PostProcessingPipeline pipeline;
+    REQUIRE(pipeline.init(32, 32));
+    pipeline.enabled = false;
+    for (float radiance : {0.0f, 0.21404114f, 1.0f}) {
+        pipeline.beginScene();
+        glClearColor(radiance, radiance, radiance, 1.0f);
+        glClearDepth(0.4);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        pipeline.transitionToLensed();
+        pipeline.endSceneAndPostProcess();
+        unsigned char pixel[4]{};
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, pipeline.outputFBO);
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glReadPixels(16, 16, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        const int expected = radiance == 0.0f ? 0 : radiance == 1.0f ? 255 : 128;
+        REQUIRE(std::abs(int(pixel[0]) - expected) <= 1);
+        std::vector<float> depth;
+        REQUIRE(pipeline.readSceneDepth(depth));
+        REQUIRE(depth[16 * 32 + 16] == Approx(0.4).margin(0.00001));
+        REQUIRE(glGetError() == GL_NO_ERROR);
+    }
+    glClearDepth(1.0);
+    pipeline.cleanup();
+}

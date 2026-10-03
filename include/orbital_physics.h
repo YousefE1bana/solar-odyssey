@@ -18,8 +18,11 @@ namespace OrbitalPhysics {
     }
 
     // Calculates the planet-relative orbital position for a natural satellite (moon) (float)
-    inline glm::vec3 computeMoonPosition(const glm::vec3& parentPlanetPos, float simTime, float moonOrbitSpeed, float orbitSpeedScale, float moonOrbitRadius) {
-        float moonRadAngle = glm::radians(simTime * moonOrbitSpeed * 0.05f * orbitSpeedScale);
+    // initialAngleDeg phases the local orbit; orbitDirection flips the sense
+    // of motion generically (+1 prograde default, -1 retrograde). Both
+    // default to legacy behavior so existing callers are unchanged.
+    inline glm::vec3 computeMoonPosition(const glm::vec3& parentPlanetPos, float simTime, float moonOrbitSpeed, float orbitSpeedScale, float moonOrbitRadius, float initialAngleDeg = 0.0f, float orbitDirection = 1.0f) {
+        float moonRadAngle = glm::radians(initialAngleDeg + orbitDirection * simTime * moonOrbitSpeed * 0.05f * orbitSpeedScale);
         return parentPlanetPos + glm::vec3(
             std::cos(moonRadAngle) * moonOrbitRadius,
             0.0f,
@@ -28,8 +31,11 @@ namespace OrbitalPhysics {
     }
 
     // Calculates the planet-relative orbital position for a natural satellite (moon) (double)
-    inline glm::dvec3 computeMoonPosition(const glm::dvec3& parentPlanetPos, double simTime, double moonOrbitSpeed, double orbitSpeedScale, double moonOrbitRadius) {
-        double moonRadAngle = glm::radians(simTime * moonOrbitSpeed * 0.05 * orbitSpeedScale);
+    // initialAngleDeg phases the local orbit; orbitDirection flips the sense
+    // of motion generically (+1 prograde default, -1 retrograde). Both
+    // default to legacy behavior so existing callers are unchanged.
+    inline glm::dvec3 computeMoonPosition(const glm::dvec3& parentPlanetPos, double simTime, double moonOrbitSpeed, double orbitSpeedScale, double moonOrbitRadius, double initialAngleDeg = 0.0, double orbitDirection = 1.0) {
+        double moonRadAngle = glm::radians(initialAngleDeg + orbitDirection * simTime * moonOrbitSpeed * 0.05 * orbitSpeedScale);
         return parentPlanetPos + glm::dvec3(
             std::cos(moonRadAngle) * moonOrbitRadius,
             0.0,

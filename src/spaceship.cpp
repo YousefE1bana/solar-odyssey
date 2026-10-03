@@ -7,12 +7,60 @@
 #include <cstdlib>
 #include <algorithm>
 #include <iostream>
+#include "save_state.h"
+
+void Spaceship::restoreSession(const SimulationSaveState& saved) {
+    // Keep GPU batches and tuning; clear session dynamics through the owner.
+    resetToSpawnNearEarth();
+    active = saved.shipActive;
+    position = glm::vec3(saved.shipPosition);
+    prevFramePosition = position;
+    velocity = glm::vec3(saved.shipVelocity);
+    if (saved.version >= 4) {
+        orientation = glm::normalize(glm::quat(saved.shipOrientation));
+        forward = orientation * glm::vec3(0.0f, 0.0f, -1.0f);
+        up = orientation * glm::vec3(0.0f, 1.0f, 0.0f);
+        right = orientation * glm::vec3(1.0f, 0.0f, 0.0f);
+        boostEnergy = static_cast<float>(saved.shipBoostEnergy);
+        cameraView = static_cast<SpaceshipCameraView>(saved.shipCameraView);
+    }
+    throttle = currentThrottle = static_cast<float>(saved.shipThrottle);
+    targetPlanetName = saved.shipTargetBody;
+    targetPlanetPos = glm::vec3(0.0f);
+    targetPlanetRadius = 1.0f;
+    targetDistance = 0.0f;
+    externalGravityAccel = glm::vec3(0.0f);
+    currentPitchInput = currentYawInput = currentRollInput = visualBankAngle = 0.0f;
+    nearestPlanetName = "None";
+    nearestPlanetDist = 9999.0f;
+    nearestPlanetRadius = 1.0f;
+    proximityAlertActive = false;
+    collisionBodiesThisFrame.clear();
+    orbitAssistAngle = 0.0f;
+    orbitAssistRadius = 4.0f;
+    thrusterPulseTimer = 0.0f;
+    soundPitch = 1.0f;
+    soundVolume = 0.0f;
+    // Warp/autopilot trajectories were never captured; always resume manual.
+    warpSystem.cancelWarp();
+    warpSystem.currentSpeed = warpSystem.distanceToDest = 0.0f;
+    warpSystem.destinationName.clear();
+    warpSystem.destinationPos = glm::vec3(0.0f);
+    warpSystem.destinationRadius = 1.0f;
+    warpSystem.soundPitch = warpSystem.soundGain = 1.0f;
+    const float back = cameraView == SHIP_CAM_CLOSE ? 3.6f : 6.5f;
+    const float height = cameraView == SHIP_CAM_CLOSE ? 1.1f : 2.2f;
+    smoothCameraEye = cameraView == SHIP_CAM_COCKPIT ? position + forward * 0.65f + up * 0.35f : position - forward * back + up * height;
+    smoothCameraTarget = position + forward * (cameraView == SHIP_CAM_COCKPIT ? 25.0f : cameraView == SHIP_CAM_CLOSE ? 10.0f : 14.0f);
+    smoothCameraUp = up;
+}
 
 Spaceship::Spaceship() {
         resetToSpawnNearEarth();
     }
 
 void Spaceship::resetToSpawnNearEarth() {
+        collisionBodiesThisFrame.clear();
         position = glm::vec3(12.0f, 2.5f, 14.0f);
         velocity = glm::vec3(0.0f, 0.0f, 0.0f);
         forward = glm::normalize(glm::vec3(-0.6f, 0.0f, -0.8f));
@@ -196,6 +244,7 @@ void Spaceship::processInput(bool fwd, bool back, bool yawL, bool yawR, bool rol
     }
 
 void Spaceship::update(float dt, const std::vector<std::pair<std::string, std::pair<glm::vec3, float>>>& planetaryBodies) {
+        collisionBodiesThisFrame.clear();
         if (!active) return;
         dt = std::min(0.05f, std::max(0.001f, dt));
 
@@ -282,6 +331,7 @@ void Spaceship::update(float dt, const std::vector<std::pair<std::string, std::p
                         float safeR = body.second.second * 1.28f;
                         if (body.first == "Sun") safeR = body.second.second * 1.45f;
                         if (glm::length(testPos - body.second.first) < safeR) {
+                            collisionBodiesThisFrame.push_back(body.first);
                             // Stop at the envelope edge instead of passing through
                             glm::vec3 outDir = glm::normalize(testPos - body.second.first);
                             position = body.second.first + outDir * safeR;
@@ -326,6 +376,7 @@ void Spaceship::update(float dt, const std::vector<std::pair<std::string, std::p
             if (name == "Sun") safeRadius = bRadius * 1.45f;
 
             if (dist < safeRadius && dist > 0.001f) {
+                collisionBodiesThisFrame.push_back(name);
                 proximityAlertActive = true;
                 glm::vec3 repulsion = glm::normalize(position - bPos);
                 float penetration = safeRadius - dist;
@@ -410,6 +461,11 @@ glm::vec3 Spaceship::getCameraTarget() const {
 
 float Spaceship::getSpeedKmh() const {
     return glm::length(velocity) * 1250.0f; // Scale to simulated cinematic km/s
+}
+
+void Spaceship::cleanupGL() {
+    renderBatch.destroy();
+    warpSystem.cleanupGL();
 }
 
 // Procedural Sci-Fi Spaceship Mesh Rendering (High Fidelity)

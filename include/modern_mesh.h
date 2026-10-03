@@ -18,6 +18,8 @@ struct Vertex {
 };
 
 // A GPU mesh: interleaved VBO + optional index buffer, wrapped in a VAO.
+// Build/destroy require the owning context current. An owner which outlives
+// that context must call destroy explicitly before context teardown.
 class GPUMesh {
 public:
     GPUMesh() = default;

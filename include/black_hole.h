@@ -93,6 +93,10 @@ public:
     static constexpr size_t MAX_PARTICLES = 160;
 
     BlackHole();
+    ~BlackHole();
+    BlackHole(const BlackHole&) = delete;
+    BlackHole& operator=(const BlackHole&) = delete;
+    void cleanup(); // release GL resources before the owning context is destroyed
 
     void initParticles();
     void resetParticle(InfallingParticle& p);
@@ -116,6 +120,8 @@ public:
     static double computeBoundedDeflection(double rs, double impactParam, double influenceRadius = 24.0, int steps = 24);
 
 private:
+    bool ownsProgram = false;
+    bool ownsLensingProgram = false;
     struct StripMesh {
         mesh::GPUMesh gpu;
         float innerR = 0, outerR = 0;

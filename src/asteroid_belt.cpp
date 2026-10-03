@@ -10,6 +10,7 @@
 #include <iostream>
 #include <chrono>
 #include <cstring>
+#include <GLFW/glfw3.h>
 
 AsteroidBelt::AsteroidBelt(int count, float inR, float outR, const char* texturePath)
     : activeCount(count), innerRadius(inR), outerRadius(outR) {
@@ -21,6 +22,10 @@ AsteroidBelt::AsteroidBelt(int count, float inR, float outR, const char* texture
 }
 
 AsteroidBelt::~AsteroidBelt() {
+    cleanup();
+}
+
+void AsteroidBelt::cleanup() {
     if (asteroidTexture && glDeleteTextures) {
         glDeleteTextures(1, &asteroidTexture);
         asteroidTexture = 0;
@@ -39,6 +44,9 @@ AsteroidBelt::~AsteroidBelt() {
         glDeleteBuffers(1, &instanceVBO);
         instanceVBO = 0;
     }
+    mappedInstancePtr = nullptr;
+    persistentStorageSupported = false;
+    instanceFrames.reset();
 }
 
 void AsteroidBelt::generateAsteroids(int totalCapacity) {
@@ -101,14 +109,15 @@ void AsteroidBelt::generateAsteroids(int totalCapacity) {
 }
 
 void AsteroidBelt::loadTexture(const char* texturePath) {
-    if (!texturePath || glCreateTextures == nullptr) return;
+    if (!glfwGetCurrentContext() || !texturePath || glCreateTextures == nullptr) return;
 
     int width, height, channels;
-    unsigned char* image = stbi_load(texturePath, &width, &height, &channels, 0);
+    unsigned char* image = stbi_load(texturePath, &width, &height, &channels, 4);
     if (image) {
         glCreateTextures(GL_TEXTURE_2D, 1, &asteroidTexture);
-        GLenum internalFormat = (channels == 4) ? GL_RGBA8 : GL_RGB8;
-        GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+        if (!asteroidTexture) { stbi_image_free(image); return; }
+        GLenum internalFormat = GL_SRGB8_ALPHA8;
+        GLenum format = GL_RGBA;
         int levels = 1 + (int)std::floor(std::log2(std::max(width, height)));
         glTextureStorage2D(asteroidTexture, levels, internalFormat, width, height);
         glTextureSubImage2D(asteroidTexture, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, image);
@@ -122,11 +131,12 @@ void AsteroidBelt::loadTexture(const char* texturePath) {
 }
 
 void AsteroidBelt::initBuffers() {
-    if (glCreateBuffers == nullptr) return;
+    if (!glfwGetCurrentContext() || glCreateBuffers == nullptr) return;
 
     GLsizeiptr totalBufferSize = sizeof(AsteroidInstanceData) * maxCapacity * kBufferRingSize;
 
     glCreateBuffers(1, &instanceVBO);
+    if (!instanceVBO) return;
 
     // Check for glBufferStorage / glNamedBufferStorage (OpenGL 4.5 Core / ARB_buffer_storage)
     GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT | GL_DYNAMIC_STORAGE_BIT;
@@ -139,14 +149,23 @@ void AsteroidBelt::initBuffers() {
     }
 
     if (!persistentStorageSupported) {
-        // Compatibility fallback using standard dynamic buffer
-        glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-        glBufferData(GL_ARRAY_BUFFER, totalBufferSize, nullptr, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // BufferStorage may have made this immutable even when mapping fails.
+        // A fresh mutable object is required for the compatibility allocator.
+        glDeleteBuffers(1, &instanceVBO);
+        instanceVBO = 0;
+        glCreateBuffers(1, &instanceVBO);
+        if (!instanceVBO) return;
+        glNamedBufferData(instanceVBO, totalBufferSize, nullptr, GL_DYNAMIC_DRAW);
         mappedInstancePtr = nullptr;
     }
 
-    currentRingIndex = 0;
+    GLint64 allocatedBytes = 0;
+    glGetNamedBufferParameteri64v(instanceVBO, GL_BUFFER_SIZE, &allocatedBytes);
+    if (allocatedBytes != totalBufferSize) {
+        cleanup();
+        return;
+    }
+    instanceFrames.reset();
     for (int i = 0; i < kBufferRingSize; ++i) {
         ringFences[i] = nullptr;
     }
@@ -205,7 +224,7 @@ void AsteroidBelt::update(float deltaTime, float planetSpeed, const glm::vec3& b
 void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& viewMat, const glm::mat4& projMat,
                           const glm::vec3& sunEyePos, const glm::vec3& camEye,
                           bool enableLOD, int lodOverride) {
-    if (allAsteroids.empty() || !program) return;
+    if (allAsteroids.empty() || !program || !instanceVBO) return;
 
     auto tRenderStart = std::chrono::high_resolution_clock::now();
 
@@ -231,64 +250,46 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
     if (uProjectionLoc != -1) glUniformMatrix4fv(uProjectionLoc, 1, GL_FALSE, glm::value_ptr(projMat));
 
     float countMult = 0.20f + 0.80f * std::max(0.0f, std::min(1.0f, focusFade));
-    int countToRender = (int)(std::min(activeCount, (int)allAsteroids.size()) * countMult);
+    int countToRender = (int)(std::clamp(activeCount, 0, (int)allAsteroids.size()) * countMult);
 
     lod::LODManager& lodMgr = lod::LODManager::instance();
     lodMgr.init();
 
-    // 1. Ring Buffer Synchronization & Timeout-Safe Back-Pressure Policy
+    // A slot's ranges describe its uploaded contents, never the current CPU frame.
     telemetry.instanceFenceWaitMs = 0.0f;
-    bool skipUpload = false;
-
-    if (persistentStorageSupported && ringFences[currentRingIndex]) {
-        // Non-blocking test on current slot
-        GLenum initialCheck = glClientWaitSync(ringFences[currentRingIndex], 0, 0);
-        if (initialCheck == GL_ALREADY_SIGNALED || initialCheck == GL_CONDITION_SATISFIED) {
-            glDeleteSync(ringFences[currentRingIndex]);
-            ringFences[currentRingIndex] = nullptr;
-        } else {
-            // Check other ring slots to see if an alternative slot is free
-            bool foundFreeSlot = false;
-            for (int trySlot = 1; trySlot < kBufferRingSize; ++trySlot) {
-                int candSlot = (currentRingIndex + trySlot) % kBufferRingSize;
-                if (!ringFences[candSlot]) {
-                    currentRingIndex = candSlot;
-                    foundFreeSlot = true;
-                    break;
-                }
-                GLenum candCheck = glClientWaitSync(ringFences[candSlot], 0, 0);
-                if (candCheck == GL_ALREADY_SIGNALED || candCheck == GL_CONDITION_SATISFIED) {
-                    glDeleteSync(ringFences[candSlot]);
-                    ringFences[candSlot] = nullptr;
-                    currentRingIndex = candSlot;
-                    foundFreeSlot = true;
-                    break;
-                }
-            }
-
-            if (!foundFreeSlot) {
-                // All ring slots are in-flight: apply bounded back-pressure wait (1ms maximum)
-                telemetry.ringBackpressureFrames++;
-                auto tWaitStart = std::chrono::high_resolution_clock::now();
-                GLenum waitStatus = glClientWaitSync(ringFences[currentRingIndex], GL_SYNC_FLUSH_COMMANDS_BIT, 1000000); // 1,000,000 ns = 1 ms
-                auto tWaitEnd = std::chrono::high_resolution_clock::now();
-                float waitMs = std::chrono::duration<float, std::milli>(tWaitEnd - tWaitStart).count();
-                telemetry.instanceFenceWaitMs = waitMs;
-                if (waitMs > telemetry.maxInstanceFenceWaitMs) {
-                    telemetry.maxInstanceFenceWaitMs = waitMs;
-                }
-
-                if (waitStatus == GL_ALREADY_SIGNALED || waitStatus == GL_CONDITION_SATISFIED) {
-                    glDeleteSync(ringFences[currentRingIndex]);
-                    ringFences[currentRingIndex] = nullptr;
-                } else if (waitStatus == GL_TIMEOUT_EXPIRED || waitStatus == GL_WAIT_FAILED) {
-                    // TIMEOUT SAFETY: Never overwrite in-flight GPU segment; skip upload to protect data integrity
-                    telemetry.ringWaitTimeouts++;
-                    skipUpload = true;
-                }
-            }
+    auto pollFence = [&](int slot, GLbitfield flags, GLuint64 timeout) {
+        if (!ringFences[slot]) return InstanceBufferRing::Availability::Ready;
+        GLenum status = glClientWaitSync(ringFences[slot], flags, timeout);
+        if (status == GL_ALREADY_SIGNALED || status == GL_CONDITION_SATISFIED) {
+            glDeleteSync(ringFences[slot]);
+            ringFences[slot] = nullptr;
+            return InstanceBufferRing::Availability::Ready;
+        }
+        if (status == GL_WAIT_FAILED) {
+            ++telemetry.ringSyncFailures;
+            return InstanceBufferRing::Availability::Failed;
+        }
+        return InstanceBufferRing::Availability::Pending;
+    };
+    int uploadSlot = persistentStorageSupported
+        ? instanceFrames.acquire([&](int slot) { return pollFence(slot, 0, 0); })
+        : instanceFrames.nextSlot();
+    if (uploadSlot < 0) {
+        ++telemetry.ringBackpressureFrames;
+        int candidate = instanceFrames.nextSlot();
+        if (instanceFrames.canWait(candidate)) {
+            auto start = std::chrono::high_resolution_clock::now();
+            auto status = pollFence(candidate, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000);
+            telemetry.instanceFenceWaitMs = std::chrono::duration<float, std::milli>(
+                std::chrono::high_resolution_clock::now() - start).count();
+            telemetry.maxInstanceFenceWaitMs = std::max(telemetry.maxInstanceFenceWaitMs,
+                                                       telemetry.instanceFenceWaitMs);
+            if (status == InstanceBufferRing::Availability::Ready) uploadSlot = candidate;
+            else if (status == InstanceBufferRing::Availability::Failed) instanceFrames.waitFailed(candidate);
+            else ++telemetry.ringWaitTimeouts;
         }
     }
+    bool skipUpload = uploadSlot < 0;
 
     // 2. Bucket asteroids by LOD into contiguous slices
     static std::vector<AsteroidInstanceData> highBucket, medBucket, lowBucket;
@@ -299,7 +300,7 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
     medBucket.reserve(countToRender);
     lowBucket.reserve(countToRender);
 
-    for (int i = 0; i < countToRender; ++i) {
+    for (int i = 0; !skipUpload && i < countToRender; ++i) {
         const Asteroid& ast = allAsteroids[i];
         float distToCam = glm::distance(ast.position, camEye);
         lod::AsteroidTier tier = lodMgr.computeAsteroidTier(distToCam, enableLOD, lodOverride);
@@ -322,14 +323,13 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
     int medCount = (int)medBucket.size();
     int lowCount = (int)lowBucket.size();
 
-    GLintptr baseInstanceOffset = (GLintptr)currentRingIndex * maxCapacity;
-    GLintptr highOffsetBytes = (baseInstanceOffset) * sizeof(AsteroidInstanceData);
-    GLintptr medOffsetBytes = (baseInstanceOffset + highCount) * sizeof(AsteroidInstanceData);
-    GLintptr lowOffsetBytes = (baseInstanceOffset + highCount + medCount) * sizeof(AsteroidInstanceData);
-
     auto tUploadStart = std::chrono::high_resolution_clock::now();
 
     if (!skipUpload) {
+        GLintptr baseInstanceOffset = (GLintptr)uploadSlot * maxCapacity;
+        GLintptr highOffsetBytes = baseInstanceOffset * sizeof(AsteroidInstanceData);
+        GLintptr medOffsetBytes = (baseInstanceOffset + highCount) * sizeof(AsteroidInstanceData);
+        GLintptr lowOffsetBytes = (baseInstanceOffset + highCount + medCount) * sizeof(AsteroidInstanceData);
         if (mappedInstancePtr) {
             AsteroidInstanceData* ringBasePtr = mappedInstancePtr + baseInstanceOffset;
             if (highCount > 0) std::memcpy(ringBasePtr, highBucket.data(), highCount * sizeof(AsteroidInstanceData));
@@ -341,10 +341,22 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
             if (medCount > 0) glNamedBufferSubData(instanceVBO, medOffsetBytes, medCount * sizeof(AsteroidInstanceData), medBucket.data());
             if (lowCount > 0) glNamedBufferSubData(instanceVBO, lowOffsetBytes, lowCount * sizeof(AsteroidInstanceData), lowBucket.data());
         }
+        instanceFrames.publish(uploadSlot, {highCount, medCount, lowCount}, maxCapacity);
     }
 
     auto tUploadEnd = std::chrono::high_resolution_clock::now();
-    telemetry.instanceUploadMs = std::chrono::duration<float, std::milli>(tUploadEnd - tUploadStart).count();
+    telemetry.instanceUploadMs = skipUpload ? 0.0f : std::chrono::duration<float, std::milli>(tUploadEnd - tUploadStart).count();
+
+    int drawSlot = instanceFrames.drawSlot();
+    auto ranges = drawSlot >= 0 ? instanceFrames.frame(drawSlot).ranges : InstanceBufferRing::Ranges{};
+    highCount = ranges.high;
+    medCount = ranges.medium;
+    lowCount = ranges.low;
+    GLintptr baseInstanceOffset = (GLintptr)std::max(0, drawSlot) * maxCapacity;
+    GLintptr highOffsetBytes = baseInstanceOffset * sizeof(AsteroidInstanceData);
+    GLintptr medOffsetBytes = (baseInstanceOffset + highCount) * sizeof(AsteroidInstanceData);
+    GLintptr lowOffsetBytes = (baseInstanceOffset + highCount + medCount) * sizeof(AsteroidInstanceData);
+    if (skipUpload && drawSlot >= 0) ++telemetry.reusedFrameDraws;
 
     // 3. Exactly <= 3 Instanced Draw Submissions
     int drawCallCount = 0;
@@ -364,10 +376,17 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
         drawCallCount++;
     }
 
-    // 4. Place GPU synchronization fence for current ring buffer slot if updated
-    if (persistentStorageSupported && !skipUpload) {
-        ringFences[currentRingIndex] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-        currentRingIndex = (currentRingIndex + 1) % kBufferRingSize;
+    // Every draw, including reuse, must be covered by the slot's latest fence.
+    if (persistentStorageSupported && drawCallCount > 0) {
+        GLsync latestReaders = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (latestReaders) {
+            if (ringFences[drawSlot]) glDeleteSync(ringFences[drawSlot]);
+            ringFences[drawSlot] = latestReaders;
+        } else {
+            ++telemetry.ringSyncFailures;
+        }
+        // A failed fence cannot make an older fence safe for CPU overwrite.
+        instanceFrames.submitted(drawSlot, latestReaders != nullptr);
     }
 
     glBindVertexArray(0);
@@ -379,6 +398,6 @@ void AsteroidBelt::render(float focusFade, GLuint program, const glm::mat4& view
     telemetry.renderSubmitMs = std::chrono::duration<float, std::milli>(tRenderEnd - tRenderStart).count();
     telemetry.totalUpdateMs = telemetry.cpuUpdateTimeMs + telemetry.instanceUploadMs + telemetry.instanceFenceWaitMs + telemetry.renderSubmitMs;
     telemetry.asteroidDrawCalls = drawCallCount;
-    telemetry.activeAsteroids = countToRender;
+    telemetry.activeAsteroids = ranges.total();
     telemetry.backendName = persistentStorageSupported ? "Persistent-Mapped Triple Buffer (glBufferStorage + GLsync)" : "glNamedBufferSubData Compatibility Fallback";
 }

@@ -1,0 +1,23 @@
+{
+  "scene": "earth",
+  "type": "OFFICIAL_BASELINE",
+  "warmup_frames": 300,
+  "measured_frames": 1000,
+  "bypass_copy": false,
+  "median_fps": 1074.5755,
+  "median_cpu_ms": 0.3745,
+  "median_wall_frame_ms": 0.9306,
+  "framebuffer_width": 1920,
+  "framebuffer_height": 1061,
+  "gpu_samples": 857,
+  "fps_measurement": "complete_frame_including_swap_and_poll",
+  "median_gpu_ms": 0.6861,
+  "gpu_time_available": true,
+  "p1_low_fps": 720.2535,
+  "p01_low_fps": 676.8190,
+  "p1_low_cpu_ms": 0.6249,
+  "p01_low_cpu_ms": 0.7512,
+  "median_draw_calls": 51,
+  "median_triangles": 129096,
+  "passed": true
+}

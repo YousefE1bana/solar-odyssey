@@ -62,8 +62,9 @@ struct PlanetMaterialResources {
 };
 
 // Texture loading helpers
-GLuint loadTexture(const char* filename);
-GLuint loadTextureOrFallback(const char* primary, const char* fallback);
+enum class TextureSpace { ColorSRGB, LinearData };
+GLuint loadTexture(const char* filename, TextureSpace space = TextureSpace::ColorSRGB);
+GLuint loadTextureOrFallback(const char* primary, const char* fallback, TextureSpace space = TextureSpace::ColorSRGB);
 
 // Planet runtime structure
 struct Planet {
@@ -115,12 +116,19 @@ struct Moon {
     float orbitRadius;
     float orbitSpeed;
     float initialAngle = 0.0f;
+    // Generic analytic orbit direction (+1 prograde, -1 retrograde).
+    // Carried as data from CanonicalBodyDef; nothing branches on names.
+    float orbitDirection = 1.0f;
+    // Owned map only; zero uses SceneRenderer's shared neutral at draw time.
     GLuint texture = 0;
     std::string parentPlanet;
     glm::vec3 currentPosition = glm::vec3(0.0f);
 
     Moon(const std::string& n, float s, float r, float os,
-         const std::string& tex, const std::string& parent, float initAngle = 0.0f);
+         const std::string& tex, const std::string& parent, float initAngle = 0.0f,
+         float dir = 1.0f);
+    // Selected Natural path for tier reload detection; empty requests neutral.
+    std::string texturePath;
 };
 
 class SceneRenderer {
@@ -134,6 +142,7 @@ public:
     GLuint starfieldProgram = 0;
 
     // Textures
+    GLuint brandMarkTexture = 0;
     GLuint sunTexture = 0;
     GLuint saturnRingTexture = 0;
     GLuint starfieldTexture = 0;
@@ -144,6 +153,12 @@ public:
     // PSM.6: generic scientific-layer datasets (Venus radar/clouds, Earth
     // relief, Mars Viking, ...). No per-body renderer members.
     ScientificLayerResources scienceLayers;
+    // Pass 3: bound filesystem paths for change-detected tier reloads.
+    // starfieldPath tracks the active scientific-sky dataset; the layer map
+    // tracks each registered science-layer path. Exactly one version of any
+    // asset is resident at a time.
+    std::string starfieldPath;
+    std::map<std::pair<std::string, BodyLayerId>, std::string> scienceLayerPaths;
     GLuint earthOceanMaskTexture = 0;
 
     // VAOs & VBOs
@@ -212,9 +227,16 @@ public:
 
     SceneRenderer();
     ~SceneRenderer();
+    SceneRenderer(const SceneRenderer&) = delete;
+    SceneRenderer& operator=(const SceneRenderer&) = delete;
 
-    bool init();
+    bool init(int textureTier = 2);
     void cleanup();
+    // Pass 3: re-resolve tier-selected texture variants (scientific
+    // starfield dataset + multi-resolution science layers). Reloads only on
+    // path change; single-resolution assets no-op. No body names here.
+    void applyTextureTier(int tier);
+    void applyStarfield(int style, int dataset);
 
     void renderStarfield(const glm::mat4& viewMat, const glm::mat4& projMat, const glm::vec3& cameraEye);
     void renderSun(const glm::mat4& viewMat, const glm::mat4& projMat, float time, float intensity, const glm::vec3& sunWorldPos, const CameraController& cameraCtrl, const SolarOdysseyUI& solarUI);
@@ -228,6 +250,9 @@ public:
                         const glm::vec3& cameraUp = glm::vec3(0.0f, 1.0f, 0.0f));
 
 private:
+    // Never stored in Moon::texture: one allocation and one cleanup owner.
+    GLuint neutralMoonTexture = 0;
+    void initNeutralMoonTexture();
     void initStarfield();
     void initRings();
 };

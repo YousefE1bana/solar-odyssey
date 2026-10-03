@@ -6,6 +6,11 @@
 
 class ImmediateBatch {
 public:
+    ImmediateBatch() = default;
+    ~ImmediateBatch() { destroy(); }
+    ImmediateBatch(const ImmediateBatch&) = delete;
+    ImmediateBatch& operator=(const ImmediateBatch&) = delete;
+    // Owners call destroy before context teardown; the destructor then no-ops.
     static constexpr GLsizei kStrideFloats = 8;
 
     bool init(const std::string& vsSource, const std::string& fsSource);

@@ -1,4 +1,8 @@
+#include "label_layout.h"
+#include <cctype>
 #include "solar_ui.h"
+#include "anomaly_catalog.h"
+#include "settings_persistence.h"
 #include "lod_manager.h"
 #include "save_state.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -12,7 +16,7 @@ void SolarOdysseyUI::applySpaceTheme() {
         ImGuiStyle& style = ImGui::GetStyle();
         ImVec4* colors = style.Colors;
 
-        style.WindowRounding = 9.0f;
+        style.WindowRounding = 5.0f;
         style.ChildRounding = 6.0f;
         style.FrameRounding = 6.0f;
         style.PopupRounding = 6.0f;
@@ -20,7 +24,7 @@ void SolarOdysseyUI::applySpaceTheme() {
         style.GrabRounding = 6.0f;
         style.TabRounding = 6.0f;
 
-        style.WindowBorderSize = 1.0f;
+        style.WindowBorderSize = 0.0f;
         style.FrameBorderSize = 0.0f;
         style.PopupBorderSize = 1.0f;
 
@@ -92,283 +96,116 @@ void SolarOdysseyUI::renderFloatingLabels(const std::vector<PickableBody>& bodie
                                           float screenWidth, float screenHeight, CameraController& cam) {
         if (!showLabels || cam.photoModeActive || cam.mode == CAM_SPACESHIP) return;
 
-        ImDrawList* drawList = ImGui::GetBackgroundDrawList();
-
-        for (const auto& body : bodies) {
-            glm::vec2 screenPos;
-            float distToCam;
-            // Position label slightly above the planet top
-            glm::vec3 labelWorldPos = body.position + glm::vec3(0.0f, body.radius * 1.35f + 0.25f, 0.0f);
-
-            if (projectWorldToScreen(labelWorldPos, viewMatrix, projMatrix, screenWidth, screenHeight, screenPos, distToCam)) {
-                // Distance fade calculation (fades gently if too far)
-                float alpha = 1.0f;
-                if (distToCam > 120.0f) {
-                    alpha = std::max(0.0f, 1.0f - (distToCam - 120.0f) / 100.0f);
-                }
-                if (alpha <= 0.05f) continue;
-
-                const CelestialBodyData* data = db.getBody(body.name);
-                ImU32 accentCol = data ? IM_COL32((int)(data->themeColor.r * 255),
-                                                  (int)(data->themeColor.g * 255),
-                                                  (int)(data->themeColor.b * 255),
-                                                  (int)(alpha * 255))
-                                       : IM_COL32(200, 220, 255, (int)(alpha * 255));
-
-                bool isSelected = (cam.focusedBodyName == body.name || selectedPlanetName == body.name);
-
-                // Label Text (body.name is already a std::string — no copy needed)
-                const char* labelText = body.name.c_str();
-                ImVec2 textSize = ImGui::CalcTextSize(labelText);
-
-                // Badge background rectangle
-                float padX = 8.0f;
-                float padY = 4.0f;
-                ImVec2 minPt(screenPos.x - textSize.x * 0.5f - padX, screenPos.y - textSize.y * 0.5f - padY);
-                ImVec2 maxPt(screenPos.x + textSize.x * 0.5f + padX, screenPos.y + textSize.y * 0.5f + padY);
-
-                // Badge background
-                ImU32 bgCol = isSelected ? IM_COL32(25, 45, 75, (int)(alpha * 220))
-                                         : IM_COL32(12, 16, 25, (int)(alpha * 190));
-                ImU32 borderCol = isSelected ? accentCol : IM_COL32(70, 95, 130, (int)(alpha * 120));
-
-                drawList->AddRectFilled(minPt, maxPt, bgCol, 5.0f);
-                drawList->AddRect(minPt, maxPt, borderCol, 5.0f, 0, isSelected ? 2.0f : 1.0f);
-
-                // Planet color accent dot
-                drawList->AddCircleFilled(ImVec2(minPt.x + 5.0f, screenPos.y), 3.0f, accentCol);
-
-                // Text
-                ImU32 textCol = isSelected ? IM_COL32(255, 255, 255, (int)(alpha * 255))
-                                           : IM_COL32(220, 230, 245, (int)(alpha * 230));
-                drawList->AddText(ImVec2(minPt.x + 12.0f, minPt.y + padY - 1.0f), textCol, labelText);
-
-                // Subtle, refined selection reticle (18% outside projected radius, thin stroke, lower alpha)
-                if (isSelected) {
-                    glm::vec2 bodyCenterScreen;
-                    float dummyDist;
-                    if (projectWorldToScreen(body.position, viewMatrix, projMatrix, screenWidth, screenHeight, bodyCenterScreen, dummyDist)) {
-                        float ringRadius = std::max(14.0f, (body.radius / distToCam) * screenHeight * 1.18f);
-                        ImU32 reticleCol = data ? IM_COL32((int)(data->themeColor.r * 255), (int)(data->themeColor.g * 255), (int)(data->themeColor.b * 255), (int)(alpha * 150))
-                                                : IM_COL32(200, 220, 255, (int)(alpha * 150));
-                        drawList->AddCircle(ImVec2(bodyCenterScreen.x, bodyCenterScreen.y), ringRadius, reticleCol, 48, 1.0f);
-                    }
-                }
-            }
+    struct Candidate { const PickableBody* body; glm::vec2 screen; float projectedRadius; int priority; };
+    std::vector<Candidate> candidates;
+    const float focalLength = .5f * screenHeight * projMatrix[1][1];
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    for (const auto& body : bodies) {
+        glm::vec2 screen; float depth;
+        if (!projectWorldToScreen(body.position, viewMatrix, projMatrix, screenWidth, screenHeight, screen, depth)) continue;
+        if (screen.x < 0 || screen.x > screenWidth || screen.y < 0 || screen.y > screenHeight) continue;
+        const bool selected = selectedPlanetName == body.name;
+        const float pixels = body.radius * focalLength / std::max(.001f, depth);
+        const bool hovered = glm::length(screen - glm::vec2(mouse.x, mouse.y)) < std::max(10.0f, pixels);
+        const bool moon = body.index >= 100;
+        if (moon && !selected && !hovered && pixels < 2.5f) continue;
+        const glm::vec3 offset = body.position - cam.currentEye;
+        const float distance = glm::length(offset);
+        if (distance <= body.radius) continue;
+        Ray ray{cam.currentEye, offset / distance};
+        bool hidden = false;
+        for (const auto& other : bodies) {
+            if (&other == &body) continue;
+            const float hit = RaycastPicker::intersectRaySphere(ray, other.position, other.radius);
+            if (hit >= 0 && hit < distance - body.radius) { hidden = true; break; }
         }
+        if (hidden) continue;
+        candidates.push_back({&body, screen, pixels, selected ? 100 : hovered ? 80 : moon ? 10 : 40});
     }
+    std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+        return a.priority != b.priority ? a.priority > b.priority : a.projectedRadius > b.projectedRadius;
+    });
+    std::vector<LabelLayout::Rect> occupied{{0,0,screenWidth,78}, {0,screenHeight-82,screenWidth,82}};
+    if (showPlanetCard) occupied.push_back({screenWidth - 400, 78, 400, screenHeight - 160});
+    auto* draw = ImGui::GetBackgroundDrawList();
+    for (const auto& candidate : candidates) {
+        const ImVec2 text = ImGui::CalcTextSize(candidate.body->name.c_str());
+        auto rect = LabelLayout::place(candidate.screen.x, candidate.screen.y - std::min(candidate.projectedRadius + 12.0f, screenHeight * .4f),
+            text.x + 20, text.y + 12, screenWidth, screenHeight, occupied);
+        if (!rect) continue;
+        occupied.push_back(*rect);
+        const bool selected = candidate.priority == 100;
+        const ImVec2 lo(rect->x,rect->y), hi(rect->x + rect->width, rect->y + rect->height);
+        draw->AddLine(ImVec2(candidate.screen.x,candidate.screen.y), ImVec2(rect->x + rect->width/2,rect->y + rect->height), IM_COL32(106,136,153,90));
+        draw->AddRectFilled(lo,hi, selected ? IM_COL32(27,48,65,220) : IM_COL32(8,16,25,185), 4);
+        draw->AddText(ImVec2(lo.x+10,lo.y+6), selected ? IM_COL32(239,247,252,255) : IM_COL32(166,190,204,230), candidate.body->name.c_str());
+    }
+}
 
     // Top Navigation & Quick Select Bar
 void SolarOdysseyUI::renderTopNavBar(float screenWidth, CameraController& cam, const CelestialDatabase& db,
                                      std::vector<std::pair<std::string, int>>& planetIndexMap,
                                      const PresentationController& psm) {
-        (void)planetIndexMap;
-        if (cam.photoModeActive) return;
-
-        float minSingleLineWidth = 1180.0f;
-        bool isCompactTwoRows = (screenWidth < minSingleLineWidth);
-        float barHeight = isCompactTwoRows ? 88.0f : 54.0f;
-
-        ImGui::SetNextWindowPos(ImVec2(16, 16), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(screenWidth - 32, barHeight), ImGuiCond_Always);
-
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                 ImGuiWindowFlags_NoSavedSettings;
-
-        if (ImGui::Begin("TopNavBar", nullptr, flags)) {
-            // App Title with glowing cyan accent
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.00f, 1.0f), " SOLAR ODYSSEY");
-            ImGui::SameLine(0, 16);
-            ImGui::TextDisabled("|");
-            ImGui::SameLine(0, 12);
-
-            // Celestial Body Dropdown Quick Selector (Handles 13+ bodies cleanly with zero overflow)
-            std::string previewText = "Select Body ▾";
-            if (!cam.focusedBodyName.empty()) {
-                previewText = " " + cam.focusedBodyName + " ▾";
+    if (cam.photoModeActive) return;
+    ImGui::SetNextWindowPos(ImVec2(16,16), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(screenWidth - 32, screenWidth < 1000 ? 96 : 54), ImGuiCond_Always);
+    if (ImGui::Begin("Navigation", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImVec4(.65f,.82f,.9f,1), "SOLAR ODYSSEY"); ImGui::SameLine();
+        if (ImGui::Button("Find a world")) ImGui::OpenPopup("Object finder");
+        if (ImGui::BeginPopup("Object finder")) {
+            ImGui::SetNextItemWidth(300);
+            ImGui::InputTextWithHint("##SearchWorld", "Name a planet or moon...", finderSearch, sizeof(finderSearch));
+            std::string query(finderSearch);
+            std::transform(query.begin(), query.end(), query.begin(), [](unsigned char c){return std::tolower(c);});
+            ImGui::BeginChild("FinderResults", ImVec2(350, 320));
+            std::vector<std::string> names = db.getOrder();
+            for (const auto& root : db.getOrder()) {
+                if (!onQueryChildren) continue;
+                for (const auto& child : onQueryChildren(root))
+                    if (std::find(names.begin(), names.end(), child) == names.end()) names.push_back(child);
             }
-            ImGui::SetNextItemWidth(140.0f);
-            const auto& order = db.getOrder();
-            if (ImGui::BeginCombo("##CelestialBodyCombo", previewText.c_str())) {
-                for (size_t i = 0; i < order.size(); ++i) {
-                    const std::string& name = order[i];
-                    const CelestialBodyData* data = db.getBody(name);
-                    if (!showDwarfPlanets && data && data->type.find("Dwarf Planet") != std::string::npos) {
-                        continue;
-                    }
-                    bool isSelected = (cam.focusedBodyName == name);
-                    if (ImGui::Selectable(name.c_str(), isSelected)) {
-                        // PSM.2: selection routes to the single source of
-                        // truth (Engine::selectBody). No mirror fallback: a
-                        // direct write here would fork a second owner.
-                        if (onSelectBody) onSelectBody(name);
-                        showPlanetCard = true;
-                    }
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            // PSM.1: presentation mode chip (read-only) + System View action.
-            // Same semantic action as the Y key; M stays Missions.
-            ImGui::SameLine(0, 12);
-            ImGui::TextDisabled("|");
-            ImGui::SameLine(0, 8);
-            const char* psmModeLabel = "EXPLORER";
-            std::string bodyModeLabel;
-            if (psm.state() == PresentationState::SYSTEM) psmModeLabel = "SYSTEM";
-            else if (psm.state() == PresentationState::BODY) {
-                // PSM.2: the chip names the presented body; selection is the
-                // authoritative identity and is always set while in BODY.
-                bodyModeLabel = psm.selectedBodyName().empty()
-                    ? "BODY" : "BODY: " + psm.selectedBodyName();
-                psmModeLabel = bodyModeLabel.c_str();
-            }
-            ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.65f, 1.0f), "%s", psmModeLabel);
-            ImGui::SameLine(0, 8);
-            if (ImGui::Button(" System View (Y) ")) {
-                if (onToggleSystemView) onToggleSystemView();
-            }
-
-            // Dynamically calculate the precise pixel width of all right-aligned action buttons
-            float btnSpacing = 5.0f;
-            float pad = ImGui::GetStyle().FramePadding.x * 2.0f;
-            float actionsWidth =
-                (ImGui::CalcTextSize(" Free Cam (F) ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Missions (M) ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Wormhole (K) ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Black Hole (B) ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Spaceship (X) ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Tour ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Reset ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Settings ").x + pad) + btnSpacing +
-                (ImGui::CalcTextSize(" Photo ").x + pad);
-
-            float cursorX = ImGui::GetCursorPosX();
-            float contentWidth = ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x * 2.0f;
-            float targetX = contentWidth - actionsWidth + ImGui::GetStyle().WindowPadding.x;
-
-            if (!isCompactTwoRows && targetX > cursorX + 16.0f) {
-                ImGui::SameLine(targetX);
-            } else {
-                ImGui::SameLine(0, 10.0f);
-            }
-
-            // Free Camera Button
-            if (cam.mode == CAM_FREE) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.85f, 0.65f, 0.95f));
-                if (ImGui::Button(" Free Cam (F) ")) {
-                    cam.toggleFreeCam();
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (ImGui::Button(" Free Cam (F) ")) {
-                    cam.toggleFreeCam();
-                }
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            // Missions Button
-            if (showMissionModal) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.70f, 0.45f, 0.95f));
-                if (ImGui::Button(" Missions (M) ")) {
-                    showMissionModal = false;
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (ImGui::Button(" Missions (M) ")) {
-                    showMissionModal = true;
-                }
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            // Wormhole Mode Button
-            if (cam.mode == CAM_WORMHOLE || selectedPlanetName == "Wormhole") {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.75f, 0.95f, 0.95f));
-                if (ImGui::Button(" Wormhole (K) ")) {
-                    cam.resetToDefault();
-                    if (onSelectBody) onSelectBody("");
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (ImGui::Button(" Wormhole (K) ")) {
-                    if (onSelectBody) onSelectBody("Wormhole");
+            for (const auto& name : names) {
+                std::string lower = name;
+                std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){return std::tolower(c);});
+                if (lower.find(query) == std::string::npos) continue;
+                if (ImGui::Selectable(name.c_str(), selectedPlanetName == name)) {
+                    if (onEnterBodyMode) onEnterBodyMode(name);
                     showPlanetCard = true;
+                    ImGui::CloseCurrentPopup();
                 }
             }
-
-            ImGui::SameLine(0, btnSpacing);
-            // Black Hole Mode Button
-            if (cam.mode == CAM_BLACK_HOLE || selectedPlanetName == "Black Hole") {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.85f, 0.95f));
-                if (ImGui::Button(" Black Hole (B) ")) {
-                    cam.resetToDefault();
-                    if (onSelectBody) onSelectBody("");
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (ImGui::Button(" Black Hole (B) ")) {
-                    if (onSelectBody) onSelectBody("Black Hole");
-                    showPlanetCard = true;
-                }
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            // Spaceship Flight Mode Button
-            if (cam.mode == CAM_SPACESHIP) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.65f, 0.95f, 0.95f));
-                if (ImGui::Button(" Spaceship (X) ")) {
-                    cam.setSpaceshipMode(false, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (ImGui::Button(" Spaceship (X) ")) {
-                    cam.mode = CAM_SPACESHIP;
-                }
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            // Guided Tour Button
-            if (cam.tourActive) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.35f, 0.25f, 0.90f));
-                if (ImGui::Button(" Stop Tour ")) {
-                    cam.stopTour();
-                }
-                ImGui::PopStyleColor();
-            } else {
-                if (ImGui::Button(" Tour ")) {
-                    cam.startTour();
-                }
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            if (ImGui::Button(" Reset ")) {
-                cam.resetToDefault();
-                if (onSelectBody) onSelectBody("");
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            if (ImGui::Button(" Settings ")) {
-                showSettingsModal = !showSettingsModal;
-            }
-
-            ImGui::SameLine(0, btnSpacing);
-            if (ImGui::Button(" Photo ")) {
-                cam.togglePhotoMode();
-            }
+            ImGui::EndChild(); ImGui::EndPopup();
         }
-        ImGui::End();
+        ImGui::SameLine();
+        if (ImGui::Button(psm.isSystem() ? "Explorer (Y)" : "System (Y)")) { if (onToggleSystemView) onToggleSystemView(); }
+        ImGui::SameLine();
+        if (ImGui::Button("Codex")) showCodex = !showCodex;
+        ImGui::SameLine();
+        if (ImGui::Button("Explore")) ImGui::OpenPopup("Exploration tools");
+        if (ImGui::BeginPopup("Exploration tools")) {
+            if (ImGui::MenuItem("Free camera", "F")) cam.toggleFreeCam();
+            if (ImGui::MenuItem("Spacecraft", "X")) cam.mode = CAM_SPACESHIP;
+            if (ImGui::MenuItem(cam.tourActive ? "Stop tour" : "Cinematic tour", "T")) { if (cam.tourActive) cam.stopTour(); else cam.startTour(); }
+            if (ImGui::MenuItem("Black hole", "B") && onFocusBody) onFocusBody("Black Hole");
+            if (ImGui::MenuItem("Wormhole", "K") && onFocusBody) onFocusBody("Wormhole");
+            if (ImGui::MenuItem("Photography", "P")) cam.togglePhotoMode();
+            if (ImGui::MenuItem("Open captured photos") && onOpenPhotos) onOpenPhotos();
+            if (ImGui::MenuItem("Diagnostics")) showDiagnostics = !showDiagnostics;
+            ImGui::EndPopup();
+        }
+        if (screenWidth < 1000) ImGui::NewLine(); else ImGui::SameLine();
+        ImGui::TextDisabled("%s", psm.isBody() ? selectedPlanetName.c_str() : psm.isSystem() ? "SYSTEM" : "EXPLORER");
+        ImGui::SameLine();
+        if (ImGui::Button("Menu (Esc)")) { if (onOpenMenu) onOpenMenu(); }
     }
+    ImGui::End();
+}
 
-    // Bottom Simulation & Playback Control Bar
 void SolarOdysseyUI::renderBottomControlBar(float screenWidth, float screenHeight, CameraController& cam) {
         if (cam.photoModeActive || cam.mode == CAM_SPACESHIP) return;
 
-        float barWidth = 720.0f;
+        float barWidth = std::min(870.0f, screenWidth - 32.0f);
         float barHeight = 52.0f;
         ImGui::SetNextWindowPos(ImVec2((screenWidth - barWidth) * 0.5f, screenHeight - barHeight - 16.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(barWidth, barHeight), ImGuiCond_Always);
@@ -414,7 +251,7 @@ void SolarOdysseyUI::renderBottomControlBar(float screenWidth, float screenHeigh
                 ImGui::SameLine(0, 8);
                 ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.20f, 1.0f), "[N-BODY GRAVITY]");
                 if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Live N-Body universal gravitation is actively simulating all orbital perturbations.");
+                    ImGui::SetTooltip("Numerical gravity integrates the 13 roots; moons remain analytic live-parent children.");
                 }
             }
         }
@@ -503,6 +340,16 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     if (onEnterBodyMode) onEnterBodyMode(data->name);
                 }
             }
+            // Cycle 4 Pass 2: science-scan actions for the dossier body.
+            // Atmospheric scans on inapplicable bodies toast the N/A message
+            // (never a fake scan); gravity runs a Detailed session.
+            if (ImGui::Button(" Scan Atmosphere", ImVec2(185, 28))) {
+                if (onStartAtmosphericScan) onStartAtmosphericScan(data->name);
+            }
+            ImGui::SameLine(0, 10);
+            if (ImGui::Button(" Gravity Measure", ImVec2(185, 28))) {
+                if (onStartGravityScan) onStartGravityScan(data->name);
+            }
             // PSM.7: compact Satellites list on a parent BODY. Each child
             // button records intent through the EXISTING authoritative funnel
             // (same as Enter/V/dossier action) — the PSM.2 cinematic transfer
@@ -525,7 +372,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                 // Tab 1: Overview — lightweight summary only. Detail lives in
                 // the Environment / Orbit / Key Facts tabs (PSM.3 progressive
                 // disclosure; the card is not a full-screen dashboard).
-                if (ImGui::BeginTabItem("Overview")) {
+                if (ImGui::BeginTabItem("About")) {
                     ImGui::Spacing();
                     ImGui::TextWrapped("%s", data->description.c_str());
                     ImGui::Spacing();
@@ -553,7 +400,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                     }
                     ImGui::NextColumn();
 
-                    ImGui::TextDisabled("Mean Temperature:");
+                    ImGui::TextDisabled("%s:", data->temperatureReference.c_str());
                     ImGui::NextColumn();
                     // Generic availability (Moon Expansion 1.3): same rule as
                     // the tilt/range rows — no body-name checks in UI.
@@ -569,7 +416,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                 }
 
                 // Tab 2: Environment — atmosphere, surface, gravity, range.
-                if (ImGui::BeginTabItem("Environment")) {
+                if (ImGui::BeginTabItem("Climate")) {
                     ImGui::Spacing();
                     ImGui::TextColored(themeCol, "Atmospheric Composition:");
                     ImGui::TextWrapped("%s", data->atmosphericComposition.c_str());
@@ -606,7 +453,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                 }
 
                 // Tab 3: Orbit / Motion (PSM.3) — all motion fields, one place.
-                if (ImGui::BeginTabItem("Orbit / Motion")) {
+                if (ImGui::BeginTabItem("Orbit")) {
                     ImGui::Spacing();
                     ImGui::Columns(2, "OrbitMetricColumns", false);
                     ImGui::SetColumnWidth(0, 180);
@@ -662,7 +509,7 @@ void SolarOdysseyUI::renderPlanetCard(float screenWidth, float screenHeight, con
                 }
 
                 // Tab 4: Key Scientific Facts (+ discovery note).
-                if (ImGui::BeginTabItem("Key Facts")) {
+                if (ImGui::BeginTabItem("Facts")) {
                     ImGui::Spacing();
                     for (size_t i = 0; i < data->keyFacts.size(); ++i) {
                         ImGui::Bullet();
@@ -740,294 +587,105 @@ void SolarOdysseyUI::renderPlanetInfoCard(float screenWidth, float screenHeight,
     // Settings & Display Layers Modal / Panel
 void SolarOdysseyUI::renderSettingsPanel(PostProcessingPipeline& postProc, AsteroidBelt* asteroidBelt,
                                          AtmosphereEffects* atmoEffects, CameraController& cam) {
-        if (!showSettingsModal) return;
-
-        ImGui::SetNextWindowSize(ImVec2(560, 620), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Simulation & Display Settings", &showSettingsModal)) {
-            if (ImGui::BeginTabBar("SettingsTabs")) {
-                // Tab 1: Planetary Simulation Settings
-                if (ImGui::BeginTabItem("Planetary Simulation")) {
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Celestial Bodies & Orbit Physics");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-
-                    const char* physicsModes[] = {
-                        "Keplerian Orbits (Stable Standard)",
-                        "N-Body Gravitation (Real Physics Simulation)"
-                    };
-                    int currentPhysics = physicsMode;
-                    if (ImGui::Combo("Physics Mode", &currentPhysics, physicsModes, IM_ARRAYSIZE(physicsModes))) {
-                        if (currentPhysics != physicsMode) {
-                            physicsMode = currentPhysics;
-                            pendingPhysicsModeChange = true;
-                        }
-                    }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip(
-                            "Keplerian: Textbook geometric orbits (predictable and stable indefinitely).\n"
-                            "N-Body: Real pairwise Newton universal gravitation (F = G*m1*m2/r^2).\n"
-                            "Planets experience live gravitational pull, precession, and orbital resonances."
-                        );
-                    }
-                    if (physicsMode == 1) {
-                        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.20f, 1.0f), "  [!] Real N-Body Gravity Active - Orbits computed via Velocity Verlet integrator.");
-                    }
-
-                    ImGui::SliderFloat("Visual Planet Scale", &planetScale, 0.25f, 3.50f, "%.2fx");
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies the render size of all planets and moons.");
-
-                    ImGui::SliderFloat("Orbit Revolution Speed", &orbitSpeedScale, 0.0f, 10.0f, "%.2fx");
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scales the orbital speed around the Sun (0 = paused orbits).");
-
-                    ImGui::SliderFloat("Axial Spin Speed", &spinSpeedScale, 0.0f, 10.0f, "%.2fx");
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scales the rotation speed around each planet's own axis.");
-
-                    ImGui::Checkbox("Physically Realistic Axial Tilt", &enableAxialTilt);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Applies real physical axial tilts (Earth 23.5°, Mars 25.2°, Saturn 26.7°, Uranus 97.8°).");
-
-                    ImGui::Checkbox("Show Dwarf Planets (Ceres, Haumea, Makemake, Eris)", &showDwarfPlanets);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggles rendering of the 4 dwarf planets in the asteroid & Kuiper belts.");
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Atmospheric & Planetary Features");
-                    ImGui::Spacing();
-
-                    ImGui::SliderFloat("Atmosphere Glow Intensity", &atmosphereGlowScale, 0.0f, 3.0f, "%.2fx");
-                    ImGui::SliderFloat("Saturn Ring Opacity", &ringOpacity, 0.1f, 1.0f, "%.2f");
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Simulation State & Bookmarks");
-                    ImGui::Spacing();
-
-                    if (ImGui::Button(" Save State (F5)", ImVec2(150, 28))) {
-                        requestStateSave = true;
-                    }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Saves simulation day, speed, camera position, and mission progress to save_state.json.");
-
-                    ImGui::SameLine(0, 10);
-                    if (ImGui::Button(" Load State (F9)", ImVec2(150, 28))) {
-                        requestStateLoad = true;
-                    }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restores simulation day, speed, camera position, and mission progress from save_state.json.");
-
-                    ImGui::Spacing();
-                    ImGui::Checkbox("Auto-save on Exit", &autoSaveOnExit);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Automatically saves the current simulation state when closing the application.");
-
-                    std::string saveSummary = SaveStateManager::instance().getSaveSummary("save_state.json");
-                    ImGui::TextDisabled("Save file: %s", saveSummary.c_str());
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    if (ImGui::Button("Reset Planetary Defaults", ImVec2(200, 26))) {
-                        planetScale = 1.0f;
-                        orbitSpeedScale = 1.0f;
-                        spinSpeedScale = 1.0f;
-                        enableAxialTilt = true;
-                        atmosphereGlowScale = 1.0f;
-                        ringOpacity = 0.90f;
-                        showDwarfPlanets = true;
-                    }
-                    ImGui::EndTabItem();
+    if (!showSettingsModal) return;
+    const ImVec2 screen = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(screen.x * .5f, screen.y * .5f), ImGuiCond_Always, ImVec2(.5f,.5f));
+    ImGui::SetNextWindowSize(ImVec2(std::min(790.0f, screen.x - 48), std::min(680.0f, screen.y - 64)), ImGuiCond_Always);
+    if (ImGui::Begin("SETTINGS", &showSettingsModal, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextDisabled("Changes apply immediately. Esc returns to your menu.");
+        ImGui::Spacing();
+        if (ImGui::BeginTabBar("Preferences")) {
+            if (ImGui::BeginTabItem("DISPLAY")) {
+                if (ImGui::Checkbox("Fullscreen", &isFullscreen)) pendingFullscreenToggle = true;
+                if (ImGui::Checkbox("VSync / match display refresh", &vsyncEnabled) && onVSyncChanged) onVSyncChanged(vsyncEnabled);
+                if (ImGui::SliderFloat("Field of view", &cam.targetFieldOfView, 20, 120, "%.0f degrees")) cam.fieldOfView = cam.targetFieldOfView;
+                ImGui::Spacing(); ImGui::Separator();
+                const char* styles[] = {"Classic / cinematic", "Scientific / catalog imagery"};
+                ImGui::Combo("Starfield style", &starfieldStyle, styles, 2);
+                if (starfieldStyle == 0) {
+                    const char* panoramas[] = {"Stars", "Stars + Milky Way"};
+                    starfieldDataset = std::clamp(starfieldDataset, 0, 1);
+                    ImGui::Combo("Panorama", &starfieldDataset, panoramas, 2);
                 }
-
-                // Tab 2: Free Camera Flight Controls
-                if (ImGui::BeginTabItem("Free Camera")) {
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.65f, 1.0f), " 6-DOF Free Flight Tuning");
-                    ImGui::Separator();
-                    ImGui::Spacing();
-
-                    ImGui::SliderFloat("Base Flight Speed", &cam.freeSpeed, 2.0f, 120.0f, "%.1f units/s");
-                    ImGui::SliderFloat("Mouse Look Sensitivity", &cam.freeSensitivity, 0.02f, 0.35f, "%.3f");
-                    ImGui::SliderFloat("Acceleration Factor", &cam.freeAcceleration, 2.0f, 20.0f, "%.1f");
-                    ImGui::SliderFloat("Inertial Damping", &cam.freeDamping, 1.0f, 15.0f, "%.1f");
-                    ImGui::SliderFloat("Shift Turbo Multiplier", &cam.freeSpeedBoost, 1.5f, 6.0f, "%.1fx");
-                    ImGui::SliderFloat("Ctrl Precision Multiplier", &cam.freeSpeedSlow, 0.1f, 0.5f, "%.2fx");
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextDisabled("Free Camera Shortcuts:");
-                    ImGui::BulletText("W / S : Forward / Backward");
-                    ImGui::BulletText("A / D : Strafe Left / Right");
-                    ImGui::BulletText("E / Space : Ascend Up");
-                    ImGui::BulletText("Q / C : Descend Down");
-                    ImGui::BulletText("Shift : 3.5x Turbo Boost  |  Ctrl : Precision Crawl");
-                    ImGui::BulletText("Scroll Wheel : Live Adjust Flight Speed");
-
-                    ImGui::Spacing();
-                    if (cam.mode != CAM_FREE) {
-                        if (ImGui::Button("Enter Free Flight Mode (F)", ImVec2(240, 28))) {
-                            cam.enterFreeCam();
-                        }
-                    } else {
-                        ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.55f, 1.0f), " Free Flight Active");
-                    }
-                    ImGui::EndTabItem();
+                if (starfieldStyle == 1) {
+                    const char* datasets[] = {"Yale / bright stars", "Hipparcos", "Tycho", "Combined catalogs"};
+                    ImGui::Combo("Catalog", &starfieldDataset, datasets, 4);
+                    ImGui::TextWrapped("Catalog map positions are preserved. The sky is a visualization, not an Earth-location planetarium or a navigational reference.");
                 }
-
-                // Tab 3: Visual Layers & Display Settings
-                if (ImGui::BeginTabItem("Display & Graphics")) {
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Screen Mode");
-                    if (ImGui::Checkbox("Fullscreen Mode (F11)", &isFullscreen)) {
-                        pendingFullscreenToggle = true;
-                    }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle between Fullscreen and Windowed mode.");
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Visual Layers & Overlays");
-                    ImGui::Checkbox("Orbit Paths (O)", &showOrbits);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Renders physical Keplerian orbital trajectories for all bodies.");
-
-                    ImGui::Checkbox("Planet Labels (L)", &showLabels);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("3D projected billboard markers with distance attenuation.");
-
-                    ImGui::Checkbox("Atmospheric Scattering", &showAtmospheres);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multi-spectral Rayleigh and Mie atmospheric limb scattering.");
-
-                    ImGui::Checkbox("Asteroid Belt", &showAsteroids);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("GPU instanced main belt simulation with Kirkwood resonance gaps.");
-
-                    ImGui::Checkbox("Solar Particles & Comets", &showParticles);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Ejected solar flare particles and hyperbolic comet with dual tails.");
-
-                    ImGui::Checkbox("Performance Diagnostics", &showDiagnostics);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Real-time GPU renderer, driver version, FPS, and frametime telemetry.");
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Cinematic Post-Processing");
-                    ImGui::Checkbox("Enable Post-Processing Pipeline", &postProc.enabled);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Master toggle for HDR framebuffer pipeline.");
-
-                    if (postProc.enabled) {
-                        ImGui::Checkbox("Bloom Lighting & Corona", &postProc.bloomEnabled);
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multi-pass Gaussian bloom for solar corona & accretion disks.");
-
-                        if (postProc.bloomEnabled) {
-                            ImGui::SliderFloat("Bloom Intensity", &postProc.bloomIntensity, 0.1f, 1.2f, "%.2f");
-                            ImGui::SliderFloat("Bloom Threshold", &postProc.bloomThreshold, 0.5f, 1.2f, "%.2f");
-                        }
-                        ImGui::Checkbox("ACES Filmic Tone Mapping", &postProc.toneMappingEnabled);
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Academy Color Encoding System curve for cinematic dynamic range.");
-
-                        ImGui::SliderFloat("Exposure", &postProc.exposure, 0.5f, 2.5f, "%.2f");
-                        ImGui::Checkbox("Vignette", &postProc.vignetteEnabled);
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Subtle optical lens darkening towards screen borders.");
-                    }
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " Level-of-Detail (LOD) System");
-                    ImGui::Checkbox("Enable Dynamic Mesh LOD", &enableMeshLOD);
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Dynamically adjusts polygon resolution of planets, moons, and asteroids based on camera distance.");
-
-                    if (enableMeshLOD) {
-                        const char* lodModes[] = {
-                            "Auto (Distance-based)",
-                            "Force LOD 0 (Ultra 64x64 / 8,192 tris)",
-                            "Force LOD 1 (High 36x36 / 2,592 tris)",
-                            "Force LOD 2 (Medium 20x20 / 800 tris)",
-                            "Force LOD 3 (Low 12x12 / 288 tris)"
-                        };
-                        ImGui::Combo("LOD Override", &lodOverrideMode, lodModes, 5);
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Manually locks the active geometric detail tier across all bodies for visual comparison.");
-
-                        ImGui::Checkbox("Show LOD Inspector in Diagnostics", &showLODDebugTelemetry);
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Displays real-time distance and polygon counts per celestial body in the Diagnostics panel.");
-                    }
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " GPU Compute Shaders");
-                    if (asteroidBelt) {
-                        bool computeActive = asteroidBelt->isComputeEnabled();
-                        if (ImGui::Checkbox("Enable Asteroid Belt Compute Shader (SSBO)", &computeActive)) {
-                            enableGPUCompute = computeActive;
-                            asteroidBelt->setComputeEnabled(computeActive);
-                        }
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip("Offloads 4,500+ asteroid orbital & rotation math to a GLSL compute shader (GL_ARB_compute_shader) on the GPU.");
-                        }
-
-                        const auto& astTelem = asteroidBelt->getTelemetry();
-                        ImGui::TextDisabled("Backend: %s", astTelem.backendName.c_str());
-                        ImGui::Text("Execution: %.3f ms (Workgroups: %d)", astTelem.lastUpdateTimeMs, astTelem.dispatchedWorkgroups);
-                    }
-                    ImGui::EndTabItem();
-                }
-
-                // Tab 4: Graphics Quality Presets
-                if (ImGui::BeginTabItem("Graphics Quality")) {
-                    ImGui::Spacing();
-                    ImGui::Text("Select Quality Preset:");
-
-                    const char* presets[] = {"Low", "Medium", "High", "Ultra"};
-                    int currPreset = (int)qualityPreset;
-                    if (ImGui::Combo("Preset", &currPreset, presets, 4)) {
-                        qualityPreset = (GraphicsQuality)currPreset;
-                        // C3.8: authoritative fan-out (atmo/BH/portal/shadow + legacy).
-                        if (onQualityChanged) onQualityChanged(qualityPreset);
-                        else applyQualityPreset(qualityPreset, postProc, asteroidBelt);
-                    }
-
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::TextDisabled("Preset Details (C3.8 canonical matrix):");
-                    if (qualityPreset == QUALITY_LOW) {
-                        ImGui::BulletText("Asteroids: 150 count");
-                        ImGui::BulletText("Bloom: Disabled");
-                        ImGui::BulletText("Atmosphere: 6 samples");
-                        ImGui::BulletText("Black Hole: <=8 bounded steps");
-                        ImGui::BulletText("Portal: 256px half-rate");
-                        ImGui::BulletText("Shadows: 1 sample");
-                    } else if (qualityPreset == QUALITY_MEDIUM) {
-                        ImGui::BulletText("Asteroids: 400 count");
-                        ImGui::BulletText("Bloom: Standard 2-pass");
-                        ImGui::BulletText("Atmosphere: 8 samples");
-                        ImGui::BulletText("Black Hole: 16 steps");
-                        ImGui::BulletText("Portal: 384px full-rate");
-                        ImGui::BulletText("Shadows: 2 samples");
-                    } else if (qualityPreset == QUALITY_HIGH) {
-                        ImGui::BulletText("Asteroids: 800 count");
-                        ImGui::BulletText("Bloom: High-Precision HDR");
-                        ImGui::BulletText("Atmosphere: 12 samples (reference)");
-                        ImGui::BulletText("Black Hole: 24 steps (reference)");
-                        ImGui::BulletText("Portal: 512px full-rate (reference)");
-                        ImGui::BulletText("Shadows: 4 samples (reference)");
-                    } else if (qualityPreset == QUALITY_ULTRA) {
-                        ImGui::BulletText("Asteroids: 1400 count");
-                        ImGui::BulletText("Bloom: Multi-pass Ultra");
-                        ImGui::BulletText("Atmosphere: 16 samples");
-                        ImGui::BulletText("Black Hole: 32 steps");
-                        ImGui::BulletText("Portal: 512px full-rate");
-                        ImGui::BulletText("Shadows: 8 samples");
-                    }
-                    ImGui::EndTabItem();
-                }
-
-                // Tab 5: Audio Settings
-                if (ImGui::BeginTabItem("Audio")) {
-                    ImGui::Spacing();
-                    ImGui::Checkbox("Mute All Audio", &audioMuted);
-                    ImGui::SliderFloat("Master Volume", &masterVolume, 0.0f, 1.0f);
-                    ImGui::SliderFloat("Music Volume", &musicVolume, 0.0f, 1.0f);
-                    ImGui::SliderFloat("Sound Effects Volume", &sfxVolume, 0.0f, 1.0f);
-                    ImGui::EndTabItem();
-                }
-
-                ImGui::EndTabBar();
+                ImGui::Checkbox("Body labels", &showLabels);
+                ImGui::Checkbox("Reference orbit circles", &showOrbits);
+                ImGui::Checkbox("Dwarf planets", &showDwarfPlanets);
+                ImGui::EndTabItem();
             }
+            if (ImGui::BeginTabItem("GRAPHICS")) {
+                int quality = qualityPreset;
+                const char* tiers[] = {"Low", "Medium", "High", "Ultra"};
+                if (ImGui::Combo("Quality", &quality, tiers, 4) && onQualityChanged) onQualityChanged(static_cast<GraphicsQuality>(quality));
+                ImGui::Checkbox("Dynamic mesh detail", &enableMeshLOD);
+                ImGui::Checkbox("Atmosphere shells", &showAtmospheres);
+                ImGui::SliderFloat("Atmosphere glow", &atmosphereGlowScale, 0, 3);
+                ImGui::Checkbox("Asteroid belt", &showAsteroids);
+                ImGui::Checkbox("Solar particles and comets", &showParticles);
+                ImGui::SliderFloat("Sun intensity", &sunIntensity, .1f, 5.0f);
+                ImGui::SliderFloat("Ring opacity", &ringOpacity, .1f, 1.0f);
+                ImGui::Separator();
+                ImGui::Checkbox("Cinematic effects", &postProc.enabled);
+                ImGui::BeginDisabled(!postProc.enabled);
+                ImGui::Checkbox("Bloom", &postProc.bloomEnabled);
+                ImGui::SliderFloat("Bloom intensity", &postProc.bloomIntensity, .1f, 1.2f);
+                ImGui::SliderFloat("Bloom threshold", &postProc.bloomThreshold, .5f, 1.2f);
+                ImGui::Checkbox("Filmic tone mapping", &postProc.toneMappingEnabled);
+                ImGui::SliderFloat("Exposure", &postProc.exposure, .5f, 2.5f);
+                ImGui::Checkbox("Vignette", &postProc.vignetteEnabled);
+                ImGui::EndDisabled();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("AUDIO")) {
+                ImGui::Checkbox("Mute audio", &audioMuted);
+                ImGui::SliderFloat("Master volume", &masterVolume, 0, 1);
+                ImGui::SliderFloat("Music volume", &musicVolume, 0, 1);
+                ImGui::SliderFloat("Effects volume", &sfxVolume, 0, 1);
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("CONTROLS")) {
+                ImGui::SliderFloat("Free camera speed", &cam.freeSpeed, 2, 120, "%.1f units/s");
+                ImGui::SliderFloat("Mouse sensitivity", &cam.freeSensitivity, .02f, .35f, "%.3f");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Drag to orbit. Scroll to zoom. Y: System view. Enter: inspect selected body. F: free camera. X: spacecraft. T: tour. P: photography. F12: capture. F5 / F9: save / load. Esc: pause menu.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Free camera: WASD moves, E / Space ascends, Q / C descends. Shift boosts, Ctrl slows. Hold Alt to release the cursor.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Spacecraft: W / S thrust, A / D yaw, R / F pitch, Q / E roll, Shift boosts. J: warp / autopilot. H: orbit assist. C: camera view. G: atmosphere scan. Shift+H: gravity measurement.");
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("SIMULATION")) {
+                const char* modes[] = {"Analytic circular orbits", "Hybrid N-body"};
+                if (ImGui::Combo("Motion model", &physicsMode, modes, 2)) pendingPhysicsModeChange = true;
+                ImGui::TextWrapped("A compressed, stylized solar system. Numerical mode integrates 13 roots; 18 analytic moons follow their live parents. This is not an ephemeris or mission-planning tool.");
+                ImGui::SliderFloat("Visual body scale", &planetScale, .25f, 3.5f);
+                ImGui::SliderFloat("Analytic revolution speed", &orbitSpeedScale, 0, 10);
+                ImGui::SliderFloat("Axial spin speed", &spinSpeedScale, 0, 10);
+                ImGui::Checkbox("Sourced axial tilts", &enableAxialTilt);
+                ImGui::Checkbox("Save exploration on exit / main menu", &autoSaveOnExit);
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
-        ImGui::End();
+        ImGui::Spacing(); ImGui::Separator();
+        if (ImGui::Button("Restore default settings")) ImGui::OpenPopup("Restore defaults?");
+        if (ImGui::BeginPopupModal("Restore defaults?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Restore settings only? Exploration records and photos are kept.");
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::SameLine();
+            if (ImGui::Button("Restore")) { if (onResetAllSettings) onResetAllSettings(); ImGui::CloseCurrentPopup(); }
+            ImGui::EndPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Back to menu")) showSettingsModal = false;
     }
+    ImGui::End();
+}
 
-    // Free Camera Live Flight Telemetry Overlay
 void SolarOdysseyUI::renderFreeCamHUD(float screenWidth, float screenHeight, CameraController& cam) {
         if (cam.mode != CAM_FREE || cam.photoModeActive) return;
 
@@ -1095,7 +753,8 @@ void SolarOdysseyUI::renderPhotoModeHUD(float screenWidth, float screenHeight, C
 
             ImGui::SameLine(0, 16);
             if (ImGui::Button(" Take Screenshot")) {
-                postProc.triggerScreenshot();
+                if (onPhotoCapture) onPhotoCapture();
+                else postProc.triggerScreenshot();
             }
 
             ImGui::SameLine(0, 12);
@@ -1353,7 +1012,7 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
 
         // 5. Controls Helper (Bottom Right)
         float helpW = 340.0f;
-        float helpH = 142.0f;
+        float helpH = 170.0f;
         ImGui::SetNextWindowPos(ImVec2(screenWidth - helpW - 24.0f, screenHeight - helpH - 24.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(helpW, helpH), ImGuiCond_Always);
 
@@ -1365,150 +1024,224 @@ void SolarOdysseyUI::renderSpaceshipHUD(float screenWidth, float screenHeight, S
             ImGui::Text("J: Warp / Autopilot  |  H: Orbit Assist");
             const char* camName = (ship.cameraView == SHIP_CAM_CHASE) ? "CHASE" :
                                   (ship.cameraView == SHIP_CAM_CLOSE) ? "CLOSE" : "COCKPIT";
-            ImGui::Text("C: View [%s]  |  X / Esc: Exit", camName);
+            ImGui::Text("C: View [%s]  |  X: Exit  |  Esc: Pause", camName);
             ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.45f, 0.95f), "Hold [Alt] to release cursor for UI");
         }
         ImGui::End();
     }
 
-    // 6. Mission HUD Telemetry Tracker (Top Left)
-void SolarOdysseyUI::renderMissionHUDTracker(float screenWidth, float screenHeight, MissionSystem& missions, Spaceship& ship, CameraController& cam) {
-        if (cam.photoModeActive) return;
+void SolarOdysseyUI::showToast(const std::string& title, const std::string& message, float duration) {
+    if (duration <= 0 || (title.empty() && message.empty())) { toasts.clear(); return; }
+    for (const auto& toast : toasts) if (toast.title == title && toast.message == message) return;
+    if (toasts.size() >= 8) toasts.pop_front();
+    toasts.push_back({title, message, std::clamp(duration, 2.0f, 5.0f)});
+}
 
-        Mission* activeM = missions.getActiveMission();
-        if (!activeM) return;
+void SolarOdysseyUI::updateNotifications(float deltaTime) {
+    const float elapsed = std::isfinite(deltaTime) ? std::max(0.0f, deltaTime) : 0.0f;
+    saveStatusToastTimer = std::max(0.0f, saveStatusToastTimer - elapsed);
+    for (size_t i = 0; i < std::min<size_t>(2, toasts.size()); ++i) toasts[i].remaining -= elapsed;
+    toasts.erase(std::remove_if(toasts.begin(), toasts.end(), [](const Toast& t) { return t.remaining <= 0; }), toasts.end());
+}
 
-        float trackerW = 340.0f;
-        float trackerH = 92.0f;
-        ImGui::SetNextWindowPos(ImVec2(24.0f, 80.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(trackerW, trackerH), ImGuiCond_Always);
-
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                 ImGuiWindowFlags_NoSavedSettings;
-
-        if (ImGui::Begin("MissionTrackerHUD", nullptr, flags)) {
-            ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.55f, 1.0f), " ACTIVE MISSION [%s]", activeM->category.c_str());
-            ImGui::Text("%s", activeM->title.c_str());
-
-            char progText[32];
-            snprintf(progText, sizeof(progText), "%.0f%% - %s", activeM->progress * 100.0f, activeM->targetName.c_str());
-            ImGui::ProgressBar(activeM->progress, ImVec2(-1, 13.0f), progText);
-
-            ImGui::TextDisabled("[M] Mission Log  |  [N] Next Mission");
+void SolarOdysseyUI::renderNotificationToast(bool flightHUD) {
+    const auto display = ImGui::GetIO().DisplaySize;
+    const float width = std::min(370.0f, display.x - 32);
+    for (size_t i = 0; i < std::min<size_t>(2, toasts.size()); ++i) {
+        ImGui::SetNextWindowPos(ImVec2(20, display.y - (flightHUD ? 268 : 168) - float(i) * 78), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(width, 72), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(.88f);
+        const std::string id = "##ObservationToast" + std::to_string(i);
+        if (ImGui::Begin(id.c_str(), nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings)) {
+            ImGui::TextColored(ImVec4(.65f,.82f,.9f,1), "%s", toasts[i].title.c_str());
+            ImGui::TextWrapped("%s", toasts[i].message.c_str());
         }
         ImGui::End();
     }
-
-    // 7. Mission Completion Toast Notification Popup
-void SolarOdysseyUI::renderMissionToast(float screenWidth, float screenHeight, MissionSystem& missions) {
-        if (!missions.toast.active) return;
-
-        float toastW = 480.0f;
-        float toastH = 58.0f;
-        float toastX = (screenWidth - toastW) * 0.5f;
-        float toastY = 75.0f;
-
-        ImGui::SetNextWindowPos(ImVec2(toastX, toastY), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(toastW, toastH), ImGuiCond_Always);
-
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                 ImGuiWindowFlags_NoSavedSettings;
-
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.22f, 0.14f, 0.95f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.95f, 0.55f, 1.0f));
-
-        if (ImGui::Begin("MissionToast", nullptr, flags)) {
-            ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.65f, 1.0f), " %s", missions.toast.title.c_str());
-            ImGui::Text("%s", missions.toast.message.c_str());
-        }
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-    }
-
-    // 8. Full Mission Log Modal Dialog
-void SolarOdysseyUI::renderMissionModal(float screenWidth, float screenHeight, MissionSystem& missions, Spaceship& ship, CameraController& cam) {
-        if (!showMissionModal) return;
-
-        float modalW = 680.0f;
-        float modalH = 520.0f;
-        ImGui::SetNextWindowPos(ImVec2((screenWidth - modalW) * 0.5f, (screenHeight - modalH) * 0.5f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(modalW, modalH), ImGuiCond_Always);
-
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
-
-        if (ImGui::Begin("INTERSTELLAR MISSION LOG", &showMissionModal, flags)) {
-            // Overall Campaign Progress
-            float compRate = missions.getOverallCompletionRate();
-            char rateText[48];
-            snprintf(rateText, sizeof(rateText), "CAMPAIGN PROGRESS: %.0f%%", compRate * 100.0f);
-            ImGui::ProgressBar(compRate, ImVec2(-1, 18.0f), rateText);
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::BeginChild("MissionListScroll", ImVec2(0, 0), true);
-
-            for (size_t i = 0; i < missions.missions.size(); ++i) {
-                Mission& m = missions.missions[i];
-                bool isActive = (missions.activeMissionIndex == (int)i);
-
-                ImGui::PushID((int)i);
-
-                if (m.isCompleted) {
-                    ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.55f, 1.0f), " [COMPLETE] #%d: %s", m.id, m.title.c_str());
-                } else if (isActive) {
-                    ImGui::TextColored(ImVec4(0.35f, 0.85f, 1.0f, 1.0f), " [ACTIVE] #%d: %s", m.id, m.title.c_str());
-                } else {
-                    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), " [PENDING] #%d: %s", m.id, m.title.c_str());
-                }
-
-                ImGui::TextDisabled("Category: %s  |  Target: %s", m.category.c_str(), m.targetName.c_str());
-                ImGui::TextWrapped("%s", m.description.c_str());
-
-                char progLabel[32];
-                snprintf(progLabel, sizeof(progLabel), "%.0f%%", m.progress * 100.0f);
-                ImGui::ProgressBar(m.progress, ImVec2(340.0f, 14.0f), progLabel);
-
-                ImGui::SameLine(0, 16);
-                if (!isActive) {
-                    if (ImGui::Button("Set Active", ImVec2(100, 22))) {
-                        missions.activeMissionIndex = (int)i;
-                    }
-                } else {
-                    ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.55f, 1.0f), "Tracking");
-                }
-
-                ImGui::SameLine(0, 12);
-                if (ImGui::Button("Target Destination", ImVec2(140, 22))) {
-                    if (onSelectBody) onSelectBody(m.targetName);
-                    if (ship.active || cam.mode == CAM_SPACESHIP) {
-                        ship.targetPlanetName = m.targetName;
-                    }
-                }
-
-                ImGui::Separator();
-                ImGui::Spacing();
-                ImGui::PopID();
-            }
-
-            ImGui::EndChild();
-        }
-        ImGui::End();
-    }
+}
 
 void SolarOdysseyUI::renderSaveStatusToast(float screenWidth, float screenHeight) {
     (void)screenHeight;
     if (saveStatusToastTimer <= 0.0f || saveStatusToast.empty()) return;
 
     float toastWidth = 440.0f;
-    ImGui::SetNextWindowPos(ImVec2((screenWidth - toastWidth) * 0.5f, 75.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2((screenWidth - toastWidth) * 0.5f, screenHeight - 124.0f), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(toastWidth, 40.0f), ImGuiCond_Always);
     ImGuiWindowFlags toastFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
     if (ImGui::Begin("SaveStatusToast", nullptr, toastFlags)) {
-        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), " [State] %s", saveStatusToast.c_str());
+        ImGui::TextColored(ImVec4(.65f,.82f,.9f,1), " [State] %s", saveStatusToast.c_str());
     }
+    ImGui::End();
+}
+
+namespace {
+
+// Cycle 4 Pass 1: Codex status chip color (functional version).
+ImVec4 codexStatusColor(DiscoveryStatus s) {
+    switch (s) {
+        case DiscoveryStatus::Detected: return ImVec4(0.55f, 0.85f, 0.55f, 1.0f);
+        case DiscoveryStatus::Visited: return ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        case DiscoveryStatus::Scanned: return ImVec4(0.65f, 0.55f, 1.0f, 1.0f);
+        case DiscoveryStatus::FullySurveyed: return ImVec4(1.0f, 0.82f, 0.35f, 1.0f);
+        case DiscoveryStatus::Unknown:
+        default: return ImVec4(0.55f, 0.55f, 0.60f, 1.0f);
+    }
+}
+
+const char* codexActivityMark(bool done) {
+    return done ? "[x]" : "[ ]";
+}
+
+} // namespace
+
+void SolarOdysseyUI::renderCodex(float screenWidth, float screenHeight, const CelestialDatabase& db,
+                                 const ScienceProgression& prog,
+                                 const std::vector<std::string>& roster) {
+    if (!showCodex) return;
+
+    const float panelW = 560.0f;
+    const float panelH = 560.0f;
+    ImGui::SetNextWindowPos(ImVec2((screenWidth - panelW) * 0.5f, (screenHeight - panelH) * 0.5f),
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(panelW, panelH), ImGuiCond_FirstUseEver);
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+
+    if (!ImGui::Begin("DISCOVERY CODEX", &showCodex, flags)) {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::SetNextItemWidth(220.0f);
+    ImGui::InputText("Search", codexSearch, sizeof(codexSearch));
+    ImGui::SameLine(0, 12);
+    ImGui::SetNextItemWidth(150.0f);
+    const char* statusNames[] = {"All statuses", "Unknown", "Detected", "Visited", "Scanned", "Fully Surveyed"};
+    ImGui::Combo("Status", &codexStatusFilter, statusNames, 6);
+
+    ImGui::Separator();
+    ImGui::BeginChild("CodexListScroll", ImVec2(0, 0), true);
+
+    const std::string needle(codexSearch);
+    for (const auto& name : roster) {
+        const DiscoveryRecord* rec = prog.getRecord(name);
+        const DiscoveryStatus status =
+            rec ? rec->status : DiscoveryStatus::Unknown;
+        // Status filter (0 = All, else DiscoveryStatus+1).
+        if (codexStatusFilter != 0 && static_cast<int>(status) != codexStatusFilter - 1) continue;
+
+        const bool known = (status != DiscoveryStatus::Unknown);
+        const std::string shownName = known ? name : "Undiscovered body";
+        // Text search matches the visible name (unknown rows match nothing
+        // except an empty query — no spoiler leakage through search).
+        if (!needle.empty() && shownName.find(needle) == std::string::npos) continue;
+
+        ImGui::PushID(name.c_str());
+        ImGui::TextColored(codexStatusColor(status), "[%s]", discoveryStatusLabel(status));
+        ImGui::SameLine(0, 8);
+        const CelestialBodyData* data = known ? db.getBody(name) : nullptr;
+        bool open = false;
+        if (known && data != nullptr) {
+            open = ImGui::CollapsingHeader(shownName.c_str());
+        } else {
+            ImGui::TextDisabled("%s", shownName.c_str());
+        }
+
+        if (open && data != nullptr) {
+            // Progressive disclosure: higher tiers reveal more database
+            // science. No per-body branches — field groups by status only.
+            ImGui::TextDisabled("%s", data->type.c_str());
+            if (status >= DiscoveryStatus::Visited) {
+                ImGui::Text("Diameter: %.1f km  |  Gravity: %.3f m/s^2  |  Period: %.2f d",
+                            data->realDiameterKm, data->surfaceGravityMs2,
+                            data->orbitalPeriodDays);
+                ImGui::TextWrapped("%s", data->subtitle.c_str());
+            }
+            if (status >= DiscoveryStatus::Scanned) {
+                ImGui::Spacing();
+                ImGui::TextWrapped("%s", data->description.c_str());
+                for (const auto& fact : data->keyFacts) {
+                    ImGui::BulletText("%s", fact.c_str());
+                }
+            }
+            if (status >= DiscoveryStatus::FullySurveyed) {
+                ImGui::Spacing();
+                if (data->hasMeanTemperatureData) ImGui::Text("%s: %.1f C", data->temperatureReference.c_str(), data->meanTemperatureC);
+                else ImGui::TextDisabled("Temperature: unavailable");
+                if (data->hasTemperatureRangeData) ImGui::Text("Range: %.1f / %.1f C", data->minTemperatureC, data->maxTemperatureC);
+                else ImGui::TextDisabled("Temperature range: unavailable");
+                ImGui::TextWrapped("Air: %s", data->atmosphericComposition.c_str());
+                ImGui::TextWrapped("Surface: %s", data->surfaceFeatures.c_str());
+                ImGui::TextWrapped("Discovery: %s", data->discoveryInfo.c_str());
+            }
+            ImGui::Spacing();
+            ImGui::Separator();
+            // Survey record (always visible once the identity is known).
+            ImGui::TextDisabled("Survey record:");
+            if (rec != nullptr) {
+                ImGui::Text("Visits: %d   |   Best photo: %s", rec->visitCount,
+                            rec->bestPhotoScore > 0.0f
+                                ? (std::to_string(static_cast<int>(rec->bestPhotoScore))).c_str()
+                                : "--");
+                ImGui::Text("%s Orbital survey   %s Atmospheric scan%s   %s Close flyby   %s Gravity",
+                            codexActivityMark(rec->orbitalSurveyCompleted),
+                            codexActivityMark(rec->atmosphericScanCompleted),
+                            rec->atmosphereApplicable ? "" : "(N/A airless)",
+                            codexActivityMark(rec->closeFlybyCompleted),
+                            codexActivityMark(rec->gravityMeasurementCompleted));
+                if (!rec->anomalyIds.empty()) {
+                    ImGui::Text("Anomalies (%d):", static_cast<int>(rec->anomalyIds.size()));
+                    for (const auto& aid : rec->anomalyIds) {
+                        // Catalog text when known; the raw id otherwise (ids
+                        // are stable keys, never prose to parse).
+                        if (const AnomalyDef* def = findAnomaly(aid)) {
+                            ImGui::BulletText("%s", def->displayName.c_str());
+                            ImGui::TextWrapped("%s", def->codexText.c_str());
+                        } else {
+                            ImGui::BulletText("%s", aid.c_str());
+                        }
+                    }
+                } else {
+                    ImGui::TextDisabled("Anomalies: none recorded");
+                }
+            }
+            ImGui::Separator();
+        }
+        ImGui::PopID();
+    }
+
+    // Non-roster discoveries (e.g. Black Hole / Wormhole anomaly contexts):
+    // records exist without a runtime-body roster slot. Listed generically
+    // from the progression map — never a second hardcoded body list.
+    bool otherHeaderShown = false;
+    for (const auto& kv : prog.allRecords()) {
+        bool inRoster = false;
+        for (const auto& r : roster) {
+            if (r == kv.first) { inRoster = true; break; }
+        }
+        if (inRoster) continue;
+        const DiscoveryRecord& rec = kv.second;
+        if (rec.anomalyIds.empty() && rec.status == DiscoveryStatus::Unknown) continue;
+        if (!otherHeaderShown) {
+            otherHeaderShown = true;
+            ImGui::Separator();
+            ImGui::TextDisabled("Other discoveries:");
+        }
+        ImGui::PushID(kv.first.c_str());
+        ImGui::TextColored(codexStatusColor(rec.status), "[%s]", discoveryStatusLabel(rec.status));
+        ImGui::SameLine(0, 8);
+        ImGui::Text("%s", kv.first.c_str());
+        for (const auto& aid : rec.anomalyIds) {
+            if (const AnomalyDef* def = findAnomaly(aid)) {
+                ImGui::BulletText("%s", def->displayName.c_str());
+            } else {
+                ImGui::BulletText("%s", aid.c_str());
+            }
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::EndChild();
     ImGui::End();
 }
 

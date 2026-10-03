@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <filesystem>
 
 AudioManager::AudioManager() {
 }
@@ -91,12 +92,12 @@ bool AudioManager::init() {
     alSourcei(wormholeSource, AL_LOOPING, AL_TRUE);
     alSourcef(wormholeSource, AL_GAIN, 0.0f);
 
-    // Mission Complete Audio (pleasant melodic chime)
-    alGenSources(1, &missionCompleteSource);
-    alGenBuffers(1, &missionCompleteBuffer);
-    generateTone(missionCompleteBuffer, 523.25f, 1.0f);
-    alSourcei(missionCompleteSource, AL_BUFFER, missionCompleteBuffer);
-    alSourcei(missionCompleteSource, AL_LOOPING, AL_FALSE);
+    // Shared chime for science discoveries and wormhole traversal.
+    alGenSources(1, &discoveryChimeSource);
+    alGenBuffers(1, &discoveryChimeBuffer);
+    generateTone(discoveryChimeBuffer, 523.25f, 1.0f);
+    alSourcei(discoveryChimeSource, AL_BUFFER, discoveryChimeBuffer);
+    alSourcei(discoveryChimeSource, AL_LOOPING, AL_FALSE);
 
     // Warp Audio Cues
     alGenSources(1, &warpChargeSource);
@@ -115,28 +116,16 @@ bool AudioManager::init() {
         alGenSources(1, &source);
         alGenBuffers(1, &buffer);
 
-        std::string lowerName = planetName;
-        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-
-        std::vector<char> pcm;
-        ALenum format = 0;
-        ALsizei sampleRate = 0;
-        if (AudioLoader::loadAudioFile(lowerName + ".mp3", pcm, format, sampleRate)) {
-            alBufferData(buffer, format, pcm.data(), (ALsizei)pcm.size(), sampleRate);
-            std::cout << "[Audio] Loaded native space track for " << planetName << " (" << pcm.size() / 1024 << " KB, " << sampleRate << " Hz)" << std::endl;
-        } else {
-            float frequency = 110.0f;
-            for (char c : planetName) frequency += c * 1.5f;
-            frequency = fmod(frequency, 220.0f) + 80.0f;
-            generateTone(buffer, frequency, 2.0f);
-        }
+        float frequency = 110.0f;
+        for (char c : planetName) frequency += c * 1.5f;
+        generateTone(buffer, fmod(frequency, 220.0f) + 80.0f, 2.0f);
 
         planetSoundSources[planetName] = source;
         planetSoundBuffers[planetName] = buffer;
     }
 
     isAudioAvailable = true;
-    musicLoad("Sound/earth.mp3");
+    musicLoad("assets/audio/orbital-ambience.wav");
     return true;
 }
 
@@ -152,7 +141,7 @@ void AudioManager::shutdown() {
     stopAndDeleteSource(blackHoleSource);       deleteBuffer(blackHoleBuffer);
     stopAndDeleteSource(spaceshipSource);       deleteBuffer(spaceshipBuffer);
     stopAndDeleteSource(wormholeSource);        deleteBuffer(wormholeBuffer);
-    stopAndDeleteSource(missionCompleteSource); deleteBuffer(missionCompleteBuffer);
+    stopAndDeleteSource(discoveryChimeSource);  deleteBuffer(discoveryChimeBuffer);
     stopAndDeleteSource(warpChargeSource);      deleteBuffer(warpChargeBuffer);
     stopAndDeleteSource(warpExitSource);        deleteBuffer(warpExitBuffer);
     stopAndDeleteSource(backgroundSource);      deleteBuffer(backgroundBuffer);
@@ -161,6 +150,7 @@ void AudioManager::shutdown() {
     for (auto &pair : planetSoundBuffers) deleteBuffer(pair.second);
     planetSoundSources.clear();
     planetSoundBuffers.clear();
+    loadedPlanetAudio.clear();
     currentPOVSource = 0;
     currentPOVPlanet.clear();
 
@@ -210,8 +200,10 @@ void AudioManager::musicLoad(const std::string &path) {
     alSourcef(backgroundSource, AL_GAIN, 0.4f);
     alSourcePlay(backgroundSource);
     gMusic.active = true;
+    gMusic.data.clear();
+    gMusic.data.shrink_to_fit();
     lastMusicVolume = 0.4f;
-    std::cout << "[Audio] Background music streaming: " << path << " (" << gMusic.sampleRate << " Hz, " << gMusic.data.size() / 1024 << " KB)" << std::endl;
+    std::cout << "[Audio] Background music buffered: " << path << " (" << gMusic.sampleRate << " Hz, " << "buffered PCM)" << std::endl;
 }
 
 void AudioManager::musicUpdate(bool muted, float masterVolume, float musicVolume) {
@@ -223,8 +215,23 @@ void AudioManager::musicUpdate(bool muted, float masterVolume, float musicVolume
     }
 }
 
+void AudioManager::ensurePlanetAudio(const std::string& name) {
+    if (!audioDevice || !planetSoundBuffers.count(name) || !loadedPlanetAudio.insert(name).second) return;
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    std::vector<char> pcm;
+    ALenum format = 0;
+    ALsizei rate = 0;
+    if (!std::filesystem::is_regular_file("Sound/" + lower + ".mp3")) return;
+    if (!AudioLoader::loadAudioFile("Sound/" + lower + ".mp3", pcm, format, rate)) return;
+    alSourceStop(planetSoundSources[name]);
+    alSourcei(planetSoundSources[name], AL_BUFFER, 0);
+    alBufferData(planetSoundBuffers[name], format, pcm.data(), static_cast<ALsizei>(pcm.size()), rate);
+}
+
 void AudioManager::playPlanetSound(const std::string &planetName, bool muted, float masterVolume, float sfxVolume) {
     if (muted || !audioDevice) return;
+    ensurePlanetAudio(planetName);
     auto sourceIt = planetSoundSources.find(planetName);
     auto bufferIt = planetSoundBuffers.find(planetName);
     if (sourceIt != planetSoundSources.end() && bufferIt != planetSoundBuffers.end()) {
@@ -240,6 +247,7 @@ void AudioManager::playPlanetSound(const std::string &planetName, bool muted, fl
 void AudioManager::startPOVAmbientSound(const std::string &planetName, bool muted, float masterVolume, float sfxVolume) {
     if (muted || !audioDevice) return;
     stopPOVAmbientSound();
+    ensurePlanetAudio(planetName);
     auto sourceIt = planetSoundSources.find(planetName);
     auto bufferIt = planetSoundBuffers.find(planetName);
     if (sourceIt != planetSoundSources.end() && bufferIt != planetSoundBuffers.end()) {
@@ -306,10 +314,16 @@ void AudioManager::playWarpExit(bool muted, float masterVolume, float sfxVolume)
     alSourcePlay(warpExitSource);
 }
 
-void AudioManager::playMissionComplete(bool muted, float masterVolume, float sfxVolume) {
-    if (muted || !audioDevice || !missionCompleteSource) return;
-    alSourcef(missionCompleteSource, AL_GAIN, masterVolume * sfxVolume * 0.6f);
-    alSourcePlay(missionCompleteSource);
+void AudioManager::stopWarpSounds() {
+    if (!isAudioAvailable) return;
+    if (warpChargeSource) alSourceStop(warpChargeSource);
+    if (warpExitSource) alSourceStop(warpExitSource);
+}
+
+void AudioManager::playDiscoveryChime(bool muted, float masterVolume, float sfxVolume) {
+    if (muted || !audioDevice || !discoveryChimeSource) return;
+    alSourcef(discoveryChimeSource, AL_GAIN, masterVolume * sfxVolume * 0.6f);
+    alSourcePlay(discoveryChimeSource);
 }
 
 void AudioManager::updateSpatialAudio(const glm::vec3& cameraEye, const glm::vec3& bhPos, const glm::vec3& whPos, bool muted, float masterVolume, float sfxVolume) {

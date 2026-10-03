@@ -1,6 +1,8 @@
+#include "runtime_paths.h"
 #include "post_processing.h"
 #include "shader_utils.h"
 #include "gl_primitives.h"
+#include "screenshot_writer.h"
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -9,6 +11,44 @@
 #include <cstring>
 #include <filesystem>
 #include <algorithm>
+#include <cstdint>
+#include <GLFW/glfw3.h>
+
+namespace {
+// Both screenshot RGB and scientific depth reads use the same pack contract.
+struct ScopedReadbackState {
+    GLint readFBO = 0, drawFBO = 0, readBuffer = 0;
+    GLint alignment = 4, rowLength = 0, skipRows = 0, skipPixels = 0, packBuffer = 0, swapBytes = 0;
+    ScopedReadbackState() {
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFBO);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFBO);
+        glGetIntegerv(GL_READ_BUFFER, &readBuffer);
+        glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+        glGetIntegerv(GL_PACK_ROW_LENGTH, &rowLength);
+        glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
+        glGetIntegerv(GL_PACK_SKIP_PIXELS, &skipPixels);
+        glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &packBuffer);
+        glGetIntegerv(GL_PACK_SWAP_BYTES, &swapBytes);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_PACK_SKIP_ROWS, 0);
+        glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+        glPixelStorei(GL_PACK_SWAP_BYTES, GL_FALSE);
+    }
+    ~ScopedReadbackState() {
+        glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+        glPixelStorei(GL_PACK_ROW_LENGTH, rowLength);
+        glPixelStorei(GL_PACK_SKIP_ROWS, skipRows);
+        glPixelStorei(GL_PACK_SKIP_PIXELS, skipPixels);
+        glPixelStorei(GL_PACK_SWAP_BYTES, swapBytes);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, packBuffer);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFBO);
+        glReadBuffer(readBuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFBO);
+    }
+};
+} // namespace
 
 PostProcessingPipeline::PostProcessingPipeline() {}
 
@@ -17,6 +57,8 @@ PostProcessingPipeline::~PostProcessingPipeline() {
 }
 
 bool PostProcessingPipeline::init(int w, int h) {
+    if (!glfwGetCurrentContext() || !glCreateFramebuffers || w <= 0 || h <= 0) return false;
+    cleanup();
     width = w;
     height = h;
     bloomWidth = std::max(1, w / 2);
@@ -51,6 +93,12 @@ bool PostProcessingPipeline::init(int w, int h) {
     uEnableToneMapLoc = glGetUniformLocation(program, "uEnableToneMap");
 
     setupFramebuffers();
+    for (GLuint target : {sceneFBO, lensedFBO, outputFBO, pingPongFBO[0], pingPongFBO[1]}) {
+        if (!target || glCheckNamedFramebufferStatus(target, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            cleanup();
+            return false;
+        }
+    }
     return true;
 }
 
@@ -59,8 +107,10 @@ void PostProcessingPipeline::setupFramebuffers() {
 
     // 1. Scene HDR Framebuffer (HDR_A: Pre-lens background, RGBA16F)
     glCreateFramebuffers(1, &sceneFBO);
+    if (!sceneFBO) return;
 
     glCreateTextures(GL_TEXTURE_2D, 1, &sceneColorTex);
+    if (!sceneColorTex) { cleanupBuffers(); return; }
     glTextureStorage2D(sceneColorTex, 1, GL_RGBA16F, width, height);
     glTextureParameteri(sceneColorTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(sceneColorTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -69,6 +119,7 @@ void PostProcessingPipeline::setupFramebuffers() {
     glNamedFramebufferTexture(sceneFBO, GL_COLOR_ATTACHMENT0, sceneColorTex, 0);
 
     glCreateRenderbuffers(1, &sceneDepthRBO);
+    if (!sceneDepthRBO) { cleanupBuffers(); return; }
     glNamedRenderbufferStorage(sceneDepthRBO, GL_DEPTH_COMPONENT24, width, height);
     glNamedFramebufferRenderbuffer(sceneFBO, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRBO);
 
@@ -78,8 +129,10 @@ void PostProcessingPipeline::setupFramebuffers() {
 
     // 2. Lensed HDR Framebuffer (HDR_B: Lensed & composite target, RGBA16F)
     glCreateFramebuffers(1, &lensedFBO);
+    if (!lensedFBO) { cleanupBuffers(); return; }
 
     glCreateTextures(GL_TEXTURE_2D, 1, &lensedColorTex);
+    if (!lensedColorTex) { cleanupBuffers(); return; }
     glTextureStorage2D(lensedColorTex, 1, GL_RGBA16F, width, height);
     glTextureParameteri(lensedColorTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(lensedColorTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -101,6 +154,10 @@ void PostProcessingPipeline::setupFramebuffers() {
     // 3. Ping-Pong Bloom Framebuffers (RGBA16F half-resolution)
     glCreateFramebuffers(2, pingPongFBO);
     glCreateTextures(GL_TEXTURE_2D, 2, pingPongColorTex);
+    if (!pingPongFBO[0] || !pingPongFBO[1] || !pingPongColorTex[0] || !pingPongColorTex[1]) {
+        cleanupBuffers();
+        return;
+    }
 
     for (int i = 0; i < 2; ++i) {
         glTextureStorage2D(pingPongColorTex[i], 1, GL_RGBA16F, bloomWidth, bloomHeight);
@@ -118,6 +175,7 @@ void PostProcessingPipeline::setupFramebuffers() {
     // 4. Clean Final Output Framebuffer (RGBA8 full-resolution, Option A capture target)
     glCreateFramebuffers(1, &outputFBO);
     glCreateTextures(GL_TEXTURE_2D, 1, &outputColorTex);
+    if (!outputFBO || !outputColorTex) { cleanupBuffers(); return; }
     glTextureStorage2D(outputColorTex, 1, GL_RGBA8, width, height);
     glTextureParameteri(outputColorTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(outputColorTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -131,7 +189,7 @@ void PostProcessingPipeline::setupFramebuffers() {
 }
 
 void PostProcessingPipeline::resize(int w, int h) {
-    if (w <= 0 || h <= 0 || (w == width && h == height)) return;
+    if (!program || !glfwGetCurrentContext() || w <= 0 || h <= 0 || (w == width && h == height)) return;
     width = w;
     height = h;
     bloomWidth = std::max(1, w / 2);
@@ -140,6 +198,9 @@ void PostProcessingPipeline::resize(int w, int h) {
 }
 
 void PostProcessingPipeline::cleanupBuffers() {
+    cleanOutputReady = false;
+    // HDR and capture routing are mandatory; enabled controls optional effects only.
+    glDisable(GL_FRAMEBUFFER_SRGB);
     if (sceneFBO) { glDeleteFramebuffers(1, &sceneFBO); sceneFBO = 0; }
     if (sceneColorTex) { glDeleteTextures(1, &sceneColorTex); sceneColorTex = 0; }
     if (lensedFBO) { glDeleteFramebuffers(1, &lensedFBO); lensedFBO = 0; }
@@ -184,7 +245,10 @@ void PostProcessingPipeline::skipStartup() {
 }
 
 void PostProcessingPipeline::beginScene() {
-    if (enabled && sceneFBO) {
+    cleanOutputReady = false;
+    // HDR and capture routing are mandatory; enabled controls optional effects only.
+    glDisable(GL_FRAMEBUFFER_SRGB);
+    if (sceneFBO) {
         glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
         glViewport(0, 0, width, height);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -227,7 +291,7 @@ void PostProcessingPipeline::copyPreLensToLensed() {
 }
 
 void PostProcessingPipeline::transitionToLensed() {
-    if (!enabled || !lensedFBO) return;
+    if (!lensedFBO) return;
     if (!bypassPreLensCopy) {
         copyPreLensToLensed();
     }
@@ -273,7 +337,7 @@ void PostProcessingPipeline::assertNoFeedbackLoop() const {
 }
 
 void PostProcessingPipeline::endSceneAndPostProcess() {
-    if (!enabled || (!sceneFBO && !lensedFBO) || !program) {
+    if (!sceneFBO || !lensedFBO || !outputFBO || !program) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         return;
     }
@@ -281,9 +345,11 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
     GLuint sourceTex = (lensedColorTex != 0) ? lensedColorTex : sceneColorTex;
 
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_FRAMEBUFFER_SRGB); // final shader encodes exactly once
     glUseProgram(program);
 
-    if (bloomEnabled) {
+    if (enabled && bloomEnabled) {
         // Pass 0: Bright pass extraction into pingPongFBO[0] from HDR_B (lensedColorTex)
         glBindFramebuffer(GL_FRAMEBUFFER, pingPongFBO[0]);
         glViewport(0, 0, bloomWidth, bloomHeight);
@@ -324,12 +390,12 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUniform1i(uPassLoc, 3);
-    glUniform1i(uEnableBloomLoc, bloomEnabled ? 1 : 0);
+    glUniform1i(uEnableBloomLoc, enabled && bloomEnabled ? 1 : 0);
     glUniform1f(uBloomIntensityLoc, bloomIntensity);
-    glUniform1i(uEnableToneMapLoc, toneMappingEnabled ? 1 : 0);
-    glUniform1f(uExposureLoc, exposure);
-    glUniform1f(uVignetteLoc, vignetteEnabled ? vignetteStrength : 0.0f);
-    glUniform1f(uFadeAlphaLoc, currentFadeAlpha);
+    glUniform1i(uEnableToneMapLoc, enabled && toneMappingEnabled ? 1 : 0);
+    glUniform1f(uExposureLoc, enabled ? exposure : 1.0f);
+    glUniform1f(uVignetteLoc, enabled && vignetteEnabled ? vignetteStrength : 0.0f);
+    glUniform1f(uFadeAlphaLoc, enabled ? currentFadeAlpha : 1.0f);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, sourceTex);
@@ -359,6 +425,7 @@ void PostProcessingPipeline::endSceneAndPostProcess() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
+    cleanOutputReady = true;
 }
 
 void PostProcessingPipeline::triggerScreenshot(const char* customPath) {
@@ -366,15 +433,34 @@ void PostProcessingPipeline::triggerScreenshot(const char* customPath) {
     pendingCapturePath = customPath ? customPath : "";
 }
 
-bool PostProcessingPipeline::captureScreenshot(const char* customPath) {
-    try {
-        std::filesystem::create_directories("Screenshots/QA");
-        std::filesystem::create_directories("Screenshots/Polish");
-        std::filesystem::create_directories("Screenshots/Regression");
-    } catch (...) {}
+bool PostProcessingPipeline::readSceneDepth(std::vector<float>& depth) const {
+    depth.clear();
+    const uint64_t count = width > 0 && height > 0 ? uint64_t(width) * uint64_t(height) : 0;
+    if (!cleanOutputReady || !count || count > 64ull * 1024 * 1024 || !lensedFBO || !sceneDepthRBO ||
+        glGetError() != GL_NO_ERROR) return false;
+    depth.resize(static_cast<std::size_t>(count));
+    bool readOK = false;
+    {
+        ScopedReadbackState state;
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, lensedFBO);
+        if (glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+            glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth.data());
+            readOK = glGetError() == GL_NO_ERROR;
+        }
+    }
+    if (!readOK) depth.clear();
+    return readOK;
+}
 
+bool PostProcessingPipeline::captureScreenshot(const char* customPath, std::vector<float>* capturedDepth) {
+    if (capturedDepth) capturedDepth->clear();
+    // An invalid size or unfilled GL readback cannot count as a capture.
+    const uint64_t pixelCount = width > 0 && height > 0 ? uint64_t(width) * uint64_t(height) : 0;
+    if (!cleanOutputReady || !pixelCount || pixelCount > 64ull * 1024 * 1024 || glGetError() != GL_NO_ERROR ||
+        (capturedDepth && (!lensedFBO || !sceneDepthRBO))) return false;
     char filename[256];
     if (customPath && customPath[0] != '\0') {
+        if (std::strlen(customPath) >= sizeof(filename)) return false;
         strncpy(filename, customPath, sizeof(filename) - 1);
         filename[sizeof(filename) - 1] = '\0';
     } else {
@@ -385,88 +471,41 @@ bool PostProcessingPipeline::captureScreenshot(const char* customPath) {
                  ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
     }
 
-    std::vector<unsigned char> pixels(width * height * 3);
-    
-    // Save previous framebuffer bindings
-    GLint prevReadFBO = 0, prevDrawFBO = 0;
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
-
-    // Explicitly select clean post-processed output FBO (Option A: 3D scene before ImGui HUD)
-    if (outputFBO) {
+    std::vector<unsigned char> pixels(static_cast<size_t>(pixelCount) * 3);
+    bool readOK = false;
+    {
+        ScopedReadbackState state;
+        // Clean post-processed 3D scene, before the ImGui HUD.
         glBindFramebuffer(GL_READ_FRAMEBUFFER, outputFBO);
-        glReadBuffer(GL_COLOR_ATTACHMENT0);
-    } else {
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glReadBuffer(GL_BACK);
+        glReadBuffer(outputFBO ? GL_COLOR_ATTACHMENT0 : GL_BACK);
+        glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, pixels.data());
+        readOK = glGetError() == GL_NO_ERROR;
     }
+    if (readOK && capturedDepth) readOK = readSceneDepth(*capturedDepth);
+    if (!readOK) { if (capturedDepth) capturedDepth->clear(); return false; }
 
-    GLint prevAlignment = 4;
-    glGetIntegerv(GL_PACK_ALIGNMENT, &prevAlignment);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-
-    glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, pixels.data());
-
-    glPixelStorei(GL_PACK_ALIGNMENT, prevAlignment);
-
-    // Restore previous framebuffer bindings
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
-
-    std::ofstream file(filename, std::ios::binary);
+    std::filesystem::path capturePath = std::filesystem::u8path(filename);
+    if ((!customPath || !customPath[0]) && !RuntimePaths::userData().empty())
+        capturePath = RuntimePaths::userData() / "Screenshots" / capturePath.filename();
+    std::error_code pathError;
+    if (capturePath.has_parent_path()) std::filesystem::create_directories(capturePath.parent_path(), pathError);
+    if (pathError) return false;
+    // Normal captures never replace an earlier photograph taken in the same second.
+    if (!customPath || !customPath[0]) {
+        const auto base = capturePath;
+        unsigned suffix = 1;
+        while (std::filesystem::exists(capturePath, pathError) && !pathError)
+            capturePath = base.parent_path() / (base.stem().string() + "_" + std::to_string(suffix++) + base.extension().string());
+        if (pathError) return false;
+    }
+    std::ofstream file(capturePath, std::ios::binary);
     if (!file.is_open()) return false;
 
-    unsigned char bmpFileHeader[14] = {
-        'B', 'M',
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        54, 0, 0, 0
-    };
-
-    unsigned char bmpInfoHeader[40] = {
-        40, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        1, 0,
-        24, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0
-    };
-
-    int rowPadding = (4 - (width * 3) % 4) % 4;
-    int fileSize = 54 + (width * 3 + rowPadding) * height;
-
-    bmpFileHeader[2] = (unsigned char)(fileSize);
-    bmpFileHeader[3] = (unsigned char)(fileSize >> 8);
-    bmpFileHeader[4] = (unsigned char)(fileSize >> 16);
-    bmpFileHeader[5] = (unsigned char)(fileSize >> 24);
-
-    bmpInfoHeader[4] = (unsigned char)(width);
-    bmpInfoHeader[5] = (unsigned char)(width >> 8);
-    bmpInfoHeader[6] = (unsigned char)(width >> 16);
-    bmpInfoHeader[7] = (unsigned char)(width >> 24);
-
-    bmpInfoHeader[8] = (unsigned char)(height);
-    bmpInfoHeader[9] = (unsigned char)(height >> 8);
-    bmpInfoHeader[10] = (unsigned char)(height >> 16);
-    bmpInfoHeader[11] = (unsigned char)(height >> 24);
-
-    file.write((char*)bmpFileHeader, 14);
-    file.write((char*)bmpInfoHeader, 40);
-
-    unsigned char padding[3] = {0, 0, 0};
-    for (int y = 0; y < height; ++y) {
-        file.write((char*)&pixels[y * width * 3], width * 3);
-        if (rowPadding > 0) file.write((char*)padding, rowPadding);
-    }
-
+    const bool wrote = writeScreenshotBMP(file, width, height, pixels);
     file.close();
-    lastScreenshotPath = filename;
+    if (!wrote || file.fail()) return false;
+    lastScreenshotPath = capturePath.u8string();
     screenshotToastTimer = 4.0f;
-    std::cout << "[PostProcess] Saved clean 3D screenshot (Option A) to: " << filename << std::endl;
+    std::cout << "[PostProcess] Saved clean 3D screenshot (Option A) to: " << lastScreenshotPath << std::endl;
     return true;
 }

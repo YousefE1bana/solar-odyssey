@@ -4,6 +4,9 @@
 namespace glprims {
 
 struct ModernSphere {
+    ModernSphere() = default;
+    ModernSphere(const ModernSphere&) = delete;
+    ModernSphere& operator=(const ModernSphere&) = delete;
     GLuint vao = 0, vbo = 0, ibo = 0;
     int indexCount = 0;
 
@@ -15,6 +18,9 @@ struct ModernSphere {
 ModernSphere& sharedModernSphere();
 
 struct FullscreenQuad {
+    FullscreenQuad() = default;
+    FullscreenQuad(const FullscreenQuad&) = delete;
+    FullscreenQuad& operator=(const FullscreenQuad&) = delete;
     GLuint vao = 0, vbo = 0;
 
     void ensure();
@@ -23,5 +29,9 @@ struct FullscreenQuad {
 };
 
 FullscreenQuad& sharedFullscreenQuad();
+
+// Shared primitives are cached per current GLFW context, never deleted by
+// static destructors. Call once before destroying that context (idempotent).
+void destroySharedResources();
 
 } // namespace glprims

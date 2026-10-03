@@ -3,6 +3,8 @@
 #include <GLFW/glfw3.h>
 #include "black_hole.h"
 #include "post_processing.h"
+#include "gl_primitives.h"
+#include "lod_manager.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 #include <vector>
@@ -41,6 +43,11 @@ struct OffscreenLensingGLContext {
 
     ~OffscreenLensingGLContext() {
         if (window) {
+            glfwMakeContextCurrent(window);
+            if (valid) {
+                lod::LODManager::releaseCurrentContext();
+                glprims::destroySharedResources();
+            }
             glfwDestroyWindow(window);
             window = nullptr;
         }

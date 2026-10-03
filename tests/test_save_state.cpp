@@ -1,10 +1,17 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include "catch.hpp"
 #include "save_state.h"
 #include "camera_controller.h"
-#include "mission_system.h"
 #include "spaceship.h"
 #include "solar_ui.h"
 #include <cstdio>
+#include <limits>
+#include <cmath>
 
 TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization (v2)", "[save_state]") {
     SimulationSaveState original;
@@ -31,11 +38,6 @@ TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization (v2)", "
     original.camera.freePitch = 10.0;
     original.camera.fov = 55.0;
 
-    original.activeMissionIndex = 2;
-    original.missions.push_back({0, true, 1.0f, 0});
-    original.missions.push_back({1, true, 1.0f, 0});
-    original.missions.push_back({2, false, 0.65f, 1});
-
     original.shipActive = true;
     original.shipPosition = glm::dvec3(15.12345678, 0.51234567, 20.98765432);
     original.shipVelocity = glm::dvec3(0.0, 0.0, 1.23456789);
@@ -46,7 +48,7 @@ TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization (v2)", "
     std::string jsonStr = original.toJSON();
     REQUIRE(!jsonStr.empty());
     REQUIRE(jsonStr.find("\"version\": 2") != std::string::npos);
-    REQUIRE(jsonStr.find("\"elapsedSimDays\": 145.75123456") != std::string::npos);
+    REQUIRE(jsonStr.find("\"elapsedSimDays\":") != std::string::npos);
     REQUIRE(jsonStr.find("\"focusedBodyName\": \"Mars\"") != std::string::npos);
 
     SimulationSaveState restored;
@@ -65,12 +67,6 @@ TEST_CASE("SaveState - JSON Roundtrip Serialization and Deserialization (v2)", "
     REQUIRE(restored.camera.focusDistance == Approx(6.5));
     REQUIRE(restored.camera.fov == Approx(55.0));
 
-    REQUIRE(restored.activeMissionIndex == 2);
-    REQUIRE(restored.missions.size() == 3);
-    REQUIRE(restored.missions[0].isCompleted == true);
-    REQUIRE(restored.missions[2].progress == Approx(0.65f));
-    REQUIRE(restored.missions[2].currentWaypointIndex == 1);
-
     REQUIRE(restored.shipActive == true);
     REQUIRE(restored.shipPosition.x == Approx(15.12345678));
     REQUIRE(restored.shipThrottle == Approx(0.8));
@@ -83,6 +79,7 @@ TEST_CASE("SaveState - Disk File Save and Load", "[save_state]") {
     const std::string testPath = "test_save_state_temp.json";
 
     SimulationSaveState state;
+    state.version = 3; // Fixture for the historical bookmark schema.
     state.elapsedSimDays = 42.0;
     state.timeMultiplier = 2.0;
     state.camera.focusedBodyName = "Saturn";
@@ -100,7 +97,7 @@ TEST_CASE("SaveState - Disk File Save and Load", "[save_state]") {
     REQUIRE(loadedState.camera.focusedBodyName == "Saturn");
 
     std::string summary = mgr.getSaveSummary(testPath);
-    REQUIRE(summary.find("Day 42.0") != std::string::npos);
+    REQUIRE(summary.find("Day 210.0") != std::string::npos); // Legacy raw seconds * 5 display days.
     REQUIRE(summary.find("Saturn Focus") != std::string::npos);
 
     std::remove(testPath.c_str());
@@ -169,45 +166,294 @@ TEST_CASE("SaveState - Capture and Restore Integration", "[save_state]") {
     cam.focusDistance = 12.0f;
     cam.currentEye = glm::vec3(0.0f, 10.0f, 20.0f);
 
-    MissionSystem missions;
-    missions.initMissions();
-    missions.activeMissionIndex = 1;
-    missions.missions[0].isCompleted = true;
-
     Spaceship ship;
     ship.active = true;
     ship.position = glm::vec3(5.0f, 1.0f, -2.0f);
     ship.throttle = 0.5f;
 
     SimulationSaveState captured;
-    mgr.captureState(captured, 88.5, 3.0, false, 0, cam, missions, ship, true);
+    mgr.captureState(captured, 88.5, 3.0, false, 0, cam, ship, true);
 
-    REQUIRE(captured.version == 2);
+    REQUIRE(captured.version == 3);
     REQUIRE(captured.elapsedSimDays == Approx(88.5));
     REQUIRE(captured.camera.focusedBodyName == "Jupiter");
-    REQUIRE(captured.activeMissionIndex == 1);
-    REQUIRE(captured.missions[0].isCompleted == true);
 
     // Reset components to defaults
     CameraController resetCam;
-    MissionSystem resetMissions;
-    resetMissions.initMissions();
     Spaceship resetShip;
     SolarOdysseyUI resetUI;
-    float simDays = 0.0f, timeMult = 1.0f;
-    bool paused = false;
-    int physMode = 0;
+    SimulationController resetSimulation;
+    resetSimulation.init();
 
     // Restore from captured state
-    mgr.restoreState(captured, simDays, timeMult, paused, physMode, resetCam, resetMissions, resetShip, resetUI);
+    REQUIRE(mgr.restoreState(captured, resetSimulation, resetCam, resetShip, resetUI));
 
-    REQUIRE(simDays == Approx(88.5f));
-    REQUIRE(timeMult == Approx(3.0f));
-    REQUIRE(resetCam.mode == CAM_FOCUS);
+    REQUIRE(resetSimulation.getSimTime() == 88.5);
+    REQUIRE(resetSimulation.getTimeMultiplier() == 3.0);
+    REQUIRE(resetUI.elapsedSimDays == Approx(442.5f));
+    REQUIRE(resetCam.mode == CAM_SPACESHIP); // Active ship owns its view.
     REQUIRE(resetCam.focusedBodyName == "Jupiter");
     REQUIRE(resetCam.focusDistance == Approx(12.0f));
-    REQUIRE(resetMissions.activeMissionIndex == 1);
-    REQUIRE(resetMissions.missions[0].isCompleted == true);
     REQUIRE(resetShip.active == true);
     REQUIRE(resetShip.throttle == Approx(0.5f));
+}
+
+TEST_CASE("SaveState - v4 continues numerical roots and live-parent moons", "[save_state]") {
+    SimulationController original;
+    original.init();
+    REQUIRE(original.restoreSession(98765.43210987654, 1.0, false, PHYSICS_NBODY, nullptr));
+    original.setOrbitSpeedScale(0.75);
+    original.update(0.004321); // Includes an unfinished fixed step.
+    CameraController cam;
+    cam.resetInstant();
+    Spaceship ship;
+    SimulationSaveState captured;
+    auto& manager = SaveStateManager::instance();
+    manager.captureState(captured, original, cam, ship, true, 0, "Earth");
+    ScienceProgression discoveries;
+    discoveries.markDetected("Earth");
+    discoveries.recordPhoto("Earth", 73.5f);
+    manager.captureProgression(captured, discoveries);
+    REQUIRE(captured.version == 5);
+    REQUIRE(captured.continuation.roots.size() == 13);
+    SimulationSaveState parsed;
+    REQUIRE(parsed.fromJSON(captured.toJSON()));
+    REQUIRE(parsed.simTimeSeconds == original.getSimTime());
+    REQUIRE(parsed.displayDays() == original.getElapsedSimDays());
+    REQUIRE(parsed.continuation.timeAccumulator == original.getNBodySimulation().timeAccumulator);
+    SimulationController restored;
+    restored.init();
+    SolarOdysseyUI ui;
+    ui.pendingPhysicsModeChange = true;
+    REQUIRE(manager.restoreState(parsed, restored, cam, ship, ui));
+    REQUIRE_FALSE(ui.pendingPhysicsModeChange);
+    REQUIRE(restored.getPhysicsMode() == PHYSICS_NBODY);
+    REQUIRE(restored.getNBodySimulation().getPhysicsMode() == PHYSICS_NBODY);
+    REQUIRE(restored.getAllBodies().size() == 31);
+    REQUIRE(restored.getNBodySimulation().bodies.size() == 13);
+    REQUIRE(restored.getNBodySimulation().getBody("Moon") == nullptr);
+    for (const auto& body : original.getAllBodies()) REQUIRE(restored.getBodyPositionDouble(body.name) == body.position);
+    original.update(0.008765);
+    restored.update(0.008765);
+    REQUIRE(restored.getSimTime() == original.getSimTime());
+    for (const auto& body : original.getNBodySimulation().bodies) {
+        REQUIRE(restored.getNBodySimulation().getBody(body.name)->position == body.position);
+        REQUIRE(restored.getNBodySimulation().getBody(body.name)->velocity == body.velocity);
+    }
+    REQUIRE(restored.getBodyPositionDouble("Moon") == original.getBodyPositionDouble("Moon"));
+    ScienceProgression loadedDiscoveries;
+    manager.restoreProgression(parsed, loadedDiscoveries);
+    REQUIRE(loadedDiscoveries.getRecord("Earth")->bestPhotoScore == 73.5f);
+}
+
+TEST_CASE("SaveState - rejection is transactional for parsed and live state", "[save_state]") {
+    SimulationController sim;
+    sim.init();
+    CameraController cam;
+    cam.resetInstant();
+    Spaceship ship;
+    SolarOdysseyUI ui;
+    SimulationSaveState valid;
+    auto& manager = SaveStateManager::instance();
+    manager.captureState(valid, sim, cam, ship, true, 0, "");
+    SimulationSaveState output = valid;
+    const std::string before = output.toJSON();
+    for (const auto& json : {
+        std::string("{\"version\": 6, \"simulation\": {\"elapsedSimDays\": 10}}"),
+        std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": -1}}"),
+        std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": 1, \"isPaused\": \"false\"}}"),
+        std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": 1e}}"),
+        std::string("{\"version\": 3, \"simulation\": {\"elapsedSimDays\": 1}, \"camera\": {\"eye\": [1, 2, \"3\"]}}"),
+        std::string("{\"version\": 3, \"version\": 2, \"simulation\": {\"elapsedSimDays\": 1}}")}) {
+        REQUIRE_FALSE(output.fromJSON(json));
+        REQUIRE(output.toJSON() == before);
+    }
+    SimulationSaveState invalid = valid;
+    invalid.physicsMode = PHYSICS_NBODY; // No root snapshot.
+    REQUIRE_FALSE(manager.restoreState(invalid, sim, cam, ship, ui));
+    REQUIRE(sim.getSimTime() == 0.0);
+    REQUIRE(sim.getPhysicsMode() == PHYSICS_KEPLERIAN);
+    REQUIRE(cam.currentEye == glm::vec3(valid.camera.eye));
+    REQUIRE_FALSE(ship.active);
+    auto badContinuation = sim.captureContinuation();
+    badContinuation.roots.push_back({"Moon", {}, {}});
+    REQUIRE_FALSE(sim.restoreSession(10.0, 2.0, true, PHYSICS_NBODY, &badContinuation));
+    REQUIRE(sim.getSimTime() == 0.0);
+    REQUIRE_FALSE(sim.isPaused());
+}
+
+TEST_CASE("SaveState - legacy mode restore reseeds into an existing numerical session", "[save_state]") {
+    SimulationController sim;
+    sim.init();
+    sim.setPhysicsMode(PHYSICS_NBODY);
+    sim.update(0.1);
+    SimulationSaveState legacy;
+    legacy.version = 3;
+    legacy.elapsedSimDays = 12.3456789012345; // Historical field is seconds.
+    legacy.physicsMode = PHYSICS_NBODY;
+    legacy.isPaused = true;
+    CameraController cam;
+    Spaceship ship;
+    SolarOdysseyUI ui;
+    REQUIRE(SaveStateManager::instance().restoreState(legacy, sim, cam, ship, ui));
+    REQUIRE(sim.getSimTime() == legacy.elapsedSimDays);
+    REQUIRE(sim.getElapsedSimDays() == legacy.elapsedSimDays * 5.0);
+    REQUIRE(sim.getNBodySimulation().timeAccumulator == 0.0);
+    const auto earth = sim.getBodyPositionDouble("Earth");
+    sim.update(0.016);
+    REQUIRE(sim.getSimTime() == legacy.elapsedSimDays);
+    REQUIRE(sim.getBodyPositionDouble("Earth") == earth);
+    legacy.physicsMode = PHYSICS_KEPLERIAN;
+    REQUIRE(SaveStateManager::instance().restoreState(legacy, sim, cam, ship, ui));
+    REQUIRE(sim.getNBodySimulation().getPhysicsMode() == PHYSICS_KEPLERIAN);
+}
+
+TEST_CASE("SaveState - camera flight and visit transients cannot leak across restoration", "[save_state]") {
+    SimulationController sim;
+    sim.init();
+    CameraController cam;
+    cam.resetInstant();
+    cam.enterFreeCam();
+    Spaceship ship;
+    SimulationSaveState saved;
+    auto& manager = SaveStateManager::instance();
+    manager.captureState(saved, sim, cam, ship, true, 0, "");
+    cam.freeVelocity = glm::vec3(10.0f);
+    cam.freeTargetYaw = 123.0f;
+    cam.tourActive = true;
+    cam.transitionProgress = 0.2f;
+    cam.photoModeActive = true;
+    ship.active = true;
+    ship.flightMode = FLIGHT_ORBIT_ASSIST;
+    ship.warpSystem.engageWarp(glm::vec3(50.0f), "Mars", 1.0f);
+    ship.prevFramePosition = glm::vec3(100.0f);
+    ship.proximityAlertActive = true;
+    SolarOdysseyUI ui;
+    REQUIRE(manager.restoreState(saved, sim, cam, ship, ui));
+    REQUIRE(cam.freeVelocity == glm::vec3(0.0f));
+    REQUIRE(cam.freeTargetYaw == cam.freeYaw);
+    REQUIRE_FALSE(cam.tourActive);
+    REQUIRE_FALSE(cam.photoModeActive);
+    REQUIRE(cam.transitionProgress == 1.0f);
+    REQUIRE_FALSE(ship.active);
+    REQUIRE_FALSE(ship.warpSystem.isWarpActive());
+    REQUIRE(ship.flightMode == FLIGHT_MANUAL);
+    REQUIRE(ship.prevFramePosition == ship.position);
+    REQUIRE_FALSE(ship.proximityAlertActive);
+    ScienceProgression progression;
+    const std::vector<ProgressionBodyRef> bodies{{"Earth", {}, 1.0f}};
+    progression.updateVisits(glm::vec3(2.0f, 0.0f, 0.0f), bodies, {});
+    const auto persistent = progression.captureSaveData();
+    progression.applySaveData(persistent);
+    progression.restoreVisitTracking(glm::vec3(2.0f, 0.0f, 0.0f), bodies);
+    progression.updateVisits(glm::vec3(2.0f, 0.0f, 0.0f), bodies, {});
+    REQUIRE(progression.getRecord("Earth") != nullptr);
+    REQUIRE(progression.getRecord("Earth")->visitCount == 1);
+}
+
+TEST_CASE("SaveState - failed replacement preserves an existing valid file", "[save_state]") {
+    const std::string path = "test_save_state_safe_write_temp.json";
+    auto& manager = SaveStateManager::instance();
+    SimulationSaveState original;
+    original.version = 3;
+    original.elapsedSimDays = 17.0;
+    REQUIRE(manager.saveToFile(path, original));
+    auto invalid = original;
+    invalid.timeMultiplier = std::numeric_limits<double>::infinity();
+    REQUIRE_FALSE(manager.saveToFile(path, invalid));
+    SimulationSaveState loaded;
+    REQUIRE(manager.loadFromFile(path, loaded));
+    REQUIRE(loaded.elapsedSimDays == 17.0);
+#ifdef _WIN32
+    // Deny delete/rename to force failure AFTER writing the temporary file.
+    struct FileLock {
+        HANDLE handle;
+        ~FileLock() { if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle); }
+    };
+    {
+        FileLock lock{CreateFileW(L"test_save_state_safe_write_temp.json", GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        REQUIRE(lock.handle != INVALID_HANDLE_VALUE);
+        auto replacement = original;
+        replacement.elapsedSimDays = 23.0;
+        REQUIRE_FALSE(manager.saveToFile(path, replacement));
+    }
+    REQUIRE(manager.loadFromFile(path, loaded));
+    REQUIRE(loaded.elapsedSimDays == 17.0);
+#endif
+    auto replacement = original;
+    replacement.elapsedSimDays = 23.0;
+    REQUIRE(manager.saveToFile(path, replacement));
+    REQUIRE(manager.loadFromFile(path, loaded));
+    REQUIRE(loaded.elapsedSimDays == 23.0);
+    REQUIRE(std::remove(path.c_str()) == 0);
+}
+
+TEST_CASE("SaveState - legacy v3 scientific records survive migration", "[save_state]") {
+    ScienceProgression original;
+    const std::vector<ProgressionBodyRef> bodies{{"Earth", {}, 1.0f}};
+    original.updateVisits(glm::vec3(2.0f, 0.0f, 0.0f), bodies, {});
+    original.recordActivity("Earth", ScienceActivity::OrbitalSurvey);
+    original.recordActivity("Earth", ScienceActivity::GravityMeasurement);
+    original.recordActivity("Earth", ScienceActivity::CloseFlyby);
+    original.recordPhoto("Earth", 81.25f);
+    original.recordAnomaly("Earth", "earth_shadow");
+    CameraController cam;
+    cam.resetInstant();
+    Spaceship ship;
+    SimulationSaveState legacy;
+    auto& manager = SaveStateManager::instance();
+    manager.captureState(legacy, 12.25, 4.0, true, 0, cam, ship, true);
+    manager.captureProgression(legacy, original);
+    auto json = legacy.toJSON();
+    json.insert(json.find('{') + 1, "\"sciencePoints\": 9999,"); // Retired fields are ignored.
+    SimulationSaveState parsed;
+    REQUIRE(parsed.fromJSON(json));
+    REQUIRE(parsed.version == 3);
+    REQUIRE(parsed.simulationSeconds() == 12.25);
+    ScienceProgression restored;
+    manager.restoreProgression(parsed, restored);
+    const auto* record = restored.getRecord("Earth");
+    REQUIRE(record != nullptr);
+    REQUIRE(record->visitCount == 1);
+    REQUIRE(record->firstVisitRecorded);
+    REQUIRE(record->orbitalSurveyCompleted);
+    REQUIRE(record->gravityMeasurementCompleted);
+    REQUIRE(record->closeFlybyCompleted);
+    REQUIRE(record->bestPhotoScore == 81.25f);
+    REQUIRE(record->anomalyIds == std::vector<std::string>{"earth_shadow"});
+    REQUIRE(record->status == original.getRecord("Earth")->status);
+    REQUIRE(parsed.toJSON().find("sciencePoints") == std::string::npos);
+}
+
+TEST_CASE("SaveState - v4 ship bookmark preserves pose energy and view without resuming warp", "[save_state]") {
+    SimulationController sim;
+    sim.init();
+    CameraController cam;
+    cam.resetInstant();
+    Spaceship ship;
+    ship.active = true;
+    ship.position = glm::vec3(25.0f, 5.0f, 12.0f);
+    ship.velocity = glm::vec3(2.0f, 0.0f, 1.0f);
+    ship.orientation = glm::angleAxis(glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    ship.boostEnergy = 42.0f;
+    ship.cameraView = SHIP_CAM_COCKPIT;
+    ship.warpSystem.engageWarp(glm::vec3(50.0f), "Mars", 1.0f);
+    SimulationSaveState snapshot;
+    auto& manager = SaveStateManager::instance();
+    manager.captureState(snapshot, sim, cam, ship, true, 0, "Earth");
+    SimulationSaveState parsed;
+    REQUIRE(parsed.fromJSON(snapshot.toJSON()));
+    Spaceship restoredShip;
+    SolarOdysseyUI ui;
+    REQUIRE(manager.restoreState(parsed, sim, cam, restoredShip, ui));
+    REQUIRE(restoredShip.position == ship.position);
+    REQUIRE(restoredShip.velocity == ship.velocity);
+    REQUIRE(restoredShip.boostEnergy == 42.0f);
+    REQUIRE(restoredShip.cameraView == SHIP_CAM_COCKPIT);
+    REQUIRE(std::abs(glm::dot(restoredShip.orientation, ship.orientation)) == Approx(1.0f));
+    REQUIRE(restoredShip.flightMode == FLIGHT_MANUAL);
+    REQUIRE_FALSE(restoredShip.warpSystem.isWarpActive());
+    REQUIRE(cam.mode == CAM_SPACESHIP);
+    REQUIRE(cam.currentEye == restoredShip.getCameraEye());
+    REQUIRE(restoredShip.prevFramePosition == restoredShip.position);
 }

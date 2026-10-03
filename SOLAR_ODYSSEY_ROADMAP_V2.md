@@ -11,7 +11,9 @@
 
 # 1. Executive Summary
 
-Solar Odyssey is already substantially beyond a typical student OpenGL project. The current project combines modern C++17, OpenGL 4.5 Core, custom GLSL rendering, HDR, bloom, ACES tone mapping, Keplerian orbital motion, optional N-body gravity, Velocity-Verlet integration, 6-DOF spacecraft flight, quaternion orientation, warp travel, orbit assist, black-hole and wormhole systems, missions, save-state persistence, OpenAL audio, GPU compute shaders, LOD, automated tests, CI, and QA screenshot capture.
+Solar Odyssey is already substantially beyond a typical student OpenGL project. The current project combines modern C++17, OpenGL 4.5 Core, custom GLSL rendering, HDR, bloom, ACES tone mapping, Keplerian orbital motion, optional N-body gravity, Velocity-Verlet integration, 6-DOF spacecraft flight, quaternion orientation, warp travel, orbit assist, black-hole and wormhole systems, scientific activities, discovery progression, save-state persistence, OpenAL audio, GPU compute shaders, LOD, automated tests, CI, and QA screenshot capture.
+
+**Current scope:** Pure Scientific Exploration & Discovery sandbox. Cycle 4 Pass 3 — Mission Campaign and the former Pass 4 — Economy, Unlocks & Achievements are **CANCELLED**, not deferred or replaced. Scientific activities and Codex records remain; there is no meta-progression system.
 
 The engine is currently more mature than the game layer built on top of it. Development must therefore follow a deliberate sequence:
 
@@ -36,13 +38,13 @@ Every cycle must improve correctness, measurable performance, maintainability, r
 
 # 2. Product Identity
 
-Solar Odyssey should become:
+Solar Odyssey's current product identity is:
 
-> A polished scientific space exploration sandbox with cinematic real-time rendering, meaningful missions, discovery progression, strong spacecraft navigation, and credible simulation systems.
+> A Scientific Exploration & Discovery sandbox with cinematic real-time rendering, scientific activities, persistent discovery progression, strong spacecraft navigation, and credible simulation systems.
 
 Its intended identity is:
 
-**Space Exploration Game + Scientific Visualization + Graphics Engineering Showcase**
+**Scientific Exploration & Discovery + Scientific Visualization + Graphics Engineering Showcase**
 
 It should not attempt to become every possible kind of space game.
 
@@ -192,14 +194,12 @@ These stay in the settings persistence layer.
 
 Versioned gameplay state:
 
-- missions
-- discovery
-- science
+- discovery and scientific activity records
 - spacecraft state
-- tutorial flags
+- tutorial flags (planned)
 - bookmarks
 
-These stay in the save-state system.
+These stay in the save-state system. Save version remains 3: reads ignore deprecated points, unlocks, achievements, mission, and campaign data; new writes omit it.
 
 ### Tuning Constants
 
@@ -207,7 +207,6 @@ Developer balance values:
 
 - boost acceleration
 - scanner duration
-- rewards
 - warp charge
 - heat thresholds
 
@@ -229,14 +228,14 @@ Do not introduce a generic event bus for 1.0.
 
 For limited fan-out events, use small typed synchronous observers.
 
-Example:
+Conceptual science-feedback flow (not an event API declaration):
 
 ```text
-MissionCompleted
-→ UI toast
-→ audio sting
-→ progression update
-→ save dirty flag
+Scientific activity recorded
+→ ScienceProgression update
+→ SolarOdysseyUI toast
+→ science audio feedback (planned)
+→ save dirty flag (planned)
 ```
 
 ---
@@ -266,7 +265,7 @@ Prefer `std::unique_ptr<T>` for dynamic ownership.
 | Cycle 1B | GPU-Driven Asteroids | Conditional scalability path |
 | Cycle 2 | Architecture & Precision | Reduce Engine coupling and fix large-scale precision |
 | Cycle 3 | Scientific Rendering | Upgrade atmosphere, black hole and wormhole |
-| Cycle 4 | Exploration & Science Gameplay | Turn simulation into a meaningful game |
+| Cycle 4 | EXPLORATION & SCIENTIFIC DISCOVERY | Observe, measure, and record discoveries |
 | Cycle 5 | Flight, Navigation & Trajectory | Deepen spacecraft gameplay |
 | Cycle 6 | Product UI / UX | Make the experience feel finished |
 | Cycle 7 | Extended QA & Engineering Tooling | Harden reliability and automation |
@@ -826,7 +825,7 @@ Move:
 - music streaming
 - ambient sources
 - spaceship audio
-- mission audio
+- science activity/discovery feedback (planned; no mission-completion hooks)
 - warp audio
 - black-hole/wormhole ambience
 
@@ -848,7 +847,7 @@ Own:
 
 ## 9.4 InputManager
 
-Translate raw GLFW input into actions:
+Planned action vocabulary for translating raw GLFW input (not current API identifiers):
 
 ```text
 MoveForward
@@ -866,7 +865,7 @@ Warp
 OrbitAssist
 PhotoMode
 Scanner
-MissionLog
+Codex
 Pause
 ```
 
@@ -934,25 +933,16 @@ Apply to:
 
 ## 9.7 GameContext Snapshot
 
-Create a lightweight immutable gameplay snapshot assembled once per frame.
+Keep a lightweight gameplay snapshot assembled once per frame and read-only to consumers.
 
-Example:
+Relevant existing fields in `include/game_context.h`:
 
-```cpp
-struct GameContext
-{
-    double simTime;
-    glm::dvec3 shipPosition;
-    glm::dvec3 shipVelocity;
-    std::string nearestBody;
-    double nearestBodyDistance;
-    bool orbiting;
-    bool photoTaken;
-    bool wormholeTraversed;
-};
-```
+- `simTime` and `deltaTime`: simulation timing
+- `cameraEye`: observation position
+- `isSpaceshipActive`, `spaceshipPos`, and `spaceshipVel`: flight state
+- `targetBodyName`, `targetBodyPos`, and `targetBodyRadius`: selected science target
 
-Gameplay systems read this instead of arbitrary Engine internals.
+Use this context and direct science interfaces instead of arbitrary Engine internals. It is not a mission/objective evaluator; discovery and activity records belong to `ScienceProgression`.
 
 ---
 
@@ -1221,273 +1211,106 @@ Extend unit tests.
 
 ---
 
-# 11. Cycle 4 — Exploration & Science Gameplay
+# 11. Cycle 4 — EXPLORATION & SCIENTIFIC DISCOVERY
 
 ## Objective
 
-Turn Solar Odyssey into a game with a meaningful exploration loop.
+Develop Solar Odyssey as a pure **Scientific Exploration & Discovery sandbox**. Scientific observations enrich persistent discovery records; they do not earn currency or purchase capabilities.
+
+**Pass 3 — Mission Campaign: CANCELLED.** The former **Pass 4 — Economy, Unlocks & Achievements** is also cancelled. Neither is deferred to Cycle 5 or replaced by another meta-progression system. Historical roadmap and checkpoint reports are not current product promises.
 
 ---
 
 ## 11.1 Core Loop
 
 ```text
-Choose Expedition
-→ Travel
-→ Navigate
-→ Observe / Scan / Photograph
-→ Discover
-→ Gain Science
-→ Complete Objectives
-→ Unlock New Capabilities
-→ Attempt Harder Expeditions
+Explore
+→ Detect
+→ Visit
+→ Scan/Survey/Photograph
+→ Discover anomalies
+→ Expand Codex
 ```
 
 ---
 
-## 11.2 Science Points
+## 11.2 Scientific Activities
 
-Add a persistent progression currency such as:
+Retain the existing activities and their observation conditions:
 
-```text
-Science Points
-```
+- **Orbital survey:** timed observation while orbit assist is active for the target.
+- **Atmospheric scan:** timed observation within range and line of sight; only applicable to bodies with a scientific atmosphere.
+- **Photography:** deterministic coverage, centering, stability, and visibility scoring; retain the best score per body.
+- **Close flyby:** record closest approach and entry speed, requiring a close approach and safe exit without collision.
+- **Gravity measurement:** timed scientific observation within range.
+- **Anomaly discovery:** record distinct scientific phenomena and their Codex descriptions.
 
-This represents completed scientific work.
-
----
-
-## 11.3 Science Sources
-
-### Orbital Survey
-
-- valid target
-- stable orbit
-- required observation duration
-
-### Atmospheric Scan
-
-- target has atmosphere
-- valid range
-- scanner active
-- uninterrupted duration
-
-### Photography
-
-Use measurable metrics only.
-
-Suggested:
-
-- target coverage
-- centering
-- stability
-- visibility/occlusion
-
-Return a score breakdown.
-
-Do not attempt to judge subjective "beauty".
-
-### Close Flyby
-
-Reward:
-
-- minimum distance
-- controlled approach
-- relative velocity
-- safe exit
-
-### Gravity Measurement
-
-Use existing gravity systems.
-
-### Anomalies
-
-Examples:
-
-- black-hole photon sphere
-- wormhole
-- Saturn ring structure
-- Jupiter storm
-- eclipse
-- asteroid resonance zone
+Scanner timings and ranges are observation settings, not purchased modifiers. Activities update records directly without rewards or one-time reward keys.
 
 ---
 
-## 11.4 Discovery Codex
+## 11.3 Discovery Codex
 
-Statuses:
+Retain the monotonic discovery states:
 
 ```text
 Unknown
 Detected
 Visited
 Scanned
-Fully Surveyed
+FullySurveyed
 ```
 
-Track:
+Persist detection and first-visit flags, visit counts, atmospheric applicability, orbital-survey and atmospheric-scan completion, best photo score, gravity-measurement and close-flyby completion, and anomaly identifiers.
 
-- first visit
-- orbital survey
-- atmospheric scan
-- best photo score
-- anomalies
-- mission completion
-- visit count
-
-Store compact flags/metadata.
-
-Do not store screenshot pixels in save files.
+Store compact flags and metadata, not screenshot pixels. Full survey requires a visit and every applicable scientific activity; airless bodies skip atmospheric scanning. These records describe observations, not achievements or purchase prerequisites.
 
 ---
 
-## 11.5 Mission Chains
+## 11.4 Direct Scientific Integration
 
-Keep mission definitions simple and code-driven for 1.0.
+`ScienceProgression` owns discovery records and transient visit-region tracking. Engine and scanner state determine activity completion. `GameContext` remains a lightweight simulation/navigation snapshot.
 
-Do not build:
-
-- scripting language
-- mission DSL
-- ECS
-- behavior trees
-
-Suggested chapters:
-
-### Chapter 1 — Inner System
-
-1. Earth Orbital Training
-2. Lunar Observation
-3. Mars Flyby
-4. Inner System Survey
-
-### Chapter 2 — Giant Worlds
-
-1. Asteroid Belt Passage
-2. Jupiter Gravity Assist
-3. Saturn Survey
-4. Outer Planet Recon
-
-### Chapter 3 — Deep Space
-
-1. Ice Giant Expedition
-2. Dwarf Planet Survey
-3. Wormhole Discovery
-4. Black-Hole Expedition
-
-### Chapter 4 — Grand Odyssey
-
-Final long-form expedition.
+`SolarOdysseyUI` owns pure notification toasts. Activity feedback reports observations, scores, or measurements; displaying a toast does not mutate scientific records. The Codex retains search, status filtering, activity records, and anomaly descriptions without a currency balance or research interface.
 
 ---
 
-## 11.6 Objective Representation
+## 11.5 Save Compatibility
 
-Example:
+Save state remains **version 3**, with no version bump.
 
-```cpp
-struct Objective
-{
-    ObjectiveType type;
-    TargetId target;
-    ObjectiveParams params;
-};
-```
-
-Completion logic reads `GameContext`.
+- Well-formed older saves may contain Science Points, unlocks, achievements, missions, or campaign data. Reads ignore those deprecated fields.
+- New writes omit deprecated meta-progression fields.
+- Discovery/activity records and supported simulation state remain persistent.
+- Version 2 loads retain the existing fresh-discovery defaults.
 
 ---
 
-## 11.7 Mission Ratings
+## 11.6 Scope Boundary
 
-Do not over-engineer before validating mission fun.
+No Science Points, science economy, reward ledger, research tree, capability purchases, achievements, missions, or campaign. No replacement meta-progression system or Cycle 5 unlock placeholders.
 
-Phase 1:
-
-```text
-Completed
-Optional Objectives
-Time Bonus
-```
-
-Only after playtesting:
-
-```text
-S / A / B / C
-```
+Cycle 4 ends with discovery/Codex, scanners, surveys, photography, flybys, gravity measurements, and anomalies.
 
 ---
 
-## 11.8 Science Economy
+## 11.7 Activity Interruptions
 
-Science needs sinks.
-
-Guideline:
-
-- unlock costs rise by tier
-- roughly 1.5–1.7 growth factor
-- full survey yields more science than required total unlock cost
-
-Avoid grind.
+Scanner progress pauses when observation conditions cease to hold; losing the target interrupts the session. Preserve existing activity conditions and retry behavior without clearing recorded discoveries. No campaign failure state applies.
 
 ---
 
-## 11.9 Unlocks
+## 11.8 Acceptance Criteria
 
-Examples:
+These are verification targets, not a report of runtime validation.
 
-- longer scanner range
-- faster scan
-- improved warp charge
-- lower warp cost
-- advanced trajectory display
-- stronger navigation overlays
-- deeper Codex data
-
----
-
-## 11.10 Achievements
-
-Examples:
-
-- First Orbit
-- Red Planet Visitor
-- Belt Runner
-- Ring Photographer
-- Gravity Surfer
-- Event Horizon Observer
-- Rift Walker
-- Grand Odyssey
-- Full Survey
-
----
-
-## 11.11 Failure Conditions
-
-Possible:
-
-- collision
-- critical energy depletion
-- excessive heat
-- timeout
-- leaving mission region
-- scanner interruption
-
-Allow fast retry.
-
----
-
-## 11.12 Acceptance Criteria
-
-- Persistent science exists.
-- At least three science activities exist.
-- Discovery Codex persists progress.
-- At least three mission chains exist.
-- Existing seven missions are migrated or superseded.
-- At least one unlock changes gameplay.
-- Photo scoring is deterministic.
-- Save state stores progression safely.
-- Player can explain the core objective after tutorial.
+- Scientific activities and deterministic photo scoring remain available.
+- Codex statuses, visits, activity flags, best photo scores, and anomaly records persist.
+- Currency, reward ledgers, unlock APIs/storage/UI, and achievement state are absent.
+- Missions, campaign, and their navigation/HUD/log, shortcuts, audio hooks, and persistence remain absent.
+- Pure notifications remain independent of discovery-state mutation.
+- Version 3 reads ignore deprecated fields and new writes omit them.
+- No meta-progression prerequisite gates scientific exploration.
 
 ---
 
@@ -1625,7 +1448,7 @@ Effects:
 
 - warnings
 - boost reduction
-- mission risk
+- interrupted scientific observation
 
 No complex component-damage simulation.
 
@@ -1725,7 +1548,7 @@ Quit
 
 - speed
 - target
-- mission
+- science activity status
 - warnings
 
 ### Navigation HUD
@@ -1734,11 +1557,11 @@ Quit
 - target geometry
 - orbit info
 
-### Mission Panel
+### Science Activity Panel
 
-- objective
-- progress
-- optional objective
+- selected observation target
+- scan/survey progress
+- activity conditions and interruption feedback
 
 ### Codex
 
@@ -1777,7 +1600,7 @@ Lightweight contextual stages:
 6. warp
 7. orbit assist
 8. scanner
-9. missions
+9. science activities and discovery Codex
 10. photo mode
 
 Persist completion flags.
@@ -1799,7 +1622,7 @@ Only show when relevant.
 
 ---
 
-## 13.7 Objective Markers
+## 13.7 Science Target Markers
 
 Add:
 
@@ -1807,7 +1630,7 @@ Add:
 - off-screen arrow
 - distance
 - target name
-- mission icon
+- science activity icon
 
 ---
 
@@ -1850,7 +1673,7 @@ Require:
 - App state machine works.
 - Developer UI hidden by default.
 - Tutorial covers core mechanics.
-- Mission objective always discoverable.
+- Science activity conditions and Codex progress are discoverable.
 - HUD stable at 1080p and 1440p.
 - UI scaling exists.
 - Contextual controls exist.
@@ -1873,7 +1696,7 @@ Maintain and extend:
 - orbital physics
 - spaceship physics
 - warp
-- missions
+- science activities
 - asteroids
 - settings
 - save state
@@ -1884,12 +1707,10 @@ Maintain and extend:
 - camera
 - audio
 
-Add:
+Add or extend:
 
-- science rewards
-- discovery
-- mission chains
-- unlocks
+- discovery and scientific activity records
+- anomaly records and deprecated meta-progression save compatibility
 - trajectory prediction
 - photo scoring
 - scanner logic
@@ -2000,7 +1821,7 @@ Extend golden scenes:
 - Saturn
 - Black Hole
 - Wormhole
-- Mission HUD
+- Science HUD / Codex
 - Flight HUD
 
 Separate software-renderer and development-GPU baselines if needed.
@@ -2317,7 +2138,7 @@ Do not claim OpenGL 3.3 compatibility if 4.5 features are required.
 - wormhole destination portal
 - science progression
 - discovery Codex
-- mission chains
+- scientific activities and anomaly discovery
 - trajectory prediction
 
 ## P2 — Important
@@ -2347,6 +2168,9 @@ Do not claim OpenGL 3.3 compatibility if 4.5 features are required.
 
 Do not add unless roadmap is deliberately reopened:
 
+- Mission Campaign (Cycle 4 Pass 3 CANCELLED), including replacement quest chains
+- Science Points, economy, research/unlocks, and achievements (former Pass 4 CANCELLED)
+- replacement meta-progression systems
 - multiplayer
 - networking
 - combat
@@ -2431,13 +2255,15 @@ short in-scattering integration
 - GameContext snapshot
 - pure scoring functions
 - direct subsystem interfaces
-- simple mission data
+- `ScienceProgression` for scientific discovery records
 
 **Rejected:**
 
 - ECS
 - gameplay scripting language
 - large generic event bus
+- Mission Campaign / quest layer (Cycle 4 Pass 3 CANCELLED)
+- currency, economy, research/unlocks, achievements, or substitute meta-progression
 
 ---
 
@@ -2484,7 +2310,7 @@ Cycle 3
 Scientific Rendering
         ↓
 Cycle 4
-Exploration & Science Gameplay
+EXPLORATION & SCIENTIFIC DISCOVERY
         ↓
 Cycle 5
 Flight & Navigation
@@ -2520,9 +2346,9 @@ If time becomes limited, prioritize:
 
 ## 3. Science & Discovery
 
-- creates the game loop
-- gives missions meaning
-- makes exploration persistent
+- creates the exploration/discovery loop
+- preserves scientific observations across sessions
+- expands the Codex without currency or capability purchases
 
 Together:
 
@@ -2616,9 +2442,9 @@ PASS / PASS WITH KNOWN LIMITATIONS / FAIL
 
 At the end of this roadmap, Solar Odyssey should be accurately describable as:
 
-> Solar Odyssey is a modern C++17/OpenGL 4.5 scientific space exploration game featuring orbital simulation, optional N-body gravity, 6-DOF spacecraft flight, scalable instanced asteroid rendering, cinematic HDR graphics, physically inspired atmospheric scattering, bounded gravitational-lensing black-hole rendering, traversable destination-view wormholes, scientific exploration missions, persistent discovery progression, and a tested portable Windows release.
+> Solar Odyssey is a modern C++17/OpenGL 4.5 Scientific Exploration & Discovery sandbox featuring orbital simulation, optional N-body gravity, 6-DOF spacecraft flight, scalable instanced asteroid rendering, cinematic HDR graphics, physically inspired atmospheric scattering, bounded gravitational-lensing black-hole rendering, traversable destination-view wormholes, scientific activities and anomaly discovery, persistent scientific discovery and Codex records, and a tested portable Windows release.
 
-Every technical phrase in that description must be directly supported by implementation.
+Every technical phrase in that description must be directly supported by implementation. Currency, research/unlocks, achievements, missions, and campaign are not part of this target; there is no replacement meta-progression system.
 
 ---
 
@@ -2642,7 +2468,7 @@ Then:
 
 Then:
 
-**Cycle 4 — Exploration & Science Gameplay**
+**Cycle 4 — EXPLORATION & SCIENTIFIC DISCOVERY**
 
 Do not start by adding more planets or unrelated visual effects.
 

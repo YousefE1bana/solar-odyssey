@@ -22,7 +22,7 @@ TEST_CASE("AudioManager - Creation and Headless Robustness", "[audio]") {
     audioMgr.stopSpaceshipSound();
     audioMgr.playWarpCharge(false, 1.0f, 1.0f);
     audioMgr.playWarpExit(false, 1.0f, 1.0f);
-    audioMgr.playMissionComplete(false, 1.0f, 1.0f);
+    audioMgr.playDiscoveryChime(false, 1.0f, 1.0f);
 
     // Shutdown on uninitialized or newly created manager must be clean & idempotent
     audioMgr.shutdown();

@@ -6,6 +6,8 @@ Collects GPU/CPU environment telemetry and records full provenance hashes.
 """
 
 import os
+import argparse
+from pathlib import Path
 import sys
 import subprocess
 import json
@@ -25,14 +27,7 @@ SCENES = [
     "spaceship"
 ]
 
-RUN_SCHEDULE = [
-    ("A1", "cycle1a", r"D:\Work\Projects\Computer Graphics Project\SolarOdyssey_Cycle1A\build\SolarOdyssey.exe", "48e3683"),
-    ("B1", "cycle2",   r"D:\Work\Projects\Computer Graphics Project\Graphics_Project_v2.0 - Copy\build\SolarOdyssey.exe", "e6548ee"),
-    ("B2", "cycle2",   r"D:\Work\Projects\Computer Graphics Project\Graphics_Project_v2.0 - Copy\build\SolarOdyssey.exe", "e6548ee"),
-    ("A2", "cycle1a", r"D:\Work\Projects\Computer Graphics Project\SolarOdyssey_Cycle1A\build\SolarOdyssey.exe", "48e3683"),
-    ("A3", "cycle1a", r"D:\Work\Projects\Computer Graphics Project\SolarOdyssey_Cycle1A\build\SolarOdyssey.exe", "48e3683"),
-    ("B3", "cycle2",   r"D:\Work\Projects\Computer Graphics Project\Graphics_Project_v2.0 - Copy\build\SolarOdyssey.exe", "e6548ee"),
-]
+
 
 def get_sha256(filepath):
     h = hashlib.sha256()
@@ -66,7 +61,26 @@ def get_env_telemetry():
     return telemetry
 
 def main():
-    root_dir = r"D:\Work\Projects\Computer Graphics Project\Graphics_Project_v2.0 - Copy"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cycle1a-exe", required=True, type=Path)
+    parser.add_argument("--cycle2-exe", required=True, type=Path)
+    parser.add_argument("--output-root", type=Path, default=Path(__file__).resolve().parent.parent)
+    args = parser.parse_args()
+    for executable in (args.cycle1a_exe, args.cycle2_exe):
+        if not executable.is_file():
+            parser.error(f"Missing baseline executable: {executable}")
+    RUN_SCHEDULE = [
+        (label, branch, str(executable.resolve()), revision)
+        for label, branch, executable, revision in [
+            ("A1", "cycle1a", args.cycle1a_exe, "48e3683"),
+            ("B1", "cycle2", args.cycle2_exe, "e6548ee"),
+            ("B2", "cycle2", args.cycle2_exe, "e6548ee"),
+            ("A2", "cycle1a", args.cycle1a_exe, "48e3683"),
+            ("A3", "cycle1a", args.cycle1a_exe, "48e3683"),
+            ("B3", "cycle2", args.cycle2_exe, "e6548ee")
+        ]
+    ]
+    root_dir = str(args.output_root.resolve())
     raw_dir = os.path.join(root_dir, "docs", "verification", "raw_benchmarks")
     os.makedirs(raw_dir, exist_ok=True)
 

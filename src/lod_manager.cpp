@@ -3,14 +3,24 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <GLFW/glfw3.h>
+#include <map>
+#include <memory>
 
 namespace lod {
+
+namespace {
+std::map<GLFWwindow*, std::unique_ptr<LODManager>>& contexts() {
+    static std::map<GLFWwindow*, std::unique_ptr<LODManager>> registry;
+    return registry;
+}
+}
 
 static const int kSphereTriangles[SPHERE_TIER_COUNT] = { 8192, 2592, 800, 288 };
 static const int kAsteroidTriangles[ASTEROID_TIER_COUNT] = { 512, 200, 72 };
 
 void LODSphereMesh::ensure(int slices, int stacks) {
-    if (triangleCount > 0 && (vao || !glCreateVertexArrays)) return;
+    if (triangleCount > 0 && (vao || !glfwGetCurrentContext() || !glCreateVertexArrays)) return;
 
     const int vertsPerRow = slices + 1;
     std::vector<float> verts;
@@ -61,12 +71,13 @@ void LODSphereMesh::ensure(int slices, int stacks) {
     triangleCount = indexCount / 3;
 
     // Guard against headless / non-OpenGL contexts
-    if (!glCreateVertexArrays || !glCreateBuffers || !glNamedBufferData) {
+    if (!glfwGetCurrentContext() || !glCreateVertexArrays || !glCreateBuffers || !glNamedBufferData) {
         return;
     }
 
     glCreateVertexArrays(1, &vao);
     glCreateBuffers(1, &vbo);
+    if (!vao || !vbo) { destroy(); return; }
     glNamedBufferData(vbo, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, 8 * sizeof(float));
 
@@ -83,6 +94,7 @@ void LODSphereMesh::ensure(int slices, int stacks) {
     glVertexArrayAttribBinding(vao, 2, 0);
 
     glCreateBuffers(1, &ibo);
+    if (!ibo) { destroy(); return; }
     glNamedBufferData(ibo, idx.size() * sizeof(unsigned short), idx.data(), GL_STATIC_DRAW);
     glVertexArrayElementBuffer(vao, ibo);
 }
@@ -141,13 +153,18 @@ void LODSphereMesh::destroy() {
 
 LODManager::LODManager() = default;
 
-LODManager::~LODManager() {
-    destroy();
+LODManager& LODManager::instance() {
+    // The null-context entry supports CPU tier/metadata queries without GL.
+    auto& owner = contexts()[glfwGetCurrentContext()];
+    if (!owner) owner.reset(new LODManager);
+    return *owner;
 }
 
-LODManager& LODManager::instance() {
-    static LODManager mgr;
-    return mgr;
+void LODManager::releaseCurrentContext() {
+    const auto found = contexts().find(glfwGetCurrentContext());
+    if (found == contexts().end()) return;
+    found->second->destroy();
+    contexts().erase(found);
 }
 
 void LODManager::init() {

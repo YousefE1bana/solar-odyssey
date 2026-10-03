@@ -10,13 +10,16 @@
 #include <imgui_impl_opengl3.h>
 
 #include <vector>
+#include <deque>
 #include <string>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 
 // Subsystems
 #include "settings_persistence.h"
+#include "session_shell.h"
 #include "planet_data.h"
 #include "camera_controller.h"
 #include "solar_ui.h"
@@ -25,12 +28,12 @@
 #include "asteroid_belt.h"
 #include "planet_pov.h"
 #include "simulation_controller.h"
+#include "observation_policy.h"
 #include "spaceship.h"
 #include "black_hole.h"
 #include "wormhole.h"
 #include "wormhole_portal_renderer.h"
 #include "render_context.h"
-#include "mission_system.h"
 #include "warp_system.h"
 #include "lod_manager.h"
 #include "save_state.h"
@@ -44,6 +47,9 @@
 #include "benchmark_runner.h"
 #include "presentation_controller.h"
 #include "body_relationships.h"
+#include "science_progression.h"
+#include "science_scanner.h"
+#include "anomaly_catalog.h"
 
 class Engine {
 public:
@@ -65,6 +71,15 @@ public:
     bool uiReleaseCursorHeld = false;
 
     // Subsystems
+    SessionShell shell;
+    bool validContinue = false;
+    std::string continueSummary;
+    bool confirmFresh = false;
+    void renderSessionShell();
+    void refreshContinue();
+    void startFreshSession();
+    void processSessionRequests();
+    bool canObserve() const { return canPersistPlayerState() && shell.sessionStarted && shell.playing(); }
     AppSettings appSettings;
     CelestialDatabase celestialDb;
     CameraController cameraCtrl;
@@ -78,8 +93,26 @@ public:
     BlackHole blackHole;
     Wormhole wormhole;
     WormholePortalRenderer wormholePortalRenderer;
-    MissionSystem missionSystem;
     SceneRenderer renderer;
+
+    // Authoritative scientific discovery records. Fed from live runtime
+    // state in updateSimulation; read by the Codex/HUD; persisted in v3/v4.
+    ScienceProgression progression;
+    // Codex roster: runtime body names (Sun + planets + moons) rebuilt in
+    // initPlanetsAndMoons from live vectors — never a second hardcoded list.
+    std::vector<std::string> codexRoster;
+    // Cycle 4 Pass 2: single authoritative scanner session, transient
+    // close-flyby session, long-range sweep timer, and a short camera
+    // history ring for photo-stability scoring. None of this is persisted;
+    // loading a save interrupts any active session.
+    ScienceScanner scanner;
+    FlybySessionState flybySession;
+    // Activity kind owned by the current scanner session (meaningful only
+    // while scanActivityActive; orbital sessions start automatically).
+    ScienceActivity activeScanActivity = ScienceActivity::OrbitalSurvey;
+    bool scanActivityActive = false;
+    float longRangeSweepTimer = 0.0f;
+    std::deque<std::pair<glm::vec3, glm::vec3>> cameraHistory;
 
     // Simulation Data
     std::vector<Planet> planets;
@@ -111,6 +144,7 @@ public:
     // updateSimulation WITHOUT calling PresentationController; consumed by
     // updatePresentation(). Keeps the strict frame-lifecycle gate intact.
     std::optional<std::string> pendingSelectionAdopt;
+    int pendingPresentationMode = 0;
 
     // Per-frame GameContext Snapshot and FrameEvents
     GameContext gameContext;
@@ -120,16 +154,29 @@ public:
     BenchmarkRunner benchmarkRunner;
 
     // QA Automation
+    bool releaseQA = false;
+    bool playerQA = false;
+    bool releaseQAFailed = false;
+    double qaPausedTime = 0;
+    glm::vec3 qaPausedShip = glm::vec3(0);
+    bool captureReleaseFrame(const std::string& name, bool withUI);
+    void runReleaseQASequence(int frame);
+    std::string savePath() const;
     bool runQACapture = false;
     int qaFrameCount = 0;
 
-    Engine();
+    enum class SessionKind { Player, Tool };
+    explicit Engine(SessionKind kind = SessionKind::Player);
     ~Engine();
 
     int run(int argc, char** argv);
 
     bool init(int width = 1920, int height = 1080, const char* title = "Solar Odyssey");
     void cleanup();
+    bool canPersistPlayerState() const { return initializationComplete && !toolSession; }
+    // For programmatic harnesses that bypass command-line run(). One way:
+    // a tool session cannot later become eligible to persist player state.
+    void excludePlayerPersistence();
 
     void initPlanetsAndMoons();
 
@@ -141,6 +188,17 @@ public:
     // Safe at runtime: no sim reset, no SaveState impact; portal FBO is
     // resized/recreated only when the tier resolution actually changes.
     void applyQualityTier(int tier);
+
+    // Pass 4: VSync display-refresh cap + full-settings reset.
+    // setVSyncEnabled applies immediately (glfwSwapInterval, context must be
+    // current) and persists. applyVSyncFromSettings pushes the persisted
+    // value (launch + reset paths). resetAllSettingsToDefaults restores
+    // AppSettings::defaults(), applies everything runtime-sensitive
+    // immediately, and persists — SETTINGS ONLY (saves/progression/screenshots
+    // and user files are never touched).
+    void setVSyncEnabled(bool enabled);
+    void applyVSyncFromSettings();
+    void resetAllSettingsToDefaults();
 
     void updateCursorCapture();
     void toggleFullscreen();
@@ -191,6 +249,46 @@ public:
     // derived-only assets never appear. Pure-helper backed (body_relationships.h).
     std::string bodyParentOf(const std::string& body) const;
     std::vector<std::string> bodyChildrenOf(const std::string& body) const;
+    // Cycle 4: scientific atmosphere existence from the atmosphere registry
+    // (NOT dossier prose, NOT the visual render-layer gate — separate
+    // concepts). Unknown names report no atmosphere.
+    bool scientificAtmosphere(const std::string& name) const;
+    // Cycle 4 Pass 2: deterministic 0-100 photo score breakdown, measurable
+    // quantities only (coverage / centering / stability / visibility).
+    struct PhotoScore {
+        float total = 0.0f;
+        float coverage = 0.0f;
+        float centering = 0.0f;
+        float stability = 0.0f;
+        float visibility = 0.0f;
+    };
+    PhotoScore evaluatePhotoScore(const std::string& target, const glm::mat4& view,
+                                 const glm::mat4& projection, const std::vector<float>& depth) const;
+    Observation::Observer scienceObserver() const;
+    std::string observationTarget() const;
+    std::vector<Observation::Body> observationBodies(bool rendered) const;
+    Observation::FrameObservation observeFrame(const Observation::Body& target,
+        const std::vector<Observation::Body>& scene, const glm::mat4& view,
+        const glm::mat4& projection, const std::vector<float>* depth = nullptr) const;
+    void requestPhotoCapture();
+    std::string pendingPhotoTarget;
+    // Lazy, shared optical evidence. Invalidated after every scene render/load.
+    mutable std::vector<float> observationFrameDepth;
+    mutable bool observationDepthReadAttempted = false;
+    // Actual frame-to-frame motion, not orbit-assist's synthetic velocity.
+    std::map<std::string, glm::vec3> previousObservationOffsets;
+    Observation::Context previousObservationContext = Observation::Context::Presentation;
+    int previousObservationPhysicsMode = -1;
+    float surveyAngularTravel = 0.0f;
+    // Cycle 4 Pass 2: start a targeted scan session (AtmosphericScan or
+    // GravityMeasurement) on a dossier/selected body. Returns false with a
+    // toast when invalid (unknown body, inapplicable atmosphere).
+    bool startScanSession(const std::string& name, ScienceActivity activity);
+    // Cycle 4 Pass 2: per-frame session drivers (scanner, flyby, sweeps,
+    // anomaly evaluation). No-ops during benchmark/QA capture.
+    void updateScienceSessions(float deltaTime);
+    void updateDetection(const glm::mat4& view, const glm::mat4& projection);
+    void updateAnomalies(const glm::mat4& view, const glm::mat4& projection);
     // PSM.2: resolves a body name to its focus target. Sun -> index -1 at the
     // origin (canonical radius 2.0); planets -> vector index; moons -> 100+i
     // (pickable-list convention). Black Hole/Wormhole/unknown/empty -> false
@@ -224,4 +322,21 @@ public:
     static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
     static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
     static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+
+private:
+    // A window alone never grants player-state persistence.
+    bool initializationComplete = false;
+    bool toolSession = false;
+    bool autoSaveEligible = true;
+    bool graphicsLoaderReady = false;
+    bool glfwInitialized = false;
+    void* windowIconBig = nullptr;
+    void* windowIconSmall = nullptr;
+    ImFont* titleFont = nullptr;
+    ImGuiContext* ownedImGuiContext = nullptr;
+    std::set<GLuint> ownedCelestialTextures; // excludes borrowed renderer textures
+    void releaseCelestialTextures();
+    bool imguiGlfwReady = false;
+    bool imguiOpenGLReady = false;
+    void resetLoadedSessionTransients();
 };

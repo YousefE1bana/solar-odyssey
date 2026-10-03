@@ -1,17 +1,20 @@
 #include "modern_mesh.h"
 #include "render_profiler.h"
 #include <cmath>
+#include <GLFW/glfw3.h>
 
 namespace mesh {
 
 void GPUMesh::build(const std::vector<Vertex>& verts, const std::vector<uint32_t>& indices) {
     destroy();
+    if (!glfwGetCurrentContext() || !glCreateVertexArrays || verts.empty()) return;
     vertexCount = (GLsizei)verts.size();
     indexCount = (GLsizei)indices.size();
 
     glCreateVertexArrays(1, &vao);
 
     glCreateBuffers(1, &vbo);
+    if (!vao || !vbo) { destroy(); return; }
     glNamedBufferData(vbo, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
 
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, (GLsizei)sizeof(Vertex));
@@ -31,6 +34,7 @@ void GPUMesh::build(const std::vector<Vertex>& verts, const std::vector<uint32_t
 
     if (!indices.empty()) {
         glCreateBuffers(1, &ibo);
+        if (!ibo) { destroy(); return; }
         glNamedBufferData(ibo, indices.size() * sizeof(uint32_t), indices.data(), GL_STATIC_DRAW);
         glVertexArrayElementBuffer(vao, ibo);
     }
@@ -39,6 +43,7 @@ void GPUMesh::build(const std::vector<Vertex>& verts, const std::vector<uint32_t
 }
 
 void GPUMesh::buildFromStrip(const std::vector<Vertex>& stripVerts) {
+    if (stripVerts.size() < 3) { destroy(); return; }
     std::vector<Vertex> tris;
     tris.reserve(((stripVerts.size() - 2) / 2) * 3 + 3);
     for (size_t i = 2; i < stripVerts.size(); i += 2) {

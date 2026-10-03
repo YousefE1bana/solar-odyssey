@@ -1,5 +1,8 @@
+#include "screenshot_writer.h"
+#include "runtime_paths.h"
 #include "engine.h"
 #include "quality_tiers.h"
+#include "texture_variants.h"
 #include "gl_primitives.h"
 #include "picking.h"
 #include "render_profiler.h"
@@ -8,9 +11,11 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cstdio>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef GLFW_EXPOSE_NATIVE_WIN32
@@ -18,17 +23,42 @@
 #endif
 #include <GLFW/glfw3native.h>
 #include <windows.h>
+#include <shellapi.h>
 #endif
 
-static const char* kSettingsPath = "solar_odyssey_settings.ini";
 
-Engine::Engine() {}
+
+Engine::Engine(SessionKind kind) : toolSession(kind == SessionKind::Tool) {}
+
+void Engine::excludePlayerPersistence() {
+    toolSession = true;
+    if (ownedImGuiContext) {
+        ImGuiContext* previous = ImGui::GetCurrentContext();
+        ImGui::SetCurrentContext(ownedImGuiContext);
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::SetCurrentContext(previous);
+    }
+}
 
 Engine::~Engine() {
     cleanup();
 }
 
 void Engine::applyLoadedSettings() {
+    solarUI.showParticles = appSettings.showParticles;
+    solarUI.enableMeshLOD = appSettings.enableMeshLOD;
+    solarUI.autoSaveOnExit = appSettings.autoSaveOnExit;
+    postPipeline.toneMappingEnabled = appSettings.toneMappingEnabled;
+    postPipeline.vignetteEnabled = appSettings.vignetteEnabled;
+    postPipeline.bloomIntensity = appSettings.bloomIntensity;
+    postPipeline.bloomThreshold = appSettings.bloomThreshold;
+    postPipeline.exposure = appSettings.exposure;
+    postPipeline.enabled = appSettings.effectsEnabled;
+    cameraCtrl.freeSpeed = appSettings.freeSpeed;
+    cameraCtrl.freeSensitivity = appSettings.mouseSensitivity;
+    solarUI.starfieldStyle = appSettings.starfieldStyle;
+    solarUI.starfieldDataset = appSettings.starfieldDataset;
+
     solarUI.masterVolume        = appSettings.masterVolume;
     solarUI.musicVolume         = appSettings.musicVolume;
     solarUI.sfxVolume           = appSettings.sfxVolume;
@@ -47,13 +77,32 @@ void Engine::applyLoadedSettings() {
     postPipeline.bloomEnabled   = appSettings.bloomEnabled;
     solarUI.timeMultiplier      = appSettings.timeScale;
     cameraCtrl.fieldOfView      = appSettings.fieldOfView;
+    cameraCtrl.targetFieldOfView = appSettings.fieldOfView;
+    solarUI.sunIntensity = appSettings.sunIntensity;
     solarUI.isFullscreen        = isFullscreen;
+    // Pass 4: VSync UI mirror follows the persisted value (single source of
+    // truth stays in AppSettings; synced at load/reset boundaries only).
+    solarUI.vsyncEnabled        = appSettings.vsyncEnabled;
     if (QualityTiers::isValidTier(appSettings.qualityPreset)) {
         solarUI.qualityPreset = static_cast<GraphicsQuality>(appSettings.qualityPreset);
     }
 }
 
 void Engine::captureCurrentSettings() {
+    appSettings.showParticles = solarUI.showParticles;
+    appSettings.enableMeshLOD = solarUI.enableMeshLOD;
+    appSettings.autoSaveOnExit = solarUI.autoSaveOnExit;
+    appSettings.toneMappingEnabled = postPipeline.toneMappingEnabled;
+    appSettings.vignetteEnabled = postPipeline.vignetteEnabled;
+    appSettings.bloomIntensity = postPipeline.bloomIntensity;
+    appSettings.bloomThreshold = postPipeline.bloomThreshold;
+    appSettings.exposure = postPipeline.exposure;
+    appSettings.effectsEnabled = postPipeline.enabled;
+    appSettings.freeSpeed = cameraCtrl.freeSpeed;
+    appSettings.mouseSensitivity = cameraCtrl.freeSensitivity;
+    appSettings.starfieldStyle = solarUI.starfieldStyle;
+    appSettings.starfieldDataset = solarUI.starfieldDataset;
+
     appSettings.masterVolume        = solarUI.masterVolume;
     appSettings.musicVolume         = solarUI.musicVolume;
     appSettings.sfxVolume           = solarUI.sfxVolume;
@@ -70,10 +119,43 @@ void Engine::captureCurrentSettings() {
     appSettings.atmosphereGlowScale = solarUI.atmosphereGlowScale;
     appSettings.ringOpacity         = solarUI.ringOpacity;
     appSettings.bloomEnabled        = postPipeline.bloomEnabled;
+    appSettings.sunIntensity = solarUI.sunIntensity;
     appSettings.timeScale           = solarUI.timeMultiplier;
     appSettings.fieldOfView         = cameraCtrl.fieldOfView;
     appSettings.fullscreen          = isFullscreen;
     appSettings.qualityPreset       = static_cast<int>(solarUI.qualityPreset);
+    appSettings.vsyncEnabled        = solarUI.vsyncEnabled;
+}
+
+// Pass 4: VSync display-refresh cap control + full-settings reset. No
+// software Sleep-based limiter anywhere — this toggles exactly the GL
+// presentation cap (interval 1 vs 0).
+void Engine::setVSyncEnabled(bool enabled) {
+    appSettings.vsyncEnabled = enabled;
+    solarUI.vsyncEnabled = enabled;
+    applyVSyncFromSettings();
+    if (canPersistPlayerState()) saveSettings(RuntimePaths::settings(), appSettings);
+}
+
+void Engine::applyVSyncFromSettings() {
+    if (window != nullptr) {
+        glfwSwapInterval(appSettings.vsyncEnabled ? 1 : 0);
+    }
+}
+
+void Engine::resetAllSettingsToDefaults() {
+    // ONE authoritative definition (AppSettings::defaults): fresh installs
+    // and this reset derive from the same source. SETTINGS ONLY — save
+    // games, science progression, screenshots and user files are untouched
+    // (nothing outside solar_odyssey_settings.ini is written here).
+    appSettings.resetToDefaults();
+    applyLoadedSettings(); // pushes audio/visual/presentation/sim-pref mirrors
+    applyQualityTier(appSettings.qualityPreset); // quality + texture variants
+    applyVSyncFromSettings(); // VSync default (ON)
+    if (isFullscreen != appSettings.fullscreen) toggleFullscreen();
+    if (canPersistPlayerState()) saveSettings(RuntimePaths::settings(), appSettings);
+    solarUI.saveStatusToast = "Settings reset to defaults";
+    solarUI.saveStatusToastTimer = 3.5f;
 }
 
 // C3.8: single authoritative fan-out for runtime tier switching.
@@ -89,12 +171,51 @@ void Engine::applyQualityTier(int tier) {
     renderer.shadowSamples = q.shadowSamples;
 
     // Legacy asteroid/bloom behavior preserved per preset.
+    const bool bloomPreference = postPipeline.bloomEnabled;
     solarUI.applyQualityPreset(solarUI.qualityPreset, postPipeline, asteroidBelt);
+    postPipeline.bloomEnabled = bloomPreference;
+
+    // Pass 3: tier-aware texture variants (moons + renderer datasets). Only
+    // one version is ever resident: reload happens solely on path change,
+    // single-resolution bodies no-op. No body names here — table-driven.
+    for (auto& moon : moons) {
+        std::string canonical;
+        for (const auto& def : CanonicalInventory::getCanonicalMoons()) {
+            if (def.name == moon.name) { canonical = def.texture; break; }
+        }
+        if (canonical.empty()) canonical = moon.texturePath;
+        const std::string wanted = TextureVariants::resolveMoonTexture(
+            canonical, moon.name, appliedTier);
+        if (wanted.empty()) {
+            // Moons never own the renderer's shared neutral texture.
+            if (moon.texture != 0) {
+                ownedCelestialTextures.erase(moon.texture);
+                glDeleteTextures(1, &moon.texture);
+            }
+            moon.texture = 0;
+            moon.texturePath.clear();
+        } else if (wanted != moon.texturePath) {
+            const std::string approvedCanonical = TextureVariants::resolveMoonTexture(
+                canonical, moon.name, QualityTiers::kHigh);
+            GLuint reloaded = loadTextureOrFallback(wanted.c_str(), approvedCanonical.c_str());
+            if (reloaded != 0) {
+                if (moon.texture != 0) {
+                    ownedCelestialTextures.erase(moon.texture);
+                    glDeleteTextures(1, &moon.texture);
+                }
+                moon.texture = reloaded;
+                ownedCelestialTextures.insert(reloaded);
+                moon.texturePath = wanted;
+            }
+        }
+    }
+    renderer.applyTextureTier(appliedTier);
+    renderer.applyStarfield(solarUI.starfieldStyle, solarUI.starfieldDataset);
 }
 
 void Engine::updateCursorCapture() {
     if (!window) return;
-    bool shouldCapture = (spaceship.active || cameraCtrl.mode == CAM_FREE) && !uiReleaseCursorHeld;
+    bool shouldCapture = shell.playing() && (spaceship.active || cameraCtrl.mode == CAM_FREE) && !uiReleaseCursorHeld;
     if (shouldCapture != isFlightMouseCaptured) {
         isFlightMouseCaptured = shouldCapture;
         if (isFlightMouseCaptured) {
@@ -134,6 +255,7 @@ void Engine::toggleFullscreen() {
 }
 
 void Engine::initPlanetsAndMoons() {
+    releaseCelestialTextures();
     planets.clear();
     moons.clear();
 
@@ -141,12 +263,26 @@ void Engine::initPlanetsAndMoons() {
         planets.emplace_back(def.name, def.size, def.orbitRadius, def.spinSpeed, def.orbitSpeed,
                              def.texture, def.hasRings, def.ringInnerRadius, def.ringOuterRadius,
                              def.isDwarf, def.initialAngle);
+        if (planets.back().texture) ownedCelestialTextures.insert(planets.back().texture);
     }
 
     for (const auto& def : CanonicalInventory::getCanonicalMoons()) {
+        // Only approved global assets enter Natural rendering. An empty
+        // selection uses shared neutral albedo, not the scientific mosaic.
+        const std::string texPath = TextureVariants::resolveMoonTexture(
+            def.texture, def.name, static_cast<int>(solarUI.qualityPreset));
         moons.emplace_back(def.name, def.size, def.orbitRadius, def.orbitSpeed,
-                           def.texture, def.parentPlanet, def.initialAngle);
+                           texPath, def.parentPlanet, def.initialAngle,
+                           def.orbitDirection);
+        if (moons.back().texture) ownedCelestialTextures.insert(moons.back().texture);
     }
+
+    // Cycle 4 Pass 1: Codex roster from the live runtime vectors (generic —
+    // never a second hardcoded celestial-body list).
+    codexRoster.clear();
+    codexRoster.push_back("Sun");
+    for (const auto& planet : planets) codexRoster.push_back(planet.name);
+    for (const auto& moon : moons) codexRoster.push_back(moon.name);
 
     // Configure data-driven planetary surface capabilities and bind renderer material resources
     for (auto &planet : planets) {
@@ -166,6 +302,7 @@ void Engine::initPlanetsAndMoons() {
                     planet.materials.nightTexture = renderer.venusAtmosphereTexture;
                 } else {
                     planet.materials.nightTexture = loadTextureOrFallback(bodyData->secondaryTexture.c_str(), "");
+                    if (planet.materials.nightTexture) ownedCelestialTextures.insert(planet.materials.nightTexture);
                 }
                 planet.secondaryTexture = planet.materials.nightTexture;
             }
@@ -175,7 +312,8 @@ void Engine::initPlanetsAndMoons() {
                 if (bodyData->cloudsTexture == "Textures/earth_clouds.jpg") {
                     planet.materials.cloudTexture = renderer.earthCloudsTexture;
                 } else {
-                    planet.materials.cloudTexture = loadTextureOrFallback(bodyData->cloudsTexture.c_str(), "");
+                    planet.materials.cloudTexture = loadTextureOrFallback(bodyData->cloudsTexture.c_str(), "", TextureSpace::LinearData);
+                    if (planet.materials.cloudTexture) ownedCelestialTextures.insert(planet.materials.cloudTexture);
                 }
                 planet.cloudsTexture = planet.materials.cloudTexture;
             }
@@ -185,7 +323,8 @@ void Engine::initPlanetsAndMoons() {
                 if (bodyData->oceanMaskTexture == "Textures/earth_specular.png") {
                     planet.materials.oceanMaskTexture = renderer.earthOceanMaskTexture;
                 } else {
-                    planet.materials.oceanMaskTexture = loadTextureOrFallback(bodyData->oceanMaskTexture.c_str(), "");
+                    planet.materials.oceanMaskTexture = loadTextureOrFallback(bodyData->oceanMaskTexture.c_str(), "", TextureSpace::LinearData);
+                    if (planet.materials.oceanMaskTexture) ownedCelestialTextures.insert(planet.materials.oceanMaskTexture);
                 }
             }
         }
@@ -294,8 +433,420 @@ void Engine::explorePlanetPOVByName(const std::string& name) {
 void Engine::selectBody(const std::string& name) {
     presenter.selectBody(name);
     solarUI.selectedPlanetName = presenter.selectedBodyName();
+    // Selection is intent, not an observation. Optical/range detection is
+    // evaluated from live geometry; a changed intent cannot keep scanning X.
+    if (scanner.isActive() && scanner.target != observationTarget()) {
+        scanner.interrupt("target changed");
+        scanActivityActive = false;
+        surveyAngularTravel = 0.0f;
+    }
+    if (flybySession.active && flybySession.target != observationTarget()) flybySession.reset();
+    if (pendingPhotoTarget != observationTarget()) pendingPhotoTarget.clear();
 }
 
+Observation::Observer Engine::scienceObserver() const {
+    const auto context = spaceship.active ? Observation::Context::Spacecraft :
+        (presenter.isExplorer() && cameraCtrl.mode == CAM_FREE && !cameraCtrl.tourActive
+            ? Observation::Context::FreeFlight : Observation::Context::Presentation);
+    return Observation::observer(context, cameraCtrl.currentEye, spaceship.position,
+        spaceship.warpSystem.isWarpActive() || frameEvents.wormholeTraversed);
+}
+
+std::string Engine::observationTarget() const {
+    // Presenter owns user intent. The ship's navigation target is a fallback
+    // only when no body is selected; camera focus is framing, never identity.
+    return !presenter.selectedBodyName().empty() ? presenter.selectedBodyName() :
+        (spaceship.active ? spaceship.targetPlanetName : std::string{});
+}
+
+std::vector<Observation::Body> Engine::observationBodies(bool rendered) const {
+    const float scale = rendered ? solarUI.planetScale : 1.0f;
+    std::vector<Observation::Body> bodies{{"Sun", sunWorldPosition, 2.0f * scale}};
+    bodies.reserve(planets.size() + moons.size() + 3);
+    for (const auto& p : planets) {
+        if (rendered && p.isDwarf && !solarUI.showDwarfPlanets) continue;
+        bodies.push_back({p.name, p.currentPosition, p.size * scale});
+    }
+    for (const auto& m : moons) bodies.push_back({m.name, m.currentPosition, m.size * scale});
+    if (blackHole.active) bodies.push_back({"Black Hole", blackHole.position, blackHole.shadowRadius});
+    if (wormhole.active) bodies.push_back({"Wormhole", wormhole.position, wormhole.throatRadius});
+    return bodies;
+}
+
+void Engine::requestPhotoCapture() {
+    pendingPhotoTarget = observationTarget();
+    postPipeline.triggerScreenshot();
+}
+
+Observation::FrameObservation Engine::observeFrame(const Observation::Body& target,
+    const std::vector<Observation::Body>& scene, const glm::mat4& view,
+    const glm::mat4& projection, const std::vector<float>* depth) const {
+    if (!postPipeline.cleanOutputReady || postPipeline.width <= 0 || postPipeline.height <= 0 ||
+        !std::isfinite(projection[0][0]) || !std::isfinite(projection[1][1])) return {};
+    const Observation::Body distortion{"Lensing influence", blackHole.position, blackHole.lensingInfluenceRadius};
+    const bool distortedBackground = simCtrl.getBodyState(target.name) && blackHole.active &&
+        blackHole.enableLensingPass && blackHole.lensingProgram &&
+        blackHole.calculateScreenBounds(view, projection, postPipeline.width, postPipeline.height).isVisible;
+    const auto* distortionVolume = distortedBackground ? &distortion : nullptr;
+    if (depth) return Observation::visibleFrame(target, scene, view, projection, postPipeline.width,
+        postPipeline.height, depth, distortionVolume);
+    const auto geometry = Observation::visibleFrame(target, scene, view, projection,
+        postPipeline.width, postPipeline.height, nullptr, distortionVolume);
+    if (!geometry.valid) return geometry;
+    if (!observationDepthReadAttempted) {
+        observationDepthReadAttempted = true;
+        postPipeline.readSceneDepth(observationFrameDepth);
+    }
+    if (observationFrameDepth.empty()) return {};
+    return Observation::visibleFrame(target, scene, view, projection, postPipeline.width,
+        postPipeline.height, &observationFrameDepth, distortionVolume);
+}
+
+bool Engine::scientificAtmosphere(const std::string& name) const {
+    const auto* data = celestialDb.getBody(name);
+    return data && data->atmosphericEnvironment != AtmosphericEnvironment::None;
+}
+
+// Cycle 4 Pass 2: targeted scan sessions (AtmosphericScan / GravityMeasurement).
+// Orbital surveys start automatically from orbit-assist state; Photography,
+// CloseFlyby and OrbitalSurvey are record-only here (their live paths own them).
+bool Engine::startScanSession(const std::string& name, ScienceActivity activity) {
+    if (!canPersistPlayerState()) return false;
+    if (name.empty()) {
+        solarUI.showToast("NO SCAN TARGET", "Select a celestial body first");
+        return false;
+    }
+    int idx = -2;
+    glm::vec3 pos(0.0f);
+    float radius = 0.0f;
+    if (!resolveBodyFocusTarget(name, idx, pos, radius) || radius <= 0.0f) {
+        solarUI.showToast("SCAN UNAVAILABLE", name + " has no scannable body view");
+        return false;
+    }
+    if (activity != ScienceActivity::AtmosphericScan &&
+        activity != ScienceActivity::GravityMeasurement) {
+        return false;
+    }
+    if (activity == ScienceActivity::AtmosphericScan && !scientificAtmosphere(name)) {
+        solarUI.showToast("NO ATMOSPHERIC SURVEY", "No atmospheric survey available for " + name);
+        return false;
+    }
+    const bool gravity = (activity == ScienceActivity::GravityMeasurement);
+    const float range = gravity ? std::max(6.0f * radius, 3.0f) : std::max(10.0f * radius, 5.0f);
+    if (progression.isActivityComplete(name, activity)) {
+        solarUI.showToast("ALREADY COMPLETED", name);
+        return false;
+    }
+    const Observation::Body target{name, pos, radius};
+    const auto observer = scienceObserver();
+    if (name != observationTarget() || !Observation::nearby(observer, target, range) ||
+        !Observation::lineOfSight(observer.position, target, observationBodies(false))) {
+        solarUI.showToast("SCAN UNAVAILABLE", "Reach unobstructed scan range in spacecraft or free-flight mode");
+        return false;
+    }
+    const float duration = gravity ? ScanTuning::kGravityMeasurementSeconds
+                                   : ScanTuning::kAtmosphericScanSeconds;
+    scanner.startScan(name,
+                      gravity ? ScannerMode::Detailed : ScannerMode::Scientific,
+                      duration, range);
+    const auto context = observer.context;
+    if (previousObservationContext != context || previousObservationPhysicsMode != simCtrl.getPhysicsMode()) {
+        previousObservationOffsets.clear();
+        flybySession.reset();
+    }
+    previousObservationContext = context;
+    previousObservationPhysicsMode = simCtrl.getPhysicsMode();
+    activeScanActivity = activity;
+    scanActivityActive = true;
+    surveyAngularTravel = 0.0f;
+    char msg[128];
+    snprintf(msg, sizeof(msg), "%s scan: %s (%.0fs)",
+             gravity ? "Gravity" : "Atmospheric", name.c_str(), (double)duration);
+    solarUI.showToast("SCAN STARTED", msg);
+    return true;
+}
+
+// Cycle 4 Pass 2: deterministic 0-100 photo score from measurable quantities
+// only — coverage (apparent size vs frame), centering (projected offset),
+// stability (view-direction drift over the capture window), visibility
+// (visible sampled disk against rendered depth). Invalid evidence scores zero.
+Engine::PhotoScore Engine::evaluatePhotoScore(const std::string& target,
+                                               const glm::mat4& view,
+                                               const glm::mat4& projection,
+                                               const std::vector<float>& depth) const {
+    PhotoScore out;
+    const auto scene = observationBodies(true);
+    const auto it = std::find_if(scene.begin(), scene.end(),
+        [&](const Observation::Body& b) { return b.name == target; });
+    if (it == scene.end()) return out; // hidden bodies cannot appear in the capture
+    const auto frame = observeFrame(*it, scene, view, projection, &depth);
+    if (!frame.valid) return out;
+    out.coverage = 35.0f * std::min(1.0f, std::sqrt(frame.visibleFraction) * 3.0f);
+    out.centering = 25.0f * std::clamp(1.0f - glm::length(frame.center) / 1.41421356f, 0.0f, 1.0f);
+    float stability = 0.0f; // absent history is unknown, not perfectly stable
+    if (cameraHistory.size() >= 2) {
+        const auto& old = cameraHistory.front();
+        const glm::vec3 nowDirection = cameraCtrl.currentTarget - cameraCtrl.currentEye;
+        const glm::vec3 oldDirection = old.second - old.first;
+        if (glm::length(nowDirection) > 1e-6f && glm::length(oldDirection) > 1e-6f) {
+            const float angle = std::acos(std::clamp(glm::dot(glm::normalize(nowDirection),
+                glm::normalize(oldDirection)), -1.0f, 1.0f));
+            stability = std::clamp(1.0f - glm::degrees(angle) / 5.0f, 0.0f, 1.0f);
+        }
+    }
+    out.stability = 20.0f * stability;
+    out.visibility = 20.0f * frame.visibility;
+    out.total = out.coverage + out.centering + out.stability + out.visibility;
+    return out;
+}
+
+void Engine::updateScienceSessions(float deltaTime) {
+    if (!canObserve() || !std::isfinite(deltaTime) || deltaTime <= 0.0f) return;
+    cameraHistory.emplace_back(cameraCtrl.currentEye, cameraCtrl.currentTarget);
+    while (cameraHistory.size() > 20) cameraHistory.pop_front();
+
+    const auto observer = scienceObserver();
+    const auto context = observer.context;
+    const bool contextChanged = context != previousObservationContext ||
+                                simCtrl.getPhysicsMode() != previousObservationPhysicsMode;
+    if (!observer.physical || contextChanged || deltaTime > 1.0f) {
+        previousObservationOffsets.clear();
+        flybySession.reset();
+        surveyAngularTravel = 0.0f;
+        if (scanner.isActive()) {
+            scanner.interrupt("observer or observation continuity changed");
+            scanActivityActive = false;
+        }
+    }
+    previousObservationContext = context;
+    previousObservationPhysicsMode = simCtrl.getPhysicsMode();
+    const auto bodies = observationBodies(false);
+    const std::string selected = observationTarget();
+    auto completed = [&](const std::string& name, ScienceActivity activity) {
+        return progression.isActivityComplete(name, activity);
+    };
+    auto findBody = [&](const std::string& name) {
+        return std::find_if(bodies.begin(), bodies.end(),
+            [&](const Observation::Body& b) { return b.name == name; });
+    };
+    auto motion = [&](const Observation::Body& body, glm::vec3& relativeVelocity, float& angle) {
+        const glm::vec3 relative = observer.position - body.position;
+        const auto previous = previousObservationOffsets.find(body.name);
+        if (previous == previousObservationOffsets.end()) return false;
+        relativeVelocity = (relative - previous->second) / deltaTime;
+        angle = Observation::angularStep(previous->second, relative);
+        return Observation::finite(relativeVelocity);
+    };
+    auto orbiting = [&](const Observation::Body& body) {
+        glm::vec3 relativeVelocity(0.0f);
+        float angle = 0.0f;
+        return spaceship.active && observer.physical && spaceship.targetPlanetName == body.name &&
+            motion(body, relativeVelocity, angle) && angle <= 0.15f &&
+            Observation::orbitalMotion(observer.position - body.position, relativeVelocity, body.radius);
+    };
+
+    const auto selectedBody = findBody(selected);
+    if (!scanner.isActive() && selectedBody != bodies.end() && simCtrl.getBodyState(selected) &&
+        spaceship.flightMode == FLIGHT_ORBIT_ASSIST && orbiting(*selectedBody) &&
+        !completed(selected, ScienceActivity::OrbitalSurvey)) {
+        scanner.startScan(selected, ScannerMode::Scientific, ScanTuning::kOrbitalSurveySeconds,
+                          Observation::surveyRange(selectedBody->radius));
+        activeScanActivity = ScienceActivity::OrbitalSurvey;
+        scanActivityActive = true;
+        surveyAngularTravel = 0.0f;
+        solarUI.showToast("SCAN STARTED", "Orbital survey: " + selected + " (12s)");
+    }
+
+    if (scanner.isActive() && scanActivityActive) {
+        const auto target = findBody(scanner.target);
+        if (target == bodies.end() || scanner.target != selected || !observer.physical ||
+            completed(scanner.target, activeScanActivity)) {
+            scanner.interrupt("target or observer changed");
+            scanActivityActive = false;
+            surveyAngularTravel = 0.0f;
+        } else {
+            bool held = Observation::nearby(observer, *target, scanner.range) &&
+                Observation::lineOfSight(observer.position, *target, bodies);
+            if (activeScanActivity == ScienceActivity::OrbitalSurvey) {
+                held = held && orbiting(*target);
+                if (held) {
+                    glm::vec3 relativeVelocity(0.0f);
+                    float angle = 0.0f;
+                    motion(*target, relativeVelocity, angle);
+                    surveyAngularTravel += angle;
+                }
+            } else if (activeScanActivity == ScienceActivity::AtmosphericScan) {
+                held = held && scientificAtmosphere(target->name);
+            } else if (activeScanActivity == ScienceActivity::GravityMeasurement) {
+                const auto* state = simCtrl.getBodyState(target->name);
+                const auto& physics = simCtrl.getNBodySimulation();
+                scanner.measuredGravity = held && state ? Observation::gravityMagnitude(state->mass,
+                    physics.gravitationalConstant, glm::length(glm::dvec3(observer.position) - state->position),
+                    physics.softening) : 0.0;
+                held = held && scanner.measuredGravity > 0.0;
+            }
+            const bool eligible = activeScanActivity != ScienceActivity::OrbitalSurvey ||
+                                  surveyAngularTravel >= 0.4f; // observed arc, not just a mode enum
+            // A stalled frame is one sample, not many seconds of verified
+            // continuous observation. Normal frame cadence is unchanged.
+            if (scanner.update(std::min(deltaTime, 0.1f), held, eligible)) {
+                const auto activity = activeScanActivity;
+                const std::string targetName = scanner.target;
+                scanner.acknowledge();
+                scanActivityActive = false;
+                surveyAngularTravel = 0.0f;
+                progression.ensureTarget(targetName, scientificAtmosphere(targetName));
+                if (progression.recordActivity(targetName, activity)) {
+                    solarUI.showToast(activity == ScienceActivity::OrbitalSurvey ? "SURVEY COMPLETE" :
+                        activity == ScienceActivity::AtmosphericScan ? "ATMOSPHERIC SCAN COMPLETE" :
+                        "GRAVITY MEASUREMENT COMPLETE", targetName);
+                    if (audioMgr) audioMgr->playDiscoveryChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+                }
+            }
+        }
+    }
+
+    // Flybys lock the intended body on approach. A nearest-body change never
+    // redirects measurements; changing observation intent abandons the session.
+    if (spaceship.active && observer.physical && spaceship.flightMode == FLIGHT_MANUAL) {
+        if (!flybySession.active && selectedBody != bodies.end() && simCtrl.getBodyState(selected) &&
+            !completed(selected, ScienceActivity::CloseFlyby)) {
+            glm::vec3 relativeVelocity(0.0f);
+            float angle = 0.0f;
+            const glm::vec3 relative = observer.position - selectedBody->position;
+            const float distance = glm::length(relative);
+            if (Observation::nearby(observer, *selectedBody, std::max(6.0f * selectedBody->radius, 3.0f)) &&
+                motion(*selectedBody, relativeVelocity, angle) && distance > 0.0f &&
+                glm::dot(relativeVelocity, relative / distance) < -0.02f) {
+                flybySession.begin(selected, distance, glm::length(relativeVelocity), relative);
+            }
+        }
+        if (flybySession.active) {
+            const std::string targetName = flybySession.target;
+            const auto subject = findBody(targetName);
+            if (subject == bodies.end() || targetName != selected) {
+                flybySession.reset();
+            } else {
+                const float minimumBefore = flybySession.minDistance;
+                const float entrySpeed = flybySession.entrySpeed;
+                const bool collision = std::find(spaceship.collisionBodiesThisFrame.begin(),
+                    spaceship.collisionBodiesThisFrame.end(), targetName) != spaceship.collisionBodiesThisFrame.end();
+                const bool earned = flybySession.update(observer.position - subject->position, subject->radius, collision);
+                if (earned) {
+                    progression.ensureTarget(targetName, scientificAtmosphere(targetName));
+                    progression.recordActivity(targetName, ScienceActivity::CloseFlyby);
+                    char detail[160];
+                    snprintf(detail, sizeof(detail), "%s closest %.2f approach %.2f u/s",
+                        targetName.c_str(), (double)std::min(minimumBefore, flybySession.minDistance), (double)entrySpeed);
+                    solarUI.showToast("FLYBY COMPLETE", detail);
+                }
+                if (!flybySession.active) flybySession.reset();
+            }
+        }
+    } else {
+        flybySession.reset();
+    }
+
+    // Rebuild transient relative samples only for a physical observer.
+    if (observer.physical) for (const auto& body : bodies)
+        previousObservationOffsets[body.name] = observer.position - body.position;
+
+    longRangeSweepTimer += deltaTime;
+}
+
+void Engine::updateDetection(const glm::mat4& view, const glm::mat4& projection) {
+    if (!canObserve() || longRangeSweepTimer < 4.0f) return;
+    longRangeSweepTimer = 0.0f;
+    const auto observer = scienceObserver();
+    const auto bodies = observationBodies(false);
+    const auto scene = observationBodies(true);
+    bool toasted = false;
+    for (const auto& body : bodies) {
+        if (!simCtrl.getBodyState(body.name)) continue;
+        const auto* record = progression.getRecord(body.name);
+        if (record && record->detected) continue;
+        bool detected = spaceship.active && Observation::nearby(observer, body, 60.0f) &&
+            Observation::lineOfSight(observer.position, body, bodies);
+        const auto rendered = std::find_if(scene.begin(), scene.end(),
+            [&](const Observation::Body& b) { return b.name == body.name; });
+        if (!detected && !postPipeline.startupActive && !spaceship.warpSystem.isWarpActive() &&
+            !frameEvents.wormholeTraversed && rendered != scene.end())
+            detected = observeFrame(*rendered, scene, view, projection).valid;
+        if (detected) {
+            progression.ensureTarget(body.name, scientificAtmosphere(body.name));
+            if (progression.markDetected(body.name) && !toasted) {
+                solarUI.showToast("NEW DISCOVERY", body.name);
+                toasted = true;
+            }
+        }
+    }
+}
+
+void Engine::updateAnomalies(const glm::mat4& view, const glm::mat4& projection) {
+    if (!canObserve() || postPipeline.startupActive) return;
+    const auto observer = scienceObserver();
+    const auto physicalBodies = observationBodies(false);
+    const auto scene = observationBodies(true);
+    auto alreadyKnown = [&](const AnomalyDef& def, const std::string& owner) {
+        const auto* record = progression.getRecord(owner);
+        return record && std::find(record->anomalyIds.begin(), record->anomalyIds.end(), def.id) != record->anomalyIds.end();
+    };
+    auto discover = [&](const AnomalyDef& def, const std::string& owner) {
+        if (owner.empty()) return;
+        progression.ensureTarget(owner, scientificAtmosphere(owner));
+        if (progression.recordAnomaly(owner, def.id)) {
+            solarUI.showToast("ANOMALY DISCOVERED", def.displayName);
+            if (audioMgr) audioMgr->playDiscoveryChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+        }
+    };
+    auto visible = [&](const std::string& name) {
+        const auto target = std::find_if(scene.begin(), scene.end(),
+            [&](const Observation::Body& b) { return b.name == name; });
+        return target != scene.end() && observeFrame(*target, scene, view, projection).valid;
+    };
+    if (frameEvents.wormholeTraversed && spaceship.active) {
+        if (const auto* def = findAnomaly("wormhole-transit")) discover(*def, def->contextBody);
+    }
+    if (blackHole.active) {
+        if (const auto* def = findAnomaly("photon-ring")) {
+            const Observation::Body target{"Black Hole", blackHole.position, blackHole.shadowRadius};
+            if (!alreadyKnown(*def, def->contextBody) &&
+                Observation::nearby(observer, target, blackHole.shadowRadius * 12.0f) &&
+                visible(target.name)) discover(*def, def->contextBody);
+        }
+    }
+    for (const auto& def : anomalyCatalog()) {
+        if (def.proximityBody.empty() || alreadyKnown(def, def.contextBody)) continue;
+        const auto target = std::find_if(physicalBodies.begin(), physicalBodies.end(),
+            [&](const Observation::Body& b) { return b.name == def.proximityBody; });
+        if (target != physicalBodies.end() &&
+            Observation::nearby(observer, *target, std::max(def.proximityFactor * target->radius, def.proximityFloor)) &&
+            visible(target->name)) discover(def, def.contextBody);
+    }
+    // Witness the actual eclipsed moon. A remote eclipse somewhere in the
+    // system cannot award a discovery to an observer looking elsewhere.
+    if (const auto* def = findAnomaly("eclipse-event")) for (const auto& moon : moons) {
+        if (alreadyKnown(*def, moon.name)) continue;
+        int index;
+        glm::vec3 parentPosition;
+        float parentRadius;
+        const std::string parent = bodyParentOf(moon.name);
+        if (parent.empty() || !resolveBodyFocusTarget(parent, index, parentPosition, parentRadius)) continue;
+        if (inShadowOf(moon.currentPosition, parentPosition, parentRadius * solarUI.planetScale, sunWorldPosition) &&
+            visible(moon.name)) discover(*def, moon.name);
+    }
+    // A belt is an annular disk, not a spherical heliocentric shell. This
+    // region observation retains the catalog's explicit Ceres record owner.
+    if (asteroidBelt && observer.physical) {
+        const glm::vec3 relative = observer.position - sunWorldPosition;
+        const float radial = glm::length(glm::vec2(relative.x, relative.z));
+        const float outer = asteroidBelt->getOuterRadius();
+        if (radial >= asteroidBelt->getInnerRadius() - 1.0f && radial <= outer + 1.0f &&
+            std::fabs(relative.y) <= outer * 0.08f + 1.0f) {
+            if (const auto* def = findAnomaly("belt-resonance")) discover(*def, def->contextBody);
+        }
+    }
+}
 void Engine::setSelectedBody(const std::string& name, bool openCard) {
     selectBody(name);
     solarUI.showPlanetCard = openCard;
@@ -341,10 +892,16 @@ void Engine::toggleSystemView() {
 // PSM.2: post-sim presentation step. Sequenced by Engine::run after
 // updateSimulation and before renderFrame — never inside updateSimulation.
 void Engine::updatePresentation() {
+    const bool restoringSession = pendingSelectionAdopt.has_value();
     // R02: consume the pending restore adoption recorded by the load path.
     if (pendingSelectionAdopt.has_value()) {
+        // Adopt semantic state without starting another camera transition.
+        presenter = PresentationController{};
         presenter.selectBody(*pendingSelectionAdopt);
+        if (pendingPresentationMode == static_cast<int>(PresentationState::SYSTEM)) presenter.enterSystem();
+        else if (pendingPresentationMode == static_cast<int>(PresentationState::BODY)) presenter.enterBody();
         pendingSelectionAdopt.reset();
+        pendingPresentationMode = 0;
     }
     // PSM.2: the single EnterBody consume-and-act site. Exactly one consume
     // per frame; the intent funnels into the authoritative entry path, which
@@ -353,6 +910,24 @@ void Engine::updatePresentation() {
     std::string enterBodyName;
     if (presenter.consumeEnterBodyIntent(enterBodyName)) {
         enterBodyView(enterBodyName);
+    }
+    // BODY selection owns focus identity too. Selection-only UI writers used
+    // to retarget positions without updating the camera's name/index latch.
+    // Reuse the owner's focus path; a loaded bookmark keeps its restored pose.
+    if (presenter.isBody() && cameraCtrl.focusedBodyName != presenter.selectedBodyName()) {
+        int index;
+        glm::vec3 position;
+        float radius;
+        const std::string& name = presenter.selectedBodyName();
+        if (resolveBodyFocusTarget(name, index, position, radius)) {
+            if (restoringSession) {
+                cameraCtrl.focusedBodyName = name;
+                cameraCtrl.focusedPlanetIndex = index;
+            } else {
+                cameraCtrl.focusOnBody(index, name,
+                    PresentationController::effectivePresentationRadius(radius, solarUI.planetScale), position);
+            }
+        }
     }
     // PSM.4: single renderer-override application point, every frame before
     // renderFrame. BODY validates the request (transfer safety net) and
@@ -491,7 +1066,7 @@ void Engine::requestBodyLayer(BodyLayerId id) {
                                     true)) {
         presenter.requestLayer(id);
     } else {
-        missionSystem.showToast("LAYER UNAVAILABLE",
+        solarUI.showToast("LAYER UNAVAILABLE",
             std::string(bodyLayerLabel(id)) + " is not available for " +
             presenter.selectedBodyName());
     }
@@ -562,16 +1137,22 @@ void Engine::exitBodyForTakeover() {
 }
 
 bool Engine::init(int width, int height, const char* title) {
+    if (window || glfwInitialized) return false; // do not overwrite a live session
+    initializationComplete = false;
+    const auto failStartup = [this]() { cleanup(); return false; };
+    if (runQACapture || benchmarkRunner.isBenchmarkActive() || benchmarkRunner.isGoldenCaptureActive()) excludePlayerPersistence();
     windowWidth = width;
     windowHeight = height;
 
-    loadSettings(kSettingsPath, appSettings);
+    if (!loadSettings(RuntimePaths::settings(), appSettings) && !toolSession)
+        loadSettings((RuntimePaths::assets() / "solar_odyssey_settings.ini").u8string(), appSettings);
 
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
         return false;
     }
 
+    glfwInitialized = true;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -580,8 +1161,7 @@ bool Engine::init(int width, int height, const char* title) {
     window = glfwCreateWindow(windowWidth, windowHeight, title, NULL, NULL);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
-        glfwTerminate();
-        return false;
+        return failStartup();
     }
 
     glfwSetWindowUserPointer(window, this);
@@ -606,9 +1186,6 @@ bool Engine::init(int width, int height, const char* title) {
     }
 
     if (iconPixels) {
-        for (int i = 0; i < iconWidth * iconHeight; ++i) {
-            iconPixels[i * 4 + 3] = 255;
-        }
         GLFWimage iconImage;
         iconImage.width = iconWidth;
         iconImage.height = iconHeight;
@@ -637,6 +1214,8 @@ bool Engine::init(int width, int height, const char* title) {
             }
         }
 
+        windowIconBig = hIconBig;
+        windowIconSmall = hIconSmall;
         if (hIconBig) {
             SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIconBig);
             SetClassLongPtrW(hwnd, GCLP_HICON, (LONG_PTR)hIconBig);
@@ -649,7 +1228,10 @@ bool Engine::init(int width, int height, const char* title) {
 #endif
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    // Pass 4: apply the persisted VSync cap AFTER the GL context exists
+    // (default ON = interval 1). Benchmark onSetup() always forces
+    // interval 0 afterwards, regardless of this value.
+    glfwSwapInterval(appSettings.vsyncEnabled ? 1 : 0);
 
     glfwSetKeyCallback(window, keyCallback);
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
@@ -660,16 +1242,32 @@ bool Engine::init(int width, int height, const char* title) {
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK) {
         fprintf(stderr, "Failed to initialize GLEW\n");
-        return false;
+        return failStartup();
     }
+    graphicsLoaderReady = true;
+    // The OS may clamp the requested window to the current monitor.
+    glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+    std::cout << "[Graphics] Vendor: " << glGetString(GL_VENDOR)
+              << " | Renderer: " << glGetString(GL_RENDERER)
+              << " | OpenGL: " << glGetString(GL_VERSION) << std::endl;
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 450");
+    ownedImGuiContext = ImGui::CreateContext();
+    ImGui::SetCurrentContext(ownedImGuiContext);
+    // Disable ImGui's independent settings writer until startup succeeds.
+    ImGui::GetIO().IniFilename = nullptr;
+    imguiGlfwReady = ImGui_ImplGlfw_InitForOpenGL(window, true);
+    if (!imguiGlfwReady) return failStartup();
+    imguiOpenGLReady = ImGui_ImplOpenGL3_Init("#version 450");
+    if (!imguiOpenGLReady) return failStartup();
+    if (std::filesystem::exists("assets/fonts/Inter.ttf")) {
+        ImGui::GetIO().Fonts->AddFontFromFileTTF("assets/fonts/Inter.ttf", 18.0f);
+        titleFont = ImGui::GetIO().Fonts->AddFontFromFileTTF("assets/fonts/Inter.ttf", 44.0f);
+    }
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     solarUI.applySpaceTheme();
     applyLoadedSettings();
 
@@ -679,7 +1277,7 @@ bool Engine::init(int width, int height, const char* title) {
     particleSys->init();
     inputMgr = std::make_unique<InputManager>();
     inputMgr->init(window);
-    renderer.init();
+    if (!renderer.init(static_cast<int>(solarUI.qualityPreset))) return failStartup();
     blackHole.initShader(renderer.blackHoleProgram);
     blackHole.initLensingShader();
     initPlanetsAndMoons();
@@ -687,17 +1285,23 @@ bool Engine::init(int width, int height, const char* title) {
     asteroidBelt = new AsteroidBelt(800, 15.0f, 17.8f, "Textures/moon.jpg");
     planetPov = new PlanetPOV();
     atmosphereEffects = new AtmosphereEffects();
-    postPipeline.init(windowWidth, windowHeight);
-    wormholePortalRenderer.init(512, 512);
+    if (!postPipeline.init(windowWidth, windowHeight)) return failStartup();
+    if (!wormholePortalRenderer.init(512, 512)) return failStartup();
     lod::LODManager::instance().init();
 
     // C3.8: route Settings-UI tier changes through the authoritative applier.
     // Applies the persisted preset from solar_odyssey_settings.ini (default High).
     solarUI.onQualityChanged = [this](GraphicsQuality q) { applyQualityTier(static_cast<int>(q)); };
+    // Pass 4: route the VSync checkbox through the immediate applier
+    // (glfwSwapInterval + persist, no restart) and the reset button through
+    // the authoritative defaults restore (confirmation-gated in the UI).
+    solarUI.onVSyncChanged = [this](bool enabled) { setVSyncEnabled(enabled); };
+    solarUI.onResetAllSettings = [this]() { resetAllSettingsToDefaults(); };
     // PSM.1: route UI identity writes through the single selection adapter;
     // the System View button invokes the same semantic action as Y.
     solarUI.onSelectBody = [this](const std::string& n) { selectBody(n); };
     solarUI.onToggleSystemView = [this]() { toggleSystemView(); };
+    solarUI.onPhotoCapture = [this]() { requestPhotoCapture(); };
     // PSM.2: the dossier "Enter Body Mode" action records intent only — the
     // updatePresentation() drain funnels it through enterBodyView, the same
     // authoritative path as Enter/double-click/V.
@@ -708,30 +1312,74 @@ bool Engine::init(int width, int height, const char* title) {
     // PSM.4: the dossier Layers tab writes through the single authoritative
     // layer-selection path (Engine-side declared+resource gate included).
     solarUI.onSelectLayer = [this](BodyLayerId id) { requestBodyLayer(id); };
+    // Cycle 4 Pass 2: dossier science-scan actions route into the single
+    // authoritative scan-session starter (same path as the G/H keys).
+    solarUI.onStartAtmosphericScan = [this](const std::string& n) {
+        startScanSession(n, ScienceActivity::AtmosphericScan);
+    };
+    solarUI.onStartGravityScan = [this](const std::string& n) {
+        startScanSession(n, ScienceActivity::GravityMeasurement);
+    };
     // PSM.7: dossier navigation queries over the current runtime roster.
     solarUI.onQueryParent = [this](const std::string& b) { return bodyParentOf(b); };
     solarUI.onQueryChildren = [this](const std::string& b) { return bodyChildrenOf(b); };
     applyQualityTier(static_cast<int>(solarUI.qualityPreset));
 
+    // Renderer init currently reports success even with missing programs.
+    // Eligibility must require the mandatory startup resources themselves.
+    if (!renderer.sunProgram || !renderer.planetProgram || !renderer.asteroidProgram ||
+        !renderer.blackHoleProgram || !renderer.wormholeProgram || !renderer.starfieldProgram ||
+        !postPipeline.program || !postPipeline.validateHDRTargetIsolation()) return failStartup();
+    for (GLuint target : {postPipeline.sceneFBO, postPipeline.lensedFBO, postPipeline.outputFBO,
+                          postPipeline.pingPongFBO[0], postPipeline.pingPongFBO[1]}) {
+        if (!target || glCheckNamedFramebufferStatus(target, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return failStartup();
+    }
+    initializationComplete = true;
+    if (!toolSession && appSettings.fullscreen) toggleFullscreen();
+    solarUI.onOpenMenu = [this]() { shell.pause(); updateCursorCapture(); };
+    solarUI.onFocusBody = [this](const std::string& name) { focusPlanetByName(name); };
+    solarUI.onOpenPhotos = []() {
+#ifdef _WIN32
+        ShellExecuteW(nullptr, L"open", (RuntimePaths::userData() / L"Screenshots").c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#endif
+    };
+    ImGui::GetIO().IniFilename = nullptr;
     return true;
 }
 
+void Engine::releaseCelestialTextures() {
+    for (GLuint texture : ownedCelestialTextures) glDeleteTextures(1, &texture);
+    ownedCelestialTextures.clear();
+    for (auto& planet : planets) {
+        planet.texture = planet.secondaryTexture = planet.cloudsTexture = 0;
+        planet.materials = PlanetMaterialResources{};
+    }
+    for (auto& moon : moons) moon.texture = 0;
+}
+
 void Engine::cleanup() {
-    if (!window) return;
+    if (!window && !glfwInitialized && !ownedImGuiContext) return;
+    // A tool or another render context may have changed the current binding.
+    if (window) glfwMakeContextCurrent(window);
+    if (ownedImGuiContext) ImGui::SetCurrentContext(ownedImGuiContext);
 
     // Step 0: Save settings and persistent simulation state before tearing down systems
-    captureCurrentSettings();
-    saveSettings(kSettingsPath, appSettings);
-
-    if (solarUI.autoSaveOnExit) {
-        SimulationSaveState exitState;
-        SaveStateManager::instance().captureState(exitState, simTime, solarUI.timeMultiplier,
-                                                  solarUI.isPaused, solarUI.physicsMode,
-                                                  cameraCtrl, missionSystem, spaceship,
-                                                  solarUI.autoSaveOnExit);
-        SaveStateManager::instance().saveToFile("save_state.json", exitState);
-        std::cout << "[SaveState] Auto-saved simulation state to save_state.json on exit (Day " << simTime << ")" << std::endl;
+    if (canPersistPlayerState()) {
+        captureCurrentSettings();
+        saveSettings(RuntimePaths::settings(), appSettings);
     }
+
+    if (canPersistPlayerState() && shell.sessionStarted && autoSaveEligible && solarUI.autoSaveOnExit) {
+        SimulationSaveState exitState;
+        SaveStateManager::instance().captureState(exitState, simCtrl, cameraCtrl, spaceship,
+                                                  solarUI.autoSaveOnExit, static_cast<int>(presenter.state()), presenter.selectedBodyName());
+        SaveStateManager::instance().captureProgression(exitState, progression);
+        const bool saved = SaveStateManager::instance().saveToFile(savePath(), exitState);
+        std::cout << (saved ? "[SaveState] Auto-save completed (Day " : "[SaveState] Auto-save FAILED (Day ")
+                  << simCtrl.getElapsedSimDays() << ")" << std::endl;
+    }
+    if (!canPersistPlayerState() && ownedImGuiContext) ImGui::GetIO().IniFilename = nullptr;
+    initializationComplete = false;
 
     // Step 1: Stop Audio streams & background threads
     if (audioMgr) {
@@ -739,7 +1387,7 @@ void Engine::cleanup() {
         audioMgr.reset();
     }
 
-    // Step 2: Drain & unmap ring buffers (Asteroid belt)
+    // Step 2: Release fences and mapped storage (GL retains queued GPU uses).
     if (asteroidBelt) {
         delete asteroidBelt;
         asteroidBelt = nullptr;
@@ -751,9 +1399,17 @@ void Engine::cleanup() {
         particleSys.reset();
     }
 
-    // Step 4: Teardown Post-Processing and Portal FBOs & pipelines
-    postPipeline.cleanup();
-    wormholePortalRenderer.cleanup();
+    // Step 4: Release member-owned queries, batches, meshes and pipelines.
+    if (graphicsLoaderReady) {
+        glUseProgram(0);
+        glBindVertexArray(0);
+        benchmarkRunner.cleanupGL();
+        spaceship.cleanupGL();
+        blackHole.cleanup();
+        wormhole.cleanup();
+        postPipeline.cleanup();
+        wormholePortalRenderer.cleanup();
+    }
 
     // Step 5: Teardown SceneRenderer VAOs, textures, shaders, and celestial resources
     if (planetPov) {
@@ -764,22 +1420,16 @@ void Engine::cleanup() {
         delete atmosphereEffects;
         atmosphereEffects = nullptr;
     }
-    renderer.cleanup();
-
-    auto safeDeleteTex = [](GLuint &tex) {
-        if (tex != 0) { glDeleteTextures(1, &tex); tex = 0; }
-    };
-    for (auto &p : planets) {
-        safeDeleteTex(p.texture);
-        safeDeleteTex(p.secondaryTexture);
-        safeDeleteTex(p.cloudsTexture);
-    }
-    for (auto &m : moons) {
-        safeDeleteTex(m.texture);
+    if (graphicsLoaderReady) {
+        releaseCelestialTextures(); // borrowed material aliases are cleared first
+        renderer.cleanup();
     }
 
     // Step 6: Reset LODManager geometries
-    lod::LODManager::instance().destroy();
+    if (graphicsLoaderReady) {
+        lod::LODManager::releaseCurrentContext();
+        glprims::destroySharedResources();
+    }
 
     // Step 7: Teardown InputManager
     if (inputMgr) {
@@ -788,19 +1438,28 @@ void Engine::cleanup() {
     }
 
     // Step 8: Teardown ImGui context & backend bindings while GL context is still alive
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+    if (imguiOpenGLReady) ImGui_ImplOpenGL3_Shutdown();
+    if (imguiGlfwReady) ImGui_ImplGlfw_Shutdown();
+    if (ownedImGuiContext) ImGui::DestroyContext(ownedImGuiContext);
+    ownedImGuiContext = nullptr;
+    imguiOpenGLReady = imguiGlfwReady = graphicsLoaderReady = false;
 
     // Step 9: Destroy GLFW window
-    glfwDestroyWindow(window);
+    if (window) glfwDestroyWindow(window);
     window = nullptr;
+#ifdef _WIN32
+    if (windowIconBig) DestroyIcon(static_cast<HICON>(windowIconBig));
+    if (windowIconSmall) DestroyIcon(static_cast<HICON>(windowIconSmall));
+    windowIconBig = windowIconSmall = nullptr;
+#endif
 
     // Step 10: Terminate GLFW
-    glfwTerminate();
+    if (glfwInitialized) glfwTerminate();
+    glfwInitialized = false;
 }
 
 void Engine::processInput(float deltaTime) {
+    if (!shell.playing()) { updateCursorCapture(); return; }
     if (spaceship.active || cameraCtrl.mode == CAM_SPACESHIP) {
         if (inputMgr) inputMgr->setContext(InputContext::Spaceship);
         bool leftAltDown = (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS);
@@ -850,9 +1509,13 @@ void Engine::processInput(float deltaTime) {
 }
 
 void Engine::updateSimulation(float deltaTime) {
+    processSessionRequests();
+    if (!shell.playing()) { postPipeline.updateStartup(deltaTime); return; }
     simCtrl.setPaused(solarUI.isPaused);
-    simCtrl.setTimeMultiplier(solarUI.timeMultiplier);
-    simCtrl.setOrbitSpeedScale(solarUI.orbitSpeedScale);
+    // Only actual UI changes write back; a float mirror must not round a
+    // restored double owner on the next frame.
+    if (solarUI.timeMultiplier != static_cast<float>(simCtrl.getTimeMultiplier())) simCtrl.setTimeMultiplier(solarUI.timeMultiplier);
+    if (solarUI.orbitSpeedScale != static_cast<float>(simCtrl.getOrbitSpeedScale())) simCtrl.setOrbitSpeedScale(solarUI.orbitSpeedScale);
 
     // Dynamic physics mode toggle
     if (solarUI.pendingPhysicsModeChange) {
@@ -937,6 +1600,8 @@ void Engine::updateSimulation(float deltaTime) {
         }
     }
 
+    // updatePresentation() reconciles BODY focus through the camera owner.
+
     static std::vector<std::pair<std::string, std::pair<glm::vec3, float>>> planetaryBodies;
     planetaryBodies.clear();
     planetaryBodies.reserve(planets.size() + moons.size() + 3);
@@ -959,7 +1624,8 @@ void Engine::updateSimulation(float deltaTime) {
             cameraCtrl.mode = CAM_SPACESHIP;
         }
 
-        std::string shipTargetName = solarUI.selectedPlanetName.empty() ? (spaceship.targetPlanetName.empty() ? "Earth" : spaceship.targetPlanetName) : solarUI.selectedPlanetName;
+        std::string shipTargetName = observationTarget();
+        if (shipTargetName.empty()) shipTargetName = "Earth";
         glm::vec3 shipTargetPos(0.0f);
         float shipTargetRadius = 2.0f;
         if (shipTargetName == "Sun") {
@@ -1021,29 +1687,30 @@ void Engine::updateSimulation(float deltaTime) {
 
     frameEvents.clear();
 
-    bool wormholeTraversed = false;
     if (spaceship.active && wormhole.checkTraversal(spaceship.position)) {
         spaceship.position = wormhole.exitDestination;
-        wormholeTraversed = true;
         frameEvents.wormholeTraversed = true;
-        missionSystem.showToast("WORMHOLE TRAVERSED!", "Emerged across spacetime gateway");
-        if (audioMgr) audioMgr->playMissionComplete(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+        solarUI.showToast("WORMHOLE TRAVERSED!", "Emerged across spacetime gateway");
+        if (audioMgr) audioMgr->playDiscoveryChime(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
     }
 
-    bool photoCaptured = postPipeline.requestCleanCapture;
-    frameEvents.photoCaptured = photoCaptured;
-    missionSystem.update(deltaTime, spaceship.position, glm::length(spaceship.velocity),
-                         (int)spaceship.flightMode, spaceship.nearestPlanetName, spaceship.nearestPlanetDist,
-                         spaceship.targetPlanetName, spaceship.targetDistance,
-                         (spaceship.flightMode == FLIGHT_ORBIT_ASSIST),
-                         photoCaptured, cameraCtrl.focusedBodyName, wormholeTraversed);
-
-    if (missionSystem.hasTriggeredCompletionAudio) {
-        missionSystem.hasTriggeredCompletionAudio = false;
-        frameEvents.missionCompleted = true;
-        if (audioMgr) audioMgr->playMissionComplete(solarUI.audioMuted, solarUI.masterVolume, solarUI.sfxVolume);
+    // Only physical observers enter visit regions. Presentation views can
+    // detect/photograph a disk but never count as travel or proximity.
+    if (canObserve()) {
+        const auto observer = scienceObserver();
+        std::vector<ProgressionBodyRef> visitRefs{{"Sun", sunWorldPosition, 2.0f}};
+        for (const auto& p : planets) visitRefs.push_back({p.name, p.currentPosition, p.size});
+        for (const auto& m : moons) visitRefs.push_back({m.name, m.currentPosition, m.size});
+        if (observer.physical) {
+            auto hasAtmo = [this](const std::string& n) { return scientificAtmosphere(n); };
+            for (const auto& entered : progression.updateVisits(observer.position, visitRefs, hasAtmo))
+                solarUI.showToast("FIRST VISIT", entered);
+        } else {
+            // Suspend hysteresis without altering persistent discoveries.
+            progression.restoreVisitTracking(observer.position, visitRefs);
+        }
+        updateScienceSessions(deltaTime);
     }
-
     if (spaceship.active && audioMgr) {
         if (spaceship.warpSystem.triggerChargeSound) {
             spaceship.warpSystem.triggerChargeSound = false;
@@ -1079,40 +1746,119 @@ void Engine::updateSimulation(float deltaTime) {
         audioMgr->musicUpdate(solarUI.audioMuted, solarUI.masterVolume, solarUI.musicVolume);
     }
 
-    if (solarUI.requestStateSave) {
+}
+
+void Engine::processSessionRequests() {
+    if (solarUI.requestStateSave && !solarUI.requestStateLoad) {
         solarUI.requestStateSave = false;
         SimulationSaveState saveState;
-        SaveStateManager::instance().captureState(saveState, (float)simTime, solarUI.timeMultiplier,
-                                                  solarUI.isPaused, solarUI.physicsMode,
-                                                  cameraCtrl, missionSystem, spaceship,
-                                                  solarUI.autoSaveOnExit);
-        bool ok = SaveStateManager::instance().saveToFile("save_state.json", saveState);
-        solarUI.saveStatusToast = ok ? "Simulation state saved to save_state.json" : "Failed to save state!";
+        SaveStateManager::instance().captureState(saveState, simCtrl, cameraCtrl, spaceship,
+                                                  solarUI.autoSaveOnExit, static_cast<int>(presenter.state()), presenter.selectedBodyName());
+        SaveStateManager::instance().captureProgression(saveState, progression);
+        bool ok = canPersistPlayerState() && shell.sessionStarted && SaveStateManager::instance().saveToFile(savePath(), saveState);
+        if (ok) { autoSaveEligible = true; refreshContinue(); }
+        solarUI.saveStatusToast = !canPersistPlayerState() ? "Player persistence disabled for this session" :
+            ok ? "Simulation state saved to save_state.json" : "Failed to save state! Existing save preserved.";
         solarUI.saveStatusToastTimer = 3.5f;
-        std::cout << "[SaveState] Saved simulation state (Day " << (float)simTime << ")" << std::endl;
+        std::cout << (ok ? "[SaveState] Saved simulation state (Day " : "[SaveState] Save skipped or failed (Day ") << simCtrl.getElapsedSimDays() << ")" << std::endl;
     }
 
     if (solarUI.requestStateLoad) {
         solarUI.requestStateLoad = false;
+        solarUI.requestStateSave = false; // Load wins over a simultaneous save.
         SimulationSaveState loadState;
-        bool ok = SaveStateManager::instance().loadFromFile("save_state.json", loadState);
+        bool ok = SaveStateManager::instance().loadFromFile(savePath(), loadState);
+        if (ok) ok = SaveStateManager::instance().restoreState(loadState, simCtrl, cameraCtrl, spaceship, solarUI);
         if (ok) {
-            float loadedTime = 0.0f;
-            SaveStateManager::instance().restoreState(loadState, loadedTime, solarUI.timeMultiplier,
-                                                      solarUI.isPaused, solarUI.physicsMode,
-                                                      cameraCtrl, missionSystem, spaceship, solarUI);
+            autoSaveEligible = true;
+            shell.start();
+            SaveStateManager::instance().restoreProgression(loadState, progression);
             // R02: record only — updatePresentation() performs the adoption.
             // No PresentationController call may occur inside updateSimulation.
             pendingSelectionAdopt = solarUI.selectedPlanetName;
-            simTime = loadedTime;
+            pendingPresentationMode = loadState.version >= 4 ? loadState.presentationMode : 0;
+            simTime = simCtrl.getSimTime();
+            cloudRotationAngle = static_cast<float>(simCtrl.getCloudRotationAngle());
+            sunWorldPosition = simCtrl.getBodyPosition("Sun");
+            for (auto& p : planets) p.currentPosition = simCtrl.getBodyPosition(p.name);
+            for (auto& m : moons) m.currentPosition = simCtrl.getBodyPosition(m.name);
+            if (spaceship.targetPlanetName == "Black Hole" || spaceship.targetPlanetName == "Gargantua")
+                spaceship.setTargetPlanet(spaceship.targetPlanetName, blackHole.position, blackHole.shadowRadius);
+            else if (spaceship.targetPlanetName == "Wormhole" || spaceship.targetPlanetName == "Einstein-Rosen Bridge")
+                spaceship.setTargetPlanet(spaceship.targetPlanetName, wormhole.position, wormhole.throatRadius);
+            spaceship.targetDistance = glm::length(spaceship.position - spaceship.targetPlanetPos);
+            // Reconstruct name-based focus indexes from the current roster.
+            int index = -1;
+            glm::vec3 focusPos;
+            float radius = 0.0f;
+            if (resolveBodyFocusTarget(cameraCtrl.focusedBodyName, index, focusPos, radius)) cameraCtrl.focusedPlanetIndex = index;
+            resetLoadedSessionTransients();
+            std::vector<ProgressionBodyRef> visitRefs{{"Sun", sunWorldPosition, 2.0f}};
+            for (const auto& p : planets) visitRefs.push_back({p.name, p.currentPosition, p.size});
+            for (const auto& m : moons) visitRefs.push_back({m.name, m.currentPosition, m.size});
+            progression.restoreVisitTracking(scienceObserver().position, visitRefs);
+            gameContext.simTime = simTime;
+            gameContext.timeMultiplier = solarUI.timeMultiplier;
+            gameContext.paused = solarUI.isPaused;
+            gameContext.physicsMode = solarUI.physicsMode;
+            gameContext.cameraEye = cameraCtrl.currentEye;
+            gameContext.cameraTarget = cameraCtrl.currentTarget;
+            gameContext.cameraUp = cameraCtrl.currentUp;
+            gameContext.isSpaceshipActive = spaceship.active;
+            gameContext.flightMode = spaceship.flightMode;
+            gameContext.spaceshipPos = spaceship.position;
+            gameContext.spaceshipVel = spaceship.velocity;
+            gameContext.cloudRotationAngle = cloudRotationAngle;
+            gameContext.elapsedSimDays = solarUI.elapsedSimDays;
+            gameContext.fov = cameraCtrl.fieldOfView;
+            gameContext.targetBodyName = spaceship.targetPlanetName;
+            gameContext.targetBodyPos = spaceship.targetPlanetPos;
+            gameContext.targetBodyRadius = spaceship.targetPlanetRadius;
             updateCursorCapture();
-            solarUI.saveStatusToast = "Simulation state loaded from save_state.json";
-            std::cout << "[SaveState] Loaded simulation state (Day " << (float)simTime << ")" << std::endl;
+            solarUI.saveStatusToast = loadState.version < 4 && loadState.physicsMode == PHYSICS_NBODY ?
+                "Legacy save loaded: N-body re-seeded at saved time; trajectory was not stored" : "Saved exploration restored";
+            std::cout << "[SaveState] " << solarUI.saveStatusToast << " (Day " << simCtrl.getElapsedSimDays() << ")" << std::endl;
         } else {
-            solarUI.saveStatusToast = "No save_state.json file found!";
+            // Do not silently replace a rejected (possibly future-version)
+            // file on exit. A successful explicit save/load re-arms autosave.
+            autoSaveEligible = false;
+            solarUI.saveStatusToast = "Save missing, invalid, or unsupported; session unchanged";
         }
         solarUI.saveStatusToastTimer = 3.5f;
     }
+}
+
+void Engine::resetLoadedSessionTransients() {
+    scanner = ScienceScanner{};
+    flybySession.reset();
+    scanActivityActive = false;
+    activeScanActivity = ScienceActivity::OrbitalSurvey;
+    longRangeSweepTimer = 0.0f;
+    cameraHistory.clear();
+    pendingPhotoTarget.clear();
+    observationFrameDepth.clear();
+    observationDepthReadAttempted = false;
+    previousObservationOffsets.clear();
+    previousObservationContext = Observation::Context::Presentation;
+    previousObservationPhysicsMode = -1;
+    surveyAngularTravel = 0.0f;
+    frameEvents.clear();
+    postPipeline.requestCleanCapture = false;
+    postPipeline.pendingCapturePath.clear();
+    postPipeline.screenshotToastTimer = 0.0f;
+    solarUI.showToast("", "", 0.0f); // Clear feedback from the previous world.
+    solarUI.requestStateSave = false;
+    solarUI.requestStateLoad = false;
+    lastPickName.clear();
+    lastPickTimeSec = -1.0;
+    isLeftMouseDown = isRightMouseDown = false;
+    isFirstMouseMove = true;
+    uiReleaseCursorHeld = false;
+    if (inputMgr) { inputMgr->init(window); inputMgr->resetScroll(); }
+    wormhole.isTransitioning = false;
+    wormhole.transitionTimer = 0.0f;
+    if (planetPov) planetPov->deactivatePOV();
+    if (audioMgr) { audioMgr->stopPOVAmbientSound(); audioMgr->stopSpaceshipSound(); audioMgr->stopWarpSounds(); }
 }
 
 void Engine::renderWorldBackground(const SceneRenderContext& ctx) {
@@ -1121,28 +1867,40 @@ void Engine::renderWorldBackground(const SceneRenderContext& ctx) {
     const glm::mat4& projMat = cam.projMatrix;
     const glm::vec3& eyePos = cam.eye;
 
+    // View-dependent lighting, fade and LOD use the pass camera, including portals.
+    CameraController passCamera = cameraCtrl;
+    passCamera.currentEye = cam.eye;
+    passCamera.currentTarget = cam.target;
+    passCamera.currentUp = cam.up;
+    const BodyLayerId savedLayer = renderer.activeBodyLayer;
+    if (ctx.passType != RenderPassType::Main) {
+        passCamera.mode = CAM_FREE;
+        passCamera.tourActive = false;
+        passCamera.focusedBodyName.clear();
+        renderer.activeBodyLayer = BodyLayerId::Natural;
+    }
     renderer.renderStarfield(viewMat, projMat, eyePos);
 
-    renderer.renderSun(viewMat, projMat, (float)simTime, solarUI.sunIntensity, sunWorldPosition, cameraCtrl, solarUI);
+    renderer.renderSun(viewMat, projMat, (float)simTime, solarUI.sunIntensity, sunWorldPosition, passCamera, solarUI);
     if (particleSys) {
         particleSys->render(renderer, viewMat, projMat, solarUI.showParticles);
     }
 
     glm::vec3 sunEyePos = glm::vec3(viewMat * glm::vec4(sunWorldPosition, 1.0f));
-    renderer.renderPlanets(planets, moons, viewMat, projMat, sunWorldPosition, sunEyePos, (float)simTime, cloudRotationAngle, solarUI, cameraCtrl, celestialDb, atmosphereEffects);
-    renderer.renderMoons(moons, planets, viewMat, projMat, sunWorldPosition, sunEyePos, solarUI, cameraCtrl);
+    renderer.renderPlanets(planets, moons, viewMat, projMat, sunWorldPosition, sunEyePos, (float)simTime, cloudRotationAngle, solarUI, passCamera, celestialDb, atmosphereEffects);
+    renderer.renderMoons(moons, planets, viewMat, projMat, sunWorldPosition, sunEyePos, solarUI, passCamera);
 
     // Orbit lines: rendered with depth testing against planetary bodies to ensure proper occlusion
-    if (solarUI.showOrbits) {
+    if (solarUI.showOrbits && (ctx.passType != RenderPassType::Main || (shell.playing() && !presenter.isBody()))) {
         for (const auto &planet : planets) {
             if (!solarUI.showDwarfPlanets && planet.isDwarf) continue;
             bool isSel = (ctx.passType == RenderPassType::Main) && (cameraCtrl.focusedBodyName == planet.name || solarUI.selectedPlanetName == planet.name);
-            renderer.renderOrbit(planet.orbitRadius, isSel, cameraCtrl, viewMat, projMat);
+            renderer.renderOrbit(planet.orbitRadius, isSel, passCamera, viewMat, projMat);
         }
     }
 
     // Pre-lens background celestial elements: Asteroids render into HDR_A
-    if (asteroidBelt && solarUI.showAsteroids) {
+    if (asteroidBelt && solarUI.showAsteroids && (ctx.passType != RenderPassType::Main || (shell.playing() && !presenter.isBody()))) {
         float focusFade = 1.0f;
         if (ctx.passType == RenderPassType::Main && (cameraCtrl.mode == CAM_FOCUS || cameraCtrl.mode == CAM_POV || (cameraCtrl.tourActive && cameraCtrl.focusedPlanetIndex >= 0))) {
             focusFade = 0.20f;
@@ -1150,9 +1908,11 @@ void Engine::renderWorldBackground(const SceneRenderContext& ctx) {
         asteroidBelt->render(focusFade, renderer.asteroidProgram != 0 ? renderer.asteroidProgram : renderer.planetProgram,
                              viewMat, projMat, sunEyePos, eyePos, solarUI.enableMeshLOD, solarUI.lodOverrideMode);
     }
+    renderer.activeBodyLayer = savedLayer;
 }
 
 void Engine::renderFrame(float deltaTime) {
+    renderer.applyStarfield(solarUI.starfieldStyle, solarUI.starfieldDataset);
     RenderProfiler::instance().beginFrame();
 
     float currentFOV = cameraCtrl.fieldOfView + (spaceship.active ? spaceship.warpSystem.fovOffset : 0.0f);
@@ -1235,16 +1995,46 @@ void Engine::renderFrame(float deltaTime) {
     }
 
     postPipeline.endSceneAndPostProcess();
+    observationFrameDepth.clear();
+    observationDepthReadAttempted = false;
 
     if (postPipeline.requestCleanCapture) {
-        postPipeline.captureScreenshot(postPipeline.pendingCapturePath.empty() ? nullptr : postPipeline.pendingCapturePath.c_str());
+        const std::string target = pendingPhotoTarget;
+        std::vector<float> capturedDepth;
+        const bool scientificCapture = canObserve() && !target.empty() &&
+            target == observationTarget() && !postPipeline.startupActive &&
+            !spaceship.warpSystem.isWarpActive() && !frameEvents.wormholeTraversed;
+        const bool captured = postPipeline.captureScreenshot(
+            postPipeline.pendingCapturePath.empty() ? nullptr : postPipeline.pendingCapturePath.c_str(),
+            scientificCapture ? &capturedDepth : nullptr);
+        frameEvents.photoCaptured = captured;
+        if (captured && scientificCapture) {
+            observationFrameDepth = std::move(capturedDepth);
+            observationDepthReadAttempted = true;
+            const PhotoScore score = evaluatePhotoScore(target, viewMat, projMat, observationFrameDepth);
+            if (score.total > 0.0f) {
+                progression.ensureTarget(target, scientificAtmosphere(target));
+                progression.recordPhoto(target, score.total);
+                char detail[160];
+                snprintf(detail, sizeof(detail), "Cov %.0f/35 Cent %.0f/25 Stab %.0f/20 Vis %.0f/20 TOTAL %.0f/100",
+                    score.coverage, score.centering, score.stability, score.visibility, score.total);
+                solarUI.showToast("PHOTO SCORE", target + " " + detail);
+            }
+        } else if (!captured && canPersistPlayerState()) {
+            solarUI.showToast("CAPTURE FAILED", "Screenshot was not saved; no photo credit awarded");
+        }
         postPipeline.requestCleanCapture = false;
         postPipeline.pendingCapturePath.clear();
+        pendingPhotoTarget.clear();
     }
+    if (shell.playing()) { updateDetection(viewMat, projMat); updateAnomalies(viewMat, projMat); }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+    const float uiWidth = ImGui::GetIO().DisplaySize.x;
+    const float uiHeight = ImGui::GetIO().DisplaySize.y;
+
 
     static std::vector<PickableBody> pickableList;
     pickableList.clear();
@@ -1263,13 +2053,14 @@ void Engine::renderFrame(float deltaTime) {
     projMat = glm::perspective(glm::radians(cameraCtrl.fieldOfView),
                                (float)windowWidth / (float)windowHeight, 0.1f, 600.0f);
 
+    if (shell.playing()) {
     solarUI.renderFloatingLabels(pickableList, celestialDb, viewMat, projMat,
                                 (float)windowWidth, (float)windowHeight, cameraCtrl);
 
     std::vector<std::pair<std::string, int>> dummyMap;
-    solarUI.renderTopNavBar((float)windowWidth, cameraCtrl, celestialDb, dummyMap, presenter);
-    solarUI.renderBottomControlBar((float)windowWidth, (float)windowHeight, cameraCtrl);
-    solarUI.renderPlanetInfoCard((float)windowWidth, (float)windowHeight, celestialDb, cameraCtrl,
+    solarUI.renderTopNavBar(uiWidth, cameraCtrl, celestialDb, dummyMap, presenter);
+    solarUI.renderBottomControlBar(uiWidth, uiHeight, cameraCtrl);
+    solarUI.renderPlanetInfoCard(uiWidth, uiHeight, celestialDb, cameraCtrl,
                                 [this](const std::string& name) { focusPlanetByName(name); },
                                 [this](const std::string& name) { explorePlanetPOVByName(name); },
                                 [this](const std::string& name) { presenter.requestEnterBody(name); },
@@ -1278,15 +2069,16 @@ void Engine::renderFrame(float deltaTime) {
                                 // R02: the dossier displays the EFFECTIVE active
                                 // layer — the same value handed to the renderer.
                                 effectiveBodyLayer());
-    solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
-    solarUI.renderDiagnostics((float)windowWidth, asteroidBelt);
-    solarUI.renderFreeCamHUD((float)windowWidth, (float)windowHeight, cameraCtrl);
-    solarUI.renderPhotoModeHUD((float)windowWidth, (float)windowHeight, cameraCtrl, postPipeline);
-    solarUI.renderSpaceshipHUD((float)windowWidth, (float)windowHeight, spaceship, cameraCtrl, celestialDb);
-    solarUI.renderMissionHUDTracker((float)windowWidth, (float)windowHeight, missionSystem, spaceship, cameraCtrl);
-    solarUI.renderMissionToast((float)windowWidth, (float)windowHeight, missionSystem);
-    solarUI.renderMissionModal((float)windowWidth, (float)windowHeight, missionSystem, spaceship, cameraCtrl);
-    solarUI.renderSaveStatusToast((float)windowWidth, (float)windowHeight);
+    if (toolSession) solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
+    solarUI.renderDiagnostics(uiWidth, asteroidBelt);
+    solarUI.renderFreeCamHUD(uiWidth, uiHeight, cameraCtrl);
+    solarUI.renderPhotoModeHUD(uiWidth, uiHeight, cameraCtrl, postPipeline);
+    solarUI.renderSpaceshipHUD(uiWidth, uiHeight, spaceship, cameraCtrl, celestialDb);
+    solarUI.renderNotificationToast(spaceship.active || cameraCtrl.mode == CAM_FREE);
+    solarUI.renderCodex(uiWidth, uiHeight, celestialDb, progression, codexRoster);
+    }
+    renderSessionShell();
+    solarUI.renderSaveStatusToast(uiWidth, uiHeight);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1296,6 +2088,7 @@ void Engine::renderFrame(float deltaTime) {
         toggleFullscreen();
     }
 
+    if (releaseQA) runReleaseQASequence(++qaFrameCount);
     if (runQACapture) {
         qaFrameCount++;
         runQACaptureSequence(qaFrameCount);
@@ -1303,6 +2096,7 @@ void Engine::renderFrame(float deltaTime) {
 }
 
 void Engine::runQACaptureSequence(int qaCount) {
+    excludePlayerPersistence();
     if (qaCount == 1) {
         postPipeline.skipStartup();
     } else if (qaCount == 15) {
@@ -1449,11 +2243,7 @@ void Engine::runQACaptureSequence(int qaCount) {
         cameraCtrl.setSpaceshipMode(true, spaceship.getCameraEye(), spaceship.getCameraTarget(), spaceship.smoothCameraUp);
     } else if (qaCount == 385) {
         postPipeline.captureScreenshot("Screenshots/Polish/warp_sequence.bmp");
-        solarUI.showMissionModal = true;
     } else if (qaCount == 415) {
-        postPipeline.captureScreenshot("Screenshots/Polish/mission_hud.bmp");
-        postPipeline.captureScreenshot("Screenshots/Polish/mission_modal.bmp");
-        solarUI.showMissionModal = false;
         spaceship.warpSystem.cancelWarp();
         spaceship.active = false;
         cameraCtrl.resetToDefault();
@@ -1495,7 +2285,7 @@ void Engine::runQACaptureSequence(int qaCount) {
     } else if (qaCount == 522) {
         SimulationSaveState testSave;
         SaveStateManager::instance().captureState(testSave, 99.5f, 4.0f, false, 0,
-                                                  cameraCtrl, missionSystem, spaceship,
+                                                  cameraCtrl, spaceship,
                                                   solarUI.autoSaveOnExit);
         bool saveOk = SaveStateManager::instance().saveToFile("qa_save_test.json", testSave);
         SimulationSaveState testLoad;
@@ -1539,7 +2329,7 @@ void Engine::runQACaptureSequence(int qaCount) {
                   << ", moonEclipse=" << eclipseShadow
                   << " -> " << (shadowOk ? "PASS" : "FAIL") << std::endl;
     } else if (qaCount >= 540) {
-        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, Mission, N-Body, Native Audio, LOD, Save State, Instanced Asteroid Pipeline, and Analytical Shadow tests completed successfully!" << std::endl;
+        std::cout << "[QA] All Regression, Polish, Spaceship, Black Hole, Wormhole, Warp, N-Body, Native Audio, LOD, Save State, Instanced Asteroid Pipeline, and Analytical Shadow tests completed successfully!" << std::endl;
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
@@ -1547,7 +2337,14 @@ void Engine::runQACaptureSequence(int qaCount) {
 void Engine::onKey(int key, int scancode, int action, int mods) {
     if (inputMgr) inputMgr->onKey(key, scancode, action, mods);
     if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
-    if (ImGui::GetIO().WantCaptureKeyboard) return;
+    if (!runQACapture && key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        shell.escape();
+        solarUI.showSettingsModal = shell.page == SessionShell::Page::Settings;
+        isLeftMouseDown = isRightMouseDown = false;
+        updateCursorCapture();
+        return;
+    }
+    if (!shell.playing() || ImGui::GetIO().WantCaptureKeyboard) return;
 
     if (postPipeline.startupActive && action == GLFW_PRESS) {
         postPipeline.skipStartup();
@@ -1555,7 +2352,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
     }
 
     if (action == GLFW_PRESS) {
-        if (key == GLFW_KEY_SPACE) {
+        if (key == GLFW_KEY_SPACE && !spaceship.active && cameraCtrl.mode != CAM_FREE) {
             solarUI.isPaused = !solarUI.isPaused;
             return;
         } else if (key == GLFW_KEY_O) {
@@ -1566,12 +2363,6 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
             return;
         } else if (key == GLFW_KEY_P) {
             cameraCtrl.togglePhotoMode();
-            return;
-        } else if (key == GLFW_KEY_M) {
-            solarUI.showMissionModal = !solarUI.showMissionModal;
-            return;
-        } else if (key == GLFW_KEY_N) {
-            missionSystem.selectNextMission();
             return;
         } else if (key == GLFW_KEY_F5) {
             solarUI.requestStateSave = true;
@@ -1592,8 +2383,6 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                     spaceship.flightMode = FLIGHT_MANUAL;
                 } else if (spaceship.flightMode == FLIGHT_ORBIT_ASSIST || spaceship.flightMode == FLIGHT_AUTOPILOT) {
                     spaceship.flightMode = FLIGHT_MANUAL;
-                } else if (solarUI.showMissionModal) {
-                    solarUI.showMissionModal = false;
                 } else {
                     spaceship.toggleActive();
                     cameraCtrl.setSpaceshipMode(false, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -1604,7 +2393,10 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
             } else if (key == GLFW_KEY_J) {
                 spaceship.toggleAutopilot();
             } else if (key == GLFW_KEY_H) {
-                spaceship.toggleOrbitAssist();
+                if (mods & GLFW_MOD_SHIFT) startScanSession(observationTarget(), ScienceActivity::GravityMeasurement);
+                else spaceship.toggleOrbitAssist();
+            } else if (key == GLFW_KEY_G) {
+                startScanSession(observationTarget(), ScienceActivity::AtmosphericScan);
             } else if (key == GLFW_KEY_0) {
                 selectBody("Sun");
                 spaceship.setTargetPlanet("Sun", sunWorldPosition, 2.0f);
@@ -1671,8 +2463,19 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                 }
                 updateCursorCapture();
             } else if (key == GLFW_KEY_Y) {
-                // PSM.1: the single EXPLORER <-> SYSTEM entry action (M stays Missions).
+                // PSM.1: the single EXPLORER <-> SYSTEM entry action.
                 toggleSystemView();
+            } else if (key == GLFW_KEY_G) {
+                // Cycle 4 Pass 2: atmospheric scan on the selection (or the
+                // ship target when nothing is selected). Inapplicable bodies
+                // get the N/A toast, never a fake scan.
+                const std::string target = observationTarget();
+                startScanSession(target, ScienceActivity::AtmosphericScan);
+            } else if (key == GLFW_KEY_H) {
+                // Cycle 4 Pass 2: Detailed gravity measurement on the
+                // selection (ship branch keeps H for orbit-assist toggle).
+                const std::string target = observationTarget();
+                startScanSession(target, ScienceActivity::GravityMeasurement);
             } else if (key == GLFW_KEY_V) {
                 // PSM.2: toggle BODY for the selected eligible body. Routes
                 // through the intent drain so V shares the authoritative path.
@@ -1686,11 +2489,11 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                     if (resolveBodyFocusTarget(presenter.selectedBodyName(), vIdx, vPos, vRadius)) {
                         presenter.requestEnterBody(presenter.selectedBodyName());
                     } else {
-                        missionSystem.showToast("BODY MODE UNAVAILABLE",
+                        solarUI.showToast("BODY MODE UNAVAILABLE",
                                               presenter.selectedBodyName() + " has no Body Mode view");
                     }
                 } else {
-                    missionSystem.showToast("BODY MODE UNAVAILABLE", "Select a planet or moon first");
+                    solarUI.showToast("BODY MODE UNAVAILABLE", "Select a planet or moon first");
                 }
             } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
                 // PSM.1: semantic EnterBody intent only (PSM.2 consumer).
@@ -1723,9 +2526,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
                     }
                 }
             } else if (key == GLFW_KEY_ESCAPE) {
-                if (solarUI.showMissionModal) {
-                    solarUI.showMissionModal = false;
-                } else if (cameraCtrl.photoModeActive) {
+                if (cameraCtrl.photoModeActive) {
                     cameraCtrl.setPhotoMode(false);
                 } else if (cameraCtrl.tourActive) {
                     cameraCtrl.stopTour();
@@ -1755,6 +2556,7 @@ void Engine::onKey(int key, int scancode, int action, int mods) {
 }
 
 void Engine::onMouseButton(int button, int action, int mods) {
+    if (!shell.playing()) return;
     if (inputMgr) inputMgr->onMouseButton(button, action, mods);
     if (ImGui::GetIO().WantCaptureMouse) {
         // ImGui-captured clicks never feed the scene double-click recognizer.
@@ -1838,6 +2640,7 @@ void Engine::onMouseButton(int button, int action, int mods) {
 }
 
 void Engine::onCursorPos(double xpos, double ypos) {
+    if (!shell.playing()) return;
     if (inputMgr) inputMgr->onCursorPos(xpos, ypos);
     if (isFirstMouseMove) {
         lastMouseX = xpos;
@@ -1861,6 +2664,7 @@ void Engine::onCursorPos(double xpos, double ypos) {
 }
 
 void Engine::onScroll(double xoffset, double yoffset) {
+    if (!shell.playing()) return;
     if (inputMgr) inputMgr->onScroll(xoffset, yoffset);
     if (ImGui::GetIO().WantCaptureMouse) return;
     cameraCtrl.processScroll((float)yoffset);
@@ -1870,6 +2674,7 @@ void Engine::onFramebufferSize(int width, int height) {
     if (width <= 0 || height <= 0) return;
     windowWidth = width;
     windowHeight = height;
+    if (!graphicsLoaderReady) return;
     glViewport(0, 0, width, height);
     postPipeline.resize(width, height);
 }
@@ -1902,13 +2707,32 @@ void Engine::framebufferSizeCallback(GLFWwindow* window, int width, int height) 
 int Engine::run(int argc, char** argv) {
     bool hasBenchmark = benchmarkRunner.initFromArgs(argc, argv);
     for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--release-qa") == 0) releaseQA = true;
+        if (strcmp(argv[i], "--player-qa") == 0) { releaseQA = true; playerQA = true; }
+        if (strcmp(argv[i], "--tool-session") == 0 || strcmp(argv[i], "--no-persist") == 0) toolSession = true;
         if (strcmp(argv[i], "--qa-capture") == 0 || strcmp(argv[i], "--qa") == 0 || strcmp(argv[i], "-qa") == 0) {
             runQACapture = true;
         }
     }
 
+    toolSession = toolSession || hasBenchmark || runQACapture || (releaseQA && !playerQA);
     if (!init(1920, 1080, "Solar Odyssey")) {
         return -1;
+    }
+
+    if (!toolSession && !std::filesystem::exists(std::filesystem::u8path(RuntimePaths::save()))) {
+        SimulationSaveState legacy;
+        const auto previousSave = (RuntimePaths::assets() / "save_state.json").u8string();
+        if (SaveStateManager::instance().loadFromFile(previousSave, legacy))
+            SaveStateManager::instance().saveToFile(RuntimePaths::save(), legacy);
+    }
+    if (toolSession) shell.start();
+    else {
+        refreshContinue();
+        enterBodyView("Saturn");
+        cameraCtrl.mode = CAM_FOCUS;
+        cameraCtrl.update(10.0f, simCtrl.getBodyPosition("Saturn"), 1.2f);
+        postPipeline.skipStartup();
     }
 
     if (hasBenchmark) {
@@ -1919,7 +2743,8 @@ int Engine::run(int argc, char** argv) {
 
     while (!glfwWindowShouldClose(window)) {
         double now = glfwGetTime();
-        float deltaTime = (hasBenchmark && benchmarkRunner.isGoldenCaptureActive()) ? (1.0f / 60.0f) : ((lastFrameTime > 0.0) ? (float)(now - lastFrameTime) : 0.016f);
+        const float realDeltaTime = (float)(now - lastFrameTime);
+        float deltaTime = (releaseQA || runQACapture || (hasBenchmark && benchmarkRunner.isGoldenCaptureActive())) ? (1.0f / 60.0f) : ((lastFrameTime > 0.0) ? realDeltaTime : 0.016f);
         deltaTime = std::min(deltaTime, 0.05f);
         lastFrameTime = now;
 
@@ -1927,24 +2752,244 @@ int Engine::run(int argc, char** argv) {
             benchmarkRunner.onFrameBegin();
         }
 
+        solarUI.updateNotifications(realDeltaTime);
         processInput(deltaTime);
         updateSimulation(deltaTime);
         updatePresentation();
         renderFrame(deltaTime);
 
-        if (hasBenchmark) {
-            int drawCalls = RenderProfiler::instance().getDrawCallCount();
-            int triangles = lod::LODManager::instance().getRenderedTrianglesThisFrame();
+        if (hasBenchmark) benchmarkRunner.onRenderEnd(); // End GPU query before presentation.
+        const int drawCalls = hasBenchmark ? RenderProfiler::instance().getDrawCallCount() : 0;
+        const int triangles = hasBenchmark ? lod::LODManager::instance().getRenderedTrianglesThisFrame() : 0;
+        // Golden readback still needs GL_BACK before swapping. It collects no FPS.
+        if (hasBenchmark && benchmarkRunner.isGoldenCaptureActive()) {
             benchmarkRunner.onFrameEnd(drawCalls, triangles, 0.0, this);
-            if (benchmarkRunner.shouldExit()) {
-                break;
-            }
+            if (benchmarkRunner.shouldExit()) break;
         }
-
         glfwSwapBuffers(window);
         glfwPollEvents();
+        if (hasBenchmark && !benchmarkRunner.isGoldenCaptureActive()) {
+            benchmarkRunner.onFrameEnd(drawCalls, triangles, 0.0, this);
+            if (benchmarkRunner.shouldExit()) break;
+        }
     }
 
     cleanup();
-    return 0;
+    return releaseQAFailed ? 2 : 0;
+}
+
+void Engine::refreshContinue() {
+    SimulationSaveState candidate;
+    validContinue = SaveStateManager::instance().loadFromFile(savePath(), candidate);
+    continueSummary = validContinue ? SaveStateManager::instance().getSaveSummary(savePath()) : "No compatible saved exploration";
+}
+
+void Engine::startFreshSession() {
+    simCtrl = SimulationController{};
+    simCtrl.init();
+    simCtrl.setOrbitSpeedScale(solarUI.orbitSpeedScale);
+    solarUI.physicsMode = PHYSICS_KEPLERIAN;
+    solarUI.pendingPhysicsModeChange = false;
+    solarUI.isPaused = false;
+    simCtrl.setTimeMultiplier(solarUI.timeMultiplier);
+    simTime = cloudRotationAngle = 0;
+    sunWorldPosition = simCtrl.getBodyPosition("Sun");
+    for (auto& p : planets) p.currentPosition = simCtrl.getBodyPosition(p.name);
+    for (auto& m : moons) m.currentPosition = simCtrl.getBodyPosition(m.name);
+    SimulationSaveState fresh;
+    spaceship.restoreSession(fresh);
+    cameraCtrl = CameraController{};
+    applyLoadedSettings();
+    cameraCtrl.resetInstant();
+    progression.resetFresh();
+    resetLoadedSessionTransients();
+    presenter.forceExplorer();
+    selectBody("");
+    solarUI.showPlanetCard = solarUI.showCodex = false;
+    pendingSelectionAdopt.reset();
+    shell.start();
+    autoSaveEligible = true;
+    postPipeline.skipStartup();
+    updateCursorCapture();
+}
+
+void Engine::renderSessionShell() {
+    if (shell.playing()) return;
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    auto* backdrop = ImGui::GetBackgroundDrawList();
+    backdrop->AddRectFilled(ImVec2(0,0), display, IM_COL32(3, 8, 16, 175));
+    if (shell.page == SessionShell::Page::Settings) {
+        solarUI.showSettingsModal = true;
+        solarUI.renderSettingsPanel(postPipeline, asteroidBelt, atmosphereEffects, cameraCtrl);
+        if (!solarUI.showSettingsModal) {
+            shell.escape();
+            captureCurrentSettings();
+            if (canPersistPlayerState()) saveSettings(RuntimePaths::settings(), appSettings);
+        }
+        return;
+    }
+    const bool main = shell.page == SessionShell::Page::MainMenu;
+    const float panelWidth = std::min(420.0f, display.x - 48.0f);
+    ImGui::SetNextWindowPos(ImVec2(display.x * 0.10f, display.y * 0.22f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(panelWidth, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::Begin("##ApplicationShell", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+    if (renderer.brandMarkTexture) ImGui::Image((ImTextureID)(intptr_t)renderer.brandMarkTexture, ImVec2(64,64));
+    ImGui::TextColored(ImVec4(.52f,.76f,.86f,1), "S C I E N T I F I C   E X P L O R A T I O N");
+    ImGui::Spacing();
+    if (titleFont) ImGui::PushFont(titleFont);
+    ImGui::TextUnformatted(main ? "SOLAR" : "EXPLORATION");
+    ImGui::TextUnformatted(main ? "ODYSSEY" : "PAUSED");
+    if (titleFont) ImGui::PopFont();
+    ImGui::Spacing(); ImGui::Spacing();
+    ImGui::TextDisabled(main ? "A solar system. Your curiosity." : "Your journey is held here.");
+    ImGui::Spacing(); ImGui::Spacing();
+    const ImVec2 button(panelWidth - 28, 42);
+    if (main) {
+        ImGui::BeginDisabled(!validContinue);
+        if (ImGui::Button("CONTINUE", button)) solarUI.requestStateLoad = true;
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("%s", continueSummary.c_str());
+        ImGui::Spacing();
+        if (ImGui::Button("START EXPLORATION", button)) {
+            if (validContinue || shell.sessionStarted) { confirmFresh = true; ImGui::OpenPopup("Begin a fresh exploration?"); }
+            else startFreshSession();
+        }
+    } else {
+        if (ImGui::Button("RESUME", button)) { shell.escape(); updateCursorCapture(); }
+        if (ImGui::Button("SAVE EXPLORATION", button)) solarUI.requestStateSave = true;
+        ImGui::BeginDisabled(!validContinue);
+        if (ImGui::Button("LOAD EXPLORATION", button)) solarUI.requestStateLoad = true;
+        ImGui::EndDisabled();
+    }
+    if (ImGui::Button("SETTINGS", button)) shell.settings();
+    if (!main && ImGui::Button("MAIN MENU", button)) {
+        if (solarUI.autoSaveOnExit && autoSaveEligible) { solarUI.requestStateSave = true; processSessionRequests(); }
+        shell.mainMenu(); refreshContinue();
+    }
+    if (ImGui::Button("EXIT TO DESKTOP", button)) glfwSetWindowShouldClose(window, GLFW_TRUE);
+    if (confirmFresh && ImGui::BeginPopupModal("Begin a fresh exploration?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Starting fresh replaces your current exploration on the next save.");
+        ImGui::TextUnformatted("Your screenshots and settings are kept.");
+        if (ImGui::Button("Keep exploring", ImVec2(180, 36))) { confirmFresh = false; ImGui::CloseCurrentPopup(); }
+        ImGui::SameLine();
+        if (ImGui::Button("Start fresh", ImVec2(160, 36))) { confirmFresh = false; ImGui::CloseCurrentPopup(); startFreshSession(); }
+        ImGui::EndPopup();
+    }
+    ImGui::Spacing(); ImGui::Spacing();
+    ImGui::TextDisabled("31 worlds  /  observation tools  /  no prescribed path");
+    ImGui::End();
+    auto* footer = ImGui::GetForegroundDrawList();
+    footer->AddText(ImVec2(display.x * .10f, display.y - 44), IM_COL32(135,156,177,255), "SOLAR ODYSSEY 1.0.0     |     ESC to navigate     |     Stylized scales, sourced science");
+}
+
+std::string Engine::savePath() const {
+    return releaseQA && !playerQA ? (RuntimePaths::userData() / "qa_session.json").u8string() : RuntimePaths::save();
+}
+
+bool Engine::captureReleaseFrame(const std::string& name, bool withUI) {
+    const auto directory = RuntimePaths::assets() / "Screenshots" / "Release";
+    std::filesystem::create_directories(directory);
+    const auto path = directory / (name + ".bmp");
+    if (!withUI) return postPipeline.captureScreenshot(path.u8string().c_str());
+    std::vector<unsigned char> pixels(static_cast<size_t>(windowWidth) * windowHeight * 3);
+    GLint alignment; glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0); glReadBuffer(GL_BACK);
+    glReadPixels(0, 0, windowWidth, windowHeight, GL_BGR, GL_UNSIGNED_BYTE, pixels.data());
+    glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+    if (glGetError() != GL_NO_ERROR) return false;
+    std::ofstream file(path, std::ios::binary);
+    const bool wrote = file && writeScreenshotBMP(file, windowWidth, windowHeight, pixels);
+    file.close();
+    return wrote && !file.fail();
+}
+
+void Engine::runReleaseQASequence(int frame) {
+    auto check = [&](bool condition, const char* label) {
+        std::cout << "[Release QA] " << label << ": " << (condition ? "PASS" : "FAIL") << std::endl;
+        if (!condition) releaseQAFailed = true;
+    };
+    auto capture = [&](const char* name, bool ui = false) { check(captureReleaseFrame(name, ui), name); };
+    if (frame == 1) {
+        postPipeline.skipStartup();
+        shell.mainMenu(); refreshContinue();
+        enterBodyView("Saturn");
+        cameraCtrl.mode = CAM_FOCUS;
+        cameraCtrl.focusAngleX = -45;
+        cameraCtrl.focusDistance = 5.5f;
+        cameraCtrl.currentEye = cameraCtrl.calculateOrbitalEye(cameraCtrl.focusDistance, -45, 65, simCtrl.getBodyPosition("Saturn"));
+        cameraCtrl.currentTarget = simCtrl.getBodyPosition("Saturn");
+        check((playerQA ? canPersistPlayerState() : !canPersistPlayerState()) && !canObserve(), "Persistence eligibility matches explicit session kind");
+        if (playerQA && std::filesystem::exists(std::filesystem::u8path(RuntimePaths::settings()))) {
+            check(std::abs(appSettings.masterVolume - .37f) < .001f && std::abs(appSettings.fieldOfView - 63) < .001f &&
+                  std::abs(cameraCtrl.fieldOfView - 63) < .001f && std::abs(cameraCtrl.targetFieldOfView - 63) < .001f,
+                  "Restart restores volume and both FOV targets");
+        }
+    } else if (frame == 30) capture("main-menu", true);
+    else if (frame == 35) { startFreshSession(); check(progression.allRecords().empty(), "Fresh session has no synthetic discoveries"); }
+    else if (frame == 40) enterBodyView("Earth");
+    else if (frame == 160) { capture("earth"); capture("earth-dossier", true); }
+    else if (frame == 170) {
+        shell.pause(); qaPausedTime = simCtrl.getSimTime(); qaPausedShip = spaceship.position;
+        scanner.startScan("Earth", ScannerMode::Scientific, 10, 5);
+        scanActivityActive = true;
+    } else if (frame == 200) {
+        check(simCtrl.getSimTime() == qaPausedTime && spaceship.position == qaPausedShip && scanner.progress == 0, "Pause freezes time, ship and scanner");
+        capture("pause-menu", true);
+    } else if (frame == 205) shell.settings();
+    else if (frame == 235) capture("settings", true);
+    else if (frame == 240) {
+        onKey(GLFW_KEY_ESCAPE,0,GLFW_PRESS,0); check(shell.page == SessionShell::Page::Pause, "Settings Esc returns to pause");
+        onKey(GLFW_KEY_ESCAPE,0,GLFW_PRESS,0); check(shell.playing(), "Pause Esc resumes");
+    } else if (frame == 250) {
+        SimulationSaveState saved;
+        SaveStateManager::instance().captureState(saved, simCtrl, cameraCtrl, spaceship, true, static_cast<int>(presenter.state()), presenter.selectedBodyName());
+        SaveStateManager::instance().captureProgression(saved, progression);
+        check(SaveStateManager::instance().saveToFile(savePath(), saved), "QA-only continuation write");
+        qaPausedTime = simCtrl.getSimTime();
+        refreshContinue(); check(validContinue, "Continue requires validated save");
+        shell.mainMenu(); solarUI.requestStateLoad = true;
+    } else if (frame == 251) {
+        check(shell.playing() && simCtrl.getSimTime() >= qaPausedTime && simCtrl.getSimTime() < qaPausedTime + .1, "Continue adopts authoritative time");
+        check(scanner.state == ScannerState::Idle && !scanActivityActive, "Continue resets scanner");
+    } else if (frame == 260) postPipeline.enabled = false;
+    else if (frame == 300) { capture("earth-effects-off"); check(postPipeline.cleanOutputReady, "Effects-off current output"); postPipeline.enabled = true; }
+    else if (frame == 310) { solarUI.showPlanetCard = false; enterBodyView("Saturn"); }
+    else if (frame == 450) capture("saturn");
+    else if (frame == 460) { exitBodyView(); solarUI.showPlanetCard = false; }
+    else if (frame == 600) capture("system", true);
+    else if (frame == 610) { focusPlanetByName("Black Hole"); solarUI.showPlanetCard = false; }
+    else if (frame == 750) capture("black-hole");
+    else if (frame == 760) { focusPlanetByName("Wormhole"); solarUI.showPlanetCard = false; }
+    else if (frame == 900) capture("wormhole");
+    else if (frame == 910) { focusPlanetByName("Earth"); solarUI.showPlanetCard = false; }
+    else if (frame == 1040) {
+        solarUI.isPaused = true;
+        solarUI.showOrbits = false;
+        presenter.forceExplorer();
+        SimulationSaveState shipFrame;
+        shipFrame.shipActive = true;
+        shipFrame.shipPosition = simCtrl.getBodyPositionDouble("Earth") + glm::dvec3(0,1.7,3.5);
+        shipFrame.shipOrientation = glm::dquat(glm::quatLookAt(glm::normalize(glm::vec3(0,-1.7f,-3.5f)), glm::vec3(0,1,0)));
+        shipFrame.shipTargetBody = "Earth";
+        spaceship.restoreSession(shipFrame);
+        cameraCtrl.mode = CAM_SPACESHIP;
+    } else if (frame == 1110) capture("spacecraft", true);
+    else if (frame == 1120) {
+        spaceship.active = false; enterBodyView("Earth");
+        // Fixture records belong only to the explicitly isolated QA profile.
+        progression.markDetected("Earth"); progression.recordActivity("Earth", ScienceActivity::GravityMeasurement);
+        solarUI.showCodex = true;
+    } else if (frame == 1240) capture("codex", true);
+    else if (frame == 1250) { solarUI.showCodex = solarUI.showPlanetCard = false; cameraCtrl.setPhotoMode(true); }
+    else if (frame == 1280) capture("photography", true);
+    else if (frame == 1285 && playerQA) {
+        solarUI.masterVolume = .37f;
+        cameraCtrl.fieldOfView = cameraCtrl.targetFieldOfView = 63;
+    }
+    else if (frame == 1290) {
+        check(glGetError() == GL_NO_ERROR, "No GL error at end of release smoke");
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
 }

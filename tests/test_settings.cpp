@@ -1,3 +1,5 @@
+#include "session_shell.h"
+#include "label_layout.h"
 #include "catch.hpp"
 #include "settings_persistence.h"
 #include <cstdio>
@@ -66,8 +68,7 @@ TEST_CASE("C3.8 Quality Preset INI Persistence and Deterministic Fallback", "[se
     REQUIRE(weird.qualityPreset == 2); // stoi failure -> High default
 }
 
-TEST_CASE("Fullscreen Settings and State Synchronization", "[settings]") {
-    // 1. Verify INI persistence for both states
+TEST_CASE("Fullscreen Settings and State Synchronization", "[settings]") {    // 1. Verify INI persistence for both states
     AppSettings settings;
     settings.fullscreen = false;
     std::string iniFalse = settings.serialize();
@@ -118,4 +119,85 @@ TEST_CASE("Fullscreen Settings and State Synchronization", "[settings]") {
     toggleAction();
     REQUIRE(engineIsFullscreen == false);
     REQUIRE(uiIsFullscreen == false);
+}
+
+TEST_CASE("Pass 4 Centralized Defaults and Reset", "[settings]") {
+    // ONE authoritative definition: defaults() derives from the member
+    // initializers (same source, no parallel table). Fresh installs and
+    // Reset All Settings both use it; resetToDefaults restores every field.
+    const AppSettings fresh = AppSettings::defaults();
+    REQUIRE(fresh.masterVolume == Approx(0.8f));
+    REQUIRE(fresh.musicVolume == Approx(0.6f));
+    REQUIRE(fresh.sfxVolume == Approx(0.7f));
+    REQUIRE(fresh.audioMuted == false);
+    REQUIRE(fresh.showOrbits == true);
+    REQUIRE(fresh.showLabels == true);
+    REQUIRE(fresh.showAsteroids == true);
+    REQUIRE(fresh.showAtmospheres == true);
+    REQUIRE(fresh.showDwarfPlanets == true);
+    REQUIRE(fresh.enableAxialTilt == true);
+    REQUIRE(fresh.bloomEnabled == true);
+    REQUIRE(fresh.sunIntensity == Approx(1.0f));
+    REQUIRE(fresh.timeScale == Approx(1.0f));
+    REQUIRE(fresh.planetScale == Approx(1.0f));
+    REQUIRE(fresh.orbitSpeedScale == Approx(1.0f));
+    REQUIRE(fresh.spinSpeedScale == Approx(1.0f));
+    REQUIRE(fresh.atmosphereGlowScale == Approx(1.0f));
+    REQUIRE(fresh.ringOpacity == Approx(0.90f));
+    REQUIRE(fresh.fieldOfView == Approx(60.0f));
+    REQUIRE(fresh.vsyncEnabled == true); // VSync default ON
+    REQUIRE(fresh.fullscreen == false);
+    REQUIRE(fresh.qualityPreset == 2); // High reference tier
+
+    // A default-constructed struct IS the defaults (same definition).
+    const AppSettings plain;
+    REQUIRE(plain.serialize() == fresh.serialize());
+
+    // resetToDefaults restores all of the above after arbitrary mutation.
+    AppSettings mutated;
+    mutated.masterVolume = 0.1f;
+    mutated.audioMuted = true;
+    mutated.showOrbits = false;
+    mutated.planetScale = 3.5f;
+    mutated.vsyncEnabled = false;
+    mutated.fullscreen = true;
+    mutated.qualityPreset = 0;
+    mutated.fieldOfView = 100.0f;
+    mutated.resetToDefaults();
+    REQUIRE(mutated.serialize() == fresh.serialize());
+}
+
+TEST_CASE("Non-finite and malformed settings retain valid defaults", "[settings][release]") {
+    AppSettings settings;
+    const auto defaults = settings;
+    settings.apply({{"fieldOfView", "nan"}, {"musicVolume", "inf"},
+        {"ringOpacity", "0.4junk"}, {"vsyncEnabled", "unknown"}, {"qualityPreset", "1junk"}});
+    REQUIRE(settings.fieldOfView == defaults.fieldOfView);
+    REQUIRE(settings.musicVolume == defaults.musicVolume);
+    REQUIRE(settings.ringOpacity == defaults.ringOpacity);
+    REQUIRE(settings.vsyncEnabled == defaults.vsyncEnabled);
+    REQUIRE(settings.qualityPreset == defaults.qualityPreset);
+}
+
+TEST_CASE("Shell freezes gameplay and returns from nested settings deterministically", "[settings][release]") {
+    SessionShell shell;
+    REQUIRE_FALSE(shell.playing());
+    REQUIRE_FALSE(shell.sessionStarted);
+    shell.settings(); shell.escape();
+    REQUIRE(shell.page == SessionShell::Page::MainMenu);
+    shell.start(); shell.escape();
+    REQUIRE_FALSE(shell.playing());
+    REQUIRE(shell.sessionStarted);
+    shell.settings(); shell.escape();
+    REQUIRE(shell.page == SessionShell::Page::Pause);
+    shell.escape(); REQUIRE(shell.playing());
+    shell.mainMenu(); REQUIRE_FALSE(shell.playing());
+}
+TEST_CASE("Labels avoid controls, other labels and viewport edges", "[settings][release]") {
+    std::vector<LabelLayout::Rect> occupied{{0,0,800,80}};
+    auto first = LabelLayout::place(400,200,90,30,800,600,occupied);
+    REQUIRE(first.has_value()); occupied.push_back(*first);
+    auto second = LabelLayout::place(400,200,90,30,800,600,occupied);
+    REQUIRE(second.has_value()); REQUIRE_FALSE(first->intersects(*second));
+    REQUIRE_FALSE(LabelLayout::place(-200,20,90,30,800,600,occupied).has_value());
 }

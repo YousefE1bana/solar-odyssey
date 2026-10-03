@@ -140,8 +140,12 @@ void NBodySimulation::stepVerlet(double dt) {
     }
 }
 
-void NBodySimulation::update(double deltaTime, double timeMultiplier) {
-    if (mode != PHYSICS_NBODY || deltaTime <= 0.0) return;
+double NBodySimulation::update(double deltaTime, double timeMultiplier) {
+    if (mode != PHYSICS_NBODY || !std::isfinite(deltaTime) || deltaTime <= 0.0 ||
+        !std::isfinite(timeMultiplier) || timeMultiplier <= 0.0 ||
+        !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0 ||
+        !std::isfinite(maxAccumulatorCap) || maxAccumulatorCap < fixedDeltaTime ||
+        maxAccumulatorCap / fixedDeltaTime > 4096.0) return 0.0;
 
     double simDt = deltaTime * timeMultiplier;
     timeAccumulator += simDt;
@@ -151,10 +155,13 @@ void NBodySimulation::update(double deltaTime, double timeMultiplier) {
         timeAccumulator = maxAccumulatorCap;
     }
 
+    int steps = 0;
     while (timeAccumulator >= fixedDeltaTime) {
         stepVerlet(fixedDeltaTime);
         timeAccumulator -= fixedDeltaTime;
+        ++steps;
     }
+    return steps * fixedDeltaTime;
 }
 
 void NBodySimulation::initializeFromKeplerian(
@@ -186,4 +193,45 @@ void NBodySimulation::initializeFromKeplerian(
 void NBodySimulation::setPhysicsMode(PhysicsMode newMode) {
     mode = newMode;
     timeAccumulator = 0.0;
+}
+
+void NBodySimulation::circularizeOrbitalVelocities() {
+    const glm::dvec3 up(0.0, 1.0, 0.0);
+    const NBodyObject* sun = getBody("Sun");
+    const glm::dvec3 sunPos = sun ? sun->position : glm::dvec3(0.0);
+    const glm::dvec3 sunVel(0.0);
+    const double sunMass = sun ? sun->mass : 1.0;
+
+    auto circularize = [&](NBodyObject& body, const glm::dvec3& parentPos,
+                           const glm::dvec3& parentVel, double parentMass) {
+        glm::dvec3 r = body.position - parentPos;
+        double dist = glm::length(r);
+        if (dist < 1e-6 || !std::isfinite(dist)) return; // keep seeded velocity
+        glm::dvec3 tangent = glm::cross(up, r);
+        double tlen = glm::length(tangent);
+        if (tlen < 1e-9 || !std::isfinite(tlen)) return;
+        tangent /= tlen;
+        double speed = std::sqrt(gravitationalConstant * (parentMass + body.mass) / dist);
+        if (!std::isfinite(speed)) return;
+        body.velocity = parentVel + tangent * speed;
+    };
+
+    // Pass 1: Sun-parented bodies (planets, dwarfs — empty parentBody).
+    for (auto& body : bodies) {
+        if (body.isStatic || !body.parentBody.empty()) continue;
+        circularize(body, sunPos, sunVel, sunMass);
+    }
+    // Pass 2: moons (named parent; parent velocity already stabilized).
+    for (auto& body : bodies) {
+        if (body.isStatic || body.parentBody.empty()) continue;
+        const NBodyObject* parent = getBody(body.parentBody);
+        if (parent != nullptr) {
+            circularize(body, parent->position, parent->velocity, parent->mass);
+        } else {
+            circularize(body, sunPos, sunVel, sunMass); // unknown parent: Sun fallback
+        }
+    }
+
+    timeAccumulator = 0.0;
+    computeAllAccelerations();
 }

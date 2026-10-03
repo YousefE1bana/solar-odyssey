@@ -6,11 +6,12 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <deque>
 #include "planet_data.h"
+#include "science_progression.h"
 #include "camera_controller.h"
 #include "post_processing.h"
 #include "spaceship.h"
-#include "mission_system.h"
 #include "picking.h"
 #include "asteroid_belt.h"
 #include "atmosphere_effects.h"
@@ -35,7 +36,6 @@ public:
     bool showDiagnostics = false;
     bool showSettingsModal = false;
     bool showPlanetCard = false;
-    bool showMissionModal = false;
     bool isFullscreen = false;
     bool pendingFullscreenToggle = false;
 
@@ -71,11 +71,32 @@ public:
     std::string saveStatusToast = "";
     float saveStatusToastTimer = 0.0f;
 
+    // Cycle 4 Pass 1: Discovery Codex (functional version; Cycle 6 owns the
+    // visual redesign). Transient view state only — all facts live in
+    // CelestialDatabase + ScienceProgression.
+    bool showCodex = false;
+    char codexSearch[64] = "";
+    int codexStatusFilter = 0; // 0 All + 1..5 DiscoveryStatus+1
+
     // Graphics Preset
     GraphicsQuality qualityPreset = QUALITY_HIGH;
     // C3.8: Engine wires this to Engine::applyQualityTier so the Settings UI
     // drives the authoritative QualityTierSettings fan-out (no parallel system).
     std::function<void(GraphicsQuality)> onQualityChanged;
+
+    // Pass 4: VSync display-refresh cap. Mirror of AppSettings::vsyncEnabled
+    // (single source of truth stays in AppSettings; Engine syncs both ways
+    // at load/reset boundaries). Default ON == first-launch behavior.
+    bool vsyncEnabled = true;
+    // Wired by Engine::init to Engine::setVSyncEnabled (applies immediately
+    // via glfwSwapInterval + persists). Same seam pattern as onQualityChanged.
+    std::function<void(bool)> onVSyncChanged;
+
+    // Pass 4: Reset All Settings confirmation dialog state (transient, never
+    // persisted) + seam (wired by Engine::init to
+    // Engine::resetAllSettingsToDefaults).
+    bool showResetConfirmDialog = false;
+    std::function<void()> onResetAllSettings;
 
     // Audio controls
     float masterVolume = 0.8f;
@@ -93,6 +114,13 @@ public:
     // PSM.1: selection/mode action seams (wired by Engine::init).
     std::function<void(const std::string&)> onSelectBody;
     std::function<void()> onToggleSystemView;
+    std::function<void()> onOpenMenu;
+    std::function<void(const std::string&)> onFocusBody;
+    std::function<void()> onOpenPhotos;
+    char finderSearch[64] = "";
+    int starfieldStyle = 0; // Classic by default; catalog imagery is opt-in.
+    int starfieldDataset = 0;
+    std::function<void()> onPhotoCapture;
     // PSM.2: dossier "Enter Body Mode" seam (wired by Engine::init to the
     // EnterBody intent drain — the same authoritative path as Enter/V).
     std::function<void(const std::string&)> onEnterBodyMode;
@@ -102,6 +130,10 @@ public:
     // PSM.4: dossier Layers-tab seam (wired by Engine::init to the single
     // authoritative layer-selection path: PresentationController::requestLayer).
     std::function<void(BodyLayerId)> onSelectLayer;
+    // Cycle 4 Pass 2: dossier science-scan seams (wired by Engine::init to
+    // Engine::startScanSession for AtmosphericScan / GravityMeasurement).
+    std::function<void(const std::string&)> onStartAtmosphericScan;
+    std::function<void(const std::string&)> onStartGravityScan;
     // PSM.7: relationship query seams (wired by Engine::init to the runtime
     // roster queries). Read-only navigation aids; selection/camera still flow
     // through onEnterBodyMode into the authoritative BODY funnel.
@@ -159,15 +191,24 @@ public:
     void renderSpaceshipHUD(float screenWidth, float screenHeight, Spaceship& ship,
                             CameraController& cam, const CelestialDatabase& db);
 
-    void renderMissionHUDTracker(float screenWidth, float screenHeight, MissionSystem& missions,
-                                 Spaceship& ship, CameraController& cam);
+    // Feedback only; Engine advances notification time independently of rendering.
+    void showToast(const std::string& title, const std::string& message, float duration = 4.0f);
+    void updateNotifications(float deltaTime);
+    void renderNotificationToast(bool flightHUD = false);
 
-    void renderMissionToast(float screenWidth, float screenHeight, MissionSystem& missions);
-
-    void renderMissionModal(float screenWidth, float screenHeight, MissionSystem& missions,
-                            Spaceship& ship, CameraController& cam);
+    // Scientific Discovery Codex.
+    // roster: runtime body names (Engine-owned, built from live vectors —
+    // never a second hardcoded list). Unknown entries hide their identity;
+    // higher tiers progressively disclose database science.
+    void renderCodex(float screenWidth, float screenHeight, const CelestialDatabase& db,
+                     const ScienceProgression& prog, const std::vector<std::string>& roster);
 
     void renderSaveStatusToast(float screenWidth, float screenHeight);
+
+private:
+    struct Toast { std::string title, message; float remaining; };
+    std::deque<Toast> toasts;
+
 };
 
 // PSM.3 Sun presentation guard. Local data proves CelestialBodyData::knownMoons

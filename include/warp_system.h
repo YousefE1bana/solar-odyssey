@@ -56,6 +56,7 @@ public:
     ImmediateBatch streakBatch;
 
     WarpSystem();
+    void cleanupGL() { streakBatch.destroy(); }
 
     void initStreaks();
     void engageWarp(const glm::vec3& destPos, const std::string& name, float radius);

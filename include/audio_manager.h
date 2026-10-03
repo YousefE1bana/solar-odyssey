@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <set>
 #include <memory>
 
 struct BackgroundMusic {
@@ -42,7 +43,8 @@ public:
 
     void playWarpCharge(bool muted, float masterVolume, float sfxVolume);
     void playWarpExit(bool muted, float masterVolume, float sfxVolume);
-    void playMissionComplete(bool muted, float masterVolume, float sfxVolume);
+    void stopWarpSounds(); // Load/session reset: no old charge/exit cue.
+    void playDiscoveryChime(bool muted, float masterVolume, float sfxVolume);
 
     void updateSpatialAudio(const glm::vec3& cameraEye, const glm::vec3& bhPos, const glm::vec3& whPos, bool muted, float masterVolume, float sfxVolume);
     void updatePOVVolume(bool muted, float masterVolume, float sfxVolume);
@@ -53,6 +55,8 @@ public:
     const std::string& getMusicTrackPath() const { return gMusic.trackPath; }
 
 private:
+    void ensurePlanetAudio(const std::string& planetName);
+    std::set<std::string> loadedPlanetAudio;
     void generateTone(ALuint buffer, float frequency, float duration);
 
     bool isAudioAvailable = false;
@@ -67,8 +71,8 @@ private:
     ALuint blackHoleBuffer = 0;
     ALuint wormholeSource = 0;
     ALuint wormholeBuffer = 0;
-    ALuint missionCompleteSource = 0;
-    ALuint missionCompleteBuffer = 0;
+    ALuint discoveryChimeSource = 0;
+    ALuint discoveryChimeBuffer = 0;
     ALuint warpChargeSource = 0;
     ALuint warpChargeBuffer = 0;
     ALuint warpExitSource = 0;

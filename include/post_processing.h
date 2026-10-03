@@ -2,6 +2,7 @@
 
 #include <GL/glew.h>
 #include <string>
+#include <vector>
 
 class PostProcessingPipeline {
 public:
@@ -66,10 +67,13 @@ public:
     float screenshotToastTimer = 0.0f;
 
     bool requestCleanCapture = false;
+    bool cleanOutputReady = false; // completed composite since the latest beginScene/resize
     std::string pendingCapturePath = "";
 
     PostProcessingPipeline();
     ~PostProcessingPipeline();
+    PostProcessingPipeline(const PostProcessingPipeline&) = delete;
+    PostProcessingPipeline& operator=(const PostProcessingPipeline&) = delete;
 
     bool init(int w, int h);
     void setupFramebuffers();
@@ -97,5 +101,9 @@ public:
     void endSceneAndPostProcess();
 
     void triggerScreenshot(const char* customPath = nullptr);
-    bool captureScreenshot(const char* customPath = nullptr);
+    // Optional depth snapshot belongs to the same rendered scene as the RGB
+    // capture; science evaluates it only after the checked file write succeeds.
+    bool captureScreenshot(const char* customPath = nullptr, std::vector<float>* capturedDepth = nullptr);
+    // Fresh scene depth for optical observations, including foreground occlusion.
+    bool readSceneDepth(std::vector<float>& depth) const;
 };

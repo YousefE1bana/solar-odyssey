@@ -45,6 +45,41 @@ TEST_CASE("Orbital Mechanics and Simulation Time Propagation", "[physics]") {
         REQUIRE(moonPos0.z == Approx(0.0f).margin(0.001f));
     }
 
+    SECTION("Moon initialAngle phases the local orbit") {
+        // 90-degree presentation phase rotates the t=0 offset onto -Z.
+        glm::dvec3 parentPos(10.0, 0.0, 0.0);
+        glm::dvec3 phased = OrbitalPhysics::computeMoonPosition(parentPos, 0.0, 200.0, 1.0, 1.4, 90.0);
+        REQUIRE(phased.x == Approx(10.0).margin(0.001));
+        REQUIRE(phased.y == Approx(0.0).margin(0.001));
+        REQUIRE(phased.z == Approx(-1.4).margin(0.001));
+        // Default (omitted) phase preserves the legacy unphased offset.
+        glm::dvec3 legacy = OrbitalPhysics::computeMoonPosition(parentPos, 0.0, 200.0, 1.0, 1.4);
+        REQUIRE(legacy.x == Approx(11.4).margin(0.001));
+        REQUIRE(legacy.z == Approx(0.0).margin(0.001));
+    }
+
+    SECTION("Moon orbitDirection mirrors motion generically (retrograde)") {
+        // orbitDirection is pure data: -1 mirrors the prograde path about
+        // the parent (same radius, opposite sense). No body names involved.
+        glm::dvec3 parentPos(10.0, 0.0, 0.0);
+        const double t = 3.0;
+        glm::dvec3 pro = OrbitalPhysics::computeMoonPosition(parentPos, t, 200.0, 1.0, 1.4, 0.0, 1.0);
+        glm::dvec3 retro = OrbitalPhysics::computeMoonPosition(parentPos, t, 200.0, 1.0, 1.4, 0.0, -1.0);
+        REQUIRE(glm::length(pro - parentPos) == Approx(1.4).margin(0.001));
+        REQUIRE(glm::length(retro - parentPos) == Approx(1.4).margin(0.001));
+        REQUIRE(retro.x == Approx(pro.x).margin(0.001));
+        REQUIRE((retro.z - parentPos.z) == Approx(-(pro.z - parentPos.z)).margin(0.001));
+        // Opposite angular travel: z-velocities have opposite signs.
+        const double dt = 0.01;
+        glm::dvec3 pro2 = OrbitalPhysics::computeMoonPosition(parentPos, t + dt, 200.0, 1.0, 1.4, 0.0, 1.0);
+        glm::dvec3 retro2 = OrbitalPhysics::computeMoonPosition(parentPos, t + dt, 200.0, 1.0, 1.4, 0.0, -1.0);
+        REQUIRE(((pro2.z - pro.z) * (retro2.z - retro.z)) < 0.0);
+        // Omitted direction defaults to prograde (legacy callers unchanged).
+        glm::dvec3 def = OrbitalPhysics::computeMoonPosition(parentPos, t, 200.0, 1.0, 1.4);
+        REQUIRE(def.x == Approx(pro.x).margin(0.001));
+        REQUIRE(def.z == Approx(pro.z).margin(0.001));
+    }
+
     SECTION("Simulation time advancement scales linearly with timeMultiplier") {
         float simTime = 100.0f;
         float dt = 0.016f;

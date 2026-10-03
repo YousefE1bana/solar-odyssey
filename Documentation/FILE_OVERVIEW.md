@@ -33,11 +33,11 @@
 - **`spaceship.h`** - 6-DOF flight physics, inertial damping, autopilot, and warp drive.
 - **`black_hole.h`** - Kerr relativistic metric raymarched lensing and accretion disk shader coordinator.
 - **`wormhole.h`** - Ellis-Bronnikov traversable spacetime bridge renderer.
-- **`mission_system.h`** - Multi-stage exploration objectives, proximity triggers, and telemetry.
+- **`science_progression.h`** - `ScienceProgression`: discovery statuses, visit counts, activity flags, best photo scores, and anomaly records.
 - **`picking.h`** - Screen-space raycasting and bounding sphere celestial body selection.
 - **`settings_persistence.h`** - INI configuration loader and serializer (`solar_odyssey_settings.ini`).
-- **`save_state_manager.h`** - JSON simulation clock, camera, and spaceship state persistence (`save_state.json`).
-- **`solar_ui.h`** - Dear ImGui HUD, diagnostic overlays, planetary dossier, and control panels.
+- **`save_state.h`** - Version 3 simulation and discovery persistence (`save_state.json`); deprecated points, unlocks, achievements, mission, and campaign fields are ignored on read and omitted from new writes, without a version bump.
+- **`solar_ui.h`** - `SolarOdysseyUI`: Dear ImGui HUD, discovery Codex, planetary dossier, control panels, and pure notification toasts.
 - **`stb_image.h`** - Image loader for PNG, JPG, BMP textures and window icons.
 
 ---
@@ -54,12 +54,12 @@
 - **`spaceship.cpp`** - Thrust, aerodynamic damping, boost drain, and warp transition logic.
 - **`black_hole.cpp`** - Accretion disk rotation, shadow metrics, and shader bindings.
 - **`wormhole.cpp`** - Dual-mouth geometry and camera-aligned throat rendering.
-- **`mission_system.cpp`** - Objective conditions, reward unlocks, and waypoint math.
+- **`science_progression.cpp`** - Discovery status, visit tracking, activity/photo/anomaly records, and discovery persistence.
 - **`picking.cpp`** - View-projection inverse ray casting.
 - **`camera_controller.cpp`** - Smooth camera transitions and matrix calculations.
 - **`settings_persistence.cpp`** - Key-value INI file parsing and saving.
-- **`save_state_manager.cpp`** - Full game state serialization to JSON.
-- **`solar_ui.cpp`** - ImGui custom theme styling, floating labels, navigation bar, and settings modal.
+- **`save_state.cpp`** - Version 3 state serialization; reads ignore deprecated meta-progression fields.
+- **`solar_ui.cpp`** - ImGui styling, navigation, settings, discovery Codex, and pure notification toasts.
 - **`stb_image_impl.cpp`** - stb_image implementation translation unit.
 
 ---
@@ -72,7 +72,6 @@
 - **`tests/test_spaceship_physics.cpp`** - 6-DOF velocity integration and boost mechanics tests.
 - **`tests/test_warp_system.cpp`** - Warp state machine and relativistic cruise tests.
 - **`tests/test_settings_persistence.cpp`** - INI configuration validation tests.
-- **`tests/test_mission_system.cpp`** - Objective completion logic tests.
 - **`tests/test_camera_math.cpp`** - Camera projection and unprojection tests.
 - **`tests/test_picking.cpp`** - Ray-sphere intersection tests.
 - **`tools/visual_regression/run_regression.py`** - Automated visual regression test harness for 4 golden scenes.
