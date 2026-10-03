@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Windows MinGW Build & Unit Tests
+    name: Windows MinGW Build & Headless Tests
     runs-on: windows-latest
 
     steps:
@@ -31,12 +31,12 @@ jobs:
 
     - name: Configure CMake
       shell: msys2 {0}
-      run: cmake -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEADLESS_TESTS=ON
 
     - name: Build Solar Odyssey & Test Targets
       shell: msys2 {0}
       run: cmake --build build-cmake --config Release
 
-    - name: Run Catch2 Unit Tests (CTest)
+    - name: Run headless CTest (native GL acceptance requires hardware)
       shell: msys2 {0}
       run: ctest --test-dir build-cmake --output-on-failure

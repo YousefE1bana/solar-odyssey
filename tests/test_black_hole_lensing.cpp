@@ -299,7 +299,7 @@ TEST_CASE("BlackHole - Orientation-Independent Secondary Disk Identification", "
 // -----------------------------------------------------------------------------
 // TEST 7: Target Isolation and GL State Preservation Invariants
 // -----------------------------------------------------------------------------
-TEST_CASE("BlackHole - Lensing Pass Target Isolation and State Preservation", "[black_hole_lensing]") {
+TEST_CASE("BlackHole - Lensing Pass Target Isolation and State Preservation", "[black_hole_lensing][gl]") {
     OffscreenLensingGLContext ctx;
     REQUIRE(ctx.valid == true);
 

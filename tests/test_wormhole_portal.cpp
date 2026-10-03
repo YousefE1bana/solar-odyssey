@@ -60,7 +60,7 @@ struct OffscreenPortalGLContext {
 
 } // anonymous namespace
 
-TEST_CASE("Wormhole - Dedicated Portal Target Isolation and Allocation", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Dedicated Portal Target Isolation and Allocation", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext ctx;
     if (!ctx.valid) {
         WARN("Headless OpenGL context unavailable; skipping GL FBO test.");
@@ -94,7 +94,7 @@ TEST_CASE("Wormhole - Dedicated Portal Target Isolation and Allocation", "[wormh
     postPipeline.cleanup();
 }
 
-TEST_CASE("Wormhole - FBO Completeness and Attachment Validation", "[wormhole_portal]") {
+TEST_CASE("Wormhole - FBO Completeness and Attachment Validation", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext ctx;
     if (!ctx.valid) {
         WARN("Headless OpenGL context unavailable; skipping GL FBO test.");
@@ -134,7 +134,7 @@ TEST_CASE("Wormhole - FBO Completeness and Attachment Validation", "[wormhole_po
     REQUIRE(glGetError() == GL_NO_ERROR);
 }
 
-TEST_CASE("Wormhole - Lifecycle and Cleanup Idempotence", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Lifecycle and Cleanup Idempotence", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext ctx;
     if (!ctx.valid) {
         WARN("Headless OpenGL context unavailable; skipping GL FBO test.");
@@ -314,7 +314,7 @@ TEST_CASE("Wormhole - Frustum Culling Predicate", "[wormhole_portal]") {
     REQUIRE_FALSE(resSide.shouldRender);
 }
 
-TEST_CASE("Wormhole - Explicit Recursion Guard in SceneRenderContext", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Explicit Recursion Guard in SceneRenderContext", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext glCtx;
     if (!glCtx.valid) {
         WARN("Headless OpenGL context unavailable; skipping recursion test.");
@@ -364,7 +364,7 @@ TEST_CASE("Wormhole - Explicit Recursion Guard in SceneRenderContext", "[wormhol
     renderer.cleanup();
 }
 
-TEST_CASE("Wormhole - Complete GL State Isolation and Restoration", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Complete GL State Isolation and Restoration", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext glCtx;
     if (!glCtx.valid) {
         WARN("Headless OpenGL context unavailable; skipping GL state restoration test.");
@@ -485,7 +485,7 @@ TEST_CASE("Wormhole - Complete GL State Isolation and Restoration", "[wormhole_p
     REQUIRE(glGetError() == GL_NO_ERROR);
 }
 
-TEST_CASE("Wormhole - Culled Pass Zero-Execution Guarantee", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Culled Pass Zero-Execution Guarantee", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext glCtx;
     if (!glCtx.valid) {
         WARN("Headless OpenGL context unavailable; skipping culling zero-execution test.");
@@ -520,7 +520,7 @@ TEST_CASE("Wormhole - Culled Pass Zero-Execution Guarantee", "[wormhole_portal]"
     renderer.cleanup();
 }
 
-TEST_CASE("Wormhole - Simulation Side-Effect Free Invariant", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Simulation Side-Effect Free Invariant", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext glCtx;
     if (!glCtx.valid) {
         WARN("Headless OpenGL context unavailable; skipping simulation side-effect test.");
@@ -713,7 +713,7 @@ TEST_CASE("Wormhole - Traversal Threshold vs Throat Radius Separation", "[wormho
     REQUIRE(distAtTrigger > wormhole.throatRadius);
 }
 
-TEST_CASE("Wormhole - Wormhole Render GL State Restoration", "[wormhole_portal]") {
+TEST_CASE("Wormhole - Wormhole Render GL State Restoration", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext glCtx;
     if (!glCtx.valid) {
         WARN("Headless OpenGL context unavailable; skipping GL state restoration test.");
@@ -773,7 +773,7 @@ TEST_CASE("Wormhole - Wormhole Render GL State Restoration", "[wormhole_portal]"
     srand(1);
 }
 
-TEST_CASE("Wormhole - C3.8 Portal Resolution Lifecycle (no leaks, no double-delete)", "[wormhole_portal]") {
+TEST_CASE("Wormhole - C3.8 Portal Resolution Lifecycle (no leaks, no double-delete)", "[wormhole_portal][gl]") {
     OffscreenPortalGLContext ctx;
     if (!ctx.valid) {
         WARN("Headless OpenGL context unavailable; skipping GL FBO test.");

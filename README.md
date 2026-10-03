@@ -94,6 +94,8 @@ cmake --build build-release -j 8
 ctest --test-dir build-release --output-on-failure
 ```
 
+On machines without a suitable OpenGL context, `-DHEADLESS_TESTS=ON` selects the CPU/headless suite and explicitly excludes native `[gl]` cases. The default full suite and native runtime QA are required for GPU acceptance; hosted CI does not certify rendering.
+
 CMake refreshes the complete curated runtime asset set on every build, including shaders, fonts, audio and licenses. Source TIFFs, unapproved maps and legacy MP3s are excluded. Do not build directly over the source asset directories.
 
 From PowerShell, with the MSYS2 runtime available:

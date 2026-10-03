@@ -219,6 +219,11 @@ elseif (glm_INCLUDE_DIRS)
   target_include_directories(SolarOdysseyTests PRIVATE ${glm_INCLUDE_DIRS})
 endif()
 
-add_test(NAME UnitTests COMMAND SolarOdysseyTests)
+option(HEADLESS_TESTS "Exclude native GL tests; hosted checks are not GPU acceptance" OFF)
+if(HEADLESS_TESTS)
+  add_test(NAME UnitTests COMMAND SolarOdysseyTests "~[gl]")
+else()
+  add_test(NAME UnitTests COMMAND SolarOdysseyTests)
+endif()
 set_tests_properties(UnitTests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 

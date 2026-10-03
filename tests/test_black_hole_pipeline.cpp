@@ -55,7 +55,7 @@ struct OffscreenGLContext {
     }
 };
 
-TEST_CASE("BlackHole - Dual-FBO Ping-Pong Texture Isolation Validation (No Feedback Loop)", "[black_hole_pipeline]") {
+TEST_CASE("BlackHole - Dual-FBO Ping-Pong Texture Isolation Validation (No Feedback Loop)", "[black_hole_pipeline][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid == true);
 
@@ -109,7 +109,7 @@ TEST_CASE("BlackHole - Dual-FBO Ping-Pong Texture Isolation Validation (No Feedb
     REQUIRE(glGetError() == GL_NO_ERROR);
 }
 
-TEST_CASE("BlackHole - Depth Continuity and Shared Depth RBO Invariant", "[black_hole_pipeline]") {
+TEST_CASE("BlackHole - Depth Continuity and Shared Depth RBO Invariant", "[black_hole_pipeline][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid == true);
 
@@ -182,7 +182,7 @@ TEST_CASE("BlackHole - Depth Continuity and Shared Depth RBO Invariant", "[black
     pipeline.cleanup();
 }
 
-TEST_CASE("BlackHole - RGBA16F Storage Equality and Copy Fidelity", "[black_hole_pipeline]") {
+TEST_CASE("BlackHole - RGBA16F Storage Equality and Copy Fidelity", "[black_hole_pipeline][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid == true);
 
@@ -228,7 +228,7 @@ TEST_CASE("BlackHole - RGBA16F Storage Equality and Copy Fidelity", "[black_hole
     pipeline.cleanup();
 }
 
-TEST_CASE("BlackHole - Outside-Region Preservation under Bounded Operation", "[black_hole_pipeline]") {
+TEST_CASE("BlackHole - Outside-Region Preservation under Bounded Operation", "[black_hole_pipeline][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid == true);
 
@@ -289,7 +289,7 @@ TEST_CASE("BlackHole - Outside-Region Preservation under Bounded Operation", "[b
     pipeline.cleanup();
 }
 
-TEST_CASE("BlackHole - Lifecycle and Idempotent Cleanup Audit", "[black_hole_pipeline]") {
+TEST_CASE("BlackHole - Lifecycle and Idempotent Cleanup Audit", "[black_hole_pipeline][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid == true);
 
@@ -360,7 +360,7 @@ TEST_CASE("BlackHole - Screen-Space Bounding Calculation", "[black_hole_pipeline
     }
 }
 
-TEST_CASE("BlackHole - CPU Submission Overhead of transitionToLensed and copyPreLensToLensed", "[black_hole_pipeline]") {
+TEST_CASE("BlackHole - CPU Submission Overhead of transitionToLensed and copyPreLensToLensed", "[black_hole_pipeline][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid == true);
 
@@ -428,7 +428,7 @@ TEST_CASE("BlackHole - CPU Submission Overhead of transitionToLensed and copyPre
     REQUIRE(medianTransUs < 100.0);
 }
 
-TEST_CASE("Effects off still produces current sRGB capture and depth", "[black_hole_pipeline][release]") {
+TEST_CASE("Effects off still produces current sRGB capture and depth", "[black_hole_pipeline][release][gl]") {
     OffscreenGLContext ctx;
     REQUIRE(ctx.valid);
     PostProcessingPipeline pipeline;

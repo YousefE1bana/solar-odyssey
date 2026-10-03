@@ -20,6 +20,8 @@ ctest --test-dir build-release --output-on-failure
 
 GL coverage depends on a real suitable driver/context. Headless CI is not a substitute for the native checks reported here.
 
+The first hosted Windows run for release commit `747f7b8` compiled successfully but failed eight strict GL context assertions because that runner could not provide the required context ([run 37101414682](https://github.com/YousefE1bana/solar-odyssey/actions/runs/37101414682)). A CI-only follow-up consistently tags native GL cases and configures hosted builds with `-DHEADLESS_TESTS=ON`; it excludes those cases explicitly rather than reporting hardware checks as passing. The default remains the full suite. Both selections were rerun locally: full native acceptance remains 220 cases / 12,841 assertions, and the headless selection passes 198 cases / 12,565 assertions; release binaries and `v1.0.0` are unchanged. Hosted audio-device checks can likewise report unavailable hardware; CPU save/science/simulation checks still execute.
+
 ## Native session and visual acceptance
 
 The final `--player-qa --user-data <isolated-profile>` flow exercised real player persistence, followed by shutdown/restart. It checked Main Menu, fresh exploration with empty discovery records, pause freezing time/ship/scanner, Settings → Esc → Pause → Esc → gameplay, checked save writing, validated Continue, authoritative time restore and transient scanner reset. Restart restored volume **0.37** and both current/target FOV **63°**.
