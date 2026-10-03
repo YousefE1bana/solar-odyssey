@@ -20,7 +20,7 @@ ctest --test-dir build-release --output-on-failure
 
 GL coverage depends on a real suitable driver/context. Headless CI is not a substitute for the native checks reported here.
 
-The first hosted Windows run for release commit `747f7b8` compiled successfully but failed eight strict GL context assertions because that runner could not provide the required context ([run 37101414682](https://github.com/YousefE1bana/solar-odyssey/actions/runs/37101414682)). A CI-only follow-up consistently tags native GL cases and configures hosted builds with `-DHEADLESS_TESTS=ON`; it excludes those cases explicitly rather than reporting hardware checks as passing. The default remains the full suite. Both selections were rerun locally: full native acceptance remains 220 cases / 12,841 assertions, and the headless selection passes 198 cases / 12,565 assertions; release binaries and `v1.0.0` are unchanged. Hosted audio-device checks can likewise report unavailable hardware; CPU save/science/simulation checks still execute.
+The first hosted Windows run for release commit `747f7b8` compiled successfully but failed eight strict GL context assertions because that runner could not provide the required context ([run 37101414682](https://github.com/YousefE1bana/solar-odyssey/actions/runs/37101414682)). A CI-only follow-up consistently tags native GL cases and configures hosted builds with `-DHEADLESS_TESTS=ON`; it excludes those cases explicitly rather than reporting hardware checks as passing. The default remains the full suite. Both selections were rerun locally: full native acceptance remains 220 cases / 12,841 assertions, and the headless selection passes 198 cases / 12,565 assertions; release binaries and `v1.0.0` are unchanged. Hosted audio-device checks can likewise report unavailable hardware; CPU save/science/simulation checks still execute. The corrected hosted build and headless CTest passed on commit `2e775dc` ([run 37101911209](https://github.com/YousefE1bana/solar-odyssey/actions/runs/37101911209)). Hosted tests do not count as native GL/audio certification.
 
 ## Native session and visual acceptance
 
@@ -95,3 +95,18 @@ Research into [Solar System Scope](https://www.solarsystemscope.com/) informed s
 - Legacy saves cannot reconstruct missing orientation, numerical history or phase anchors. Unsafe transient flight/observation sessions intentionally do not resume.
 - Scientific stars are catalog-derived images, not an Earth observer sky model; combined imagery is a visual maximum union rather than catalog deduplication.
 - Audio loading/format behavior was tested; no claim of a human listening review. Binaries are unsigned, and hardware-specific graphics limitations remain possible.
+
+
+## Publication record
+
+Published stable [Solar Odyssey 1.0.0](https://github.com/YousefE1bana/solar-odyssey/releases/tag/v1.0.0), tagged at release commit `747f7b8b416edecff2cd1737266edc4400357bd3`. The release branch and default branch were advanced without rewriting existing history or replacing any tag. The later CI/test-label/documentation follow-up does not change the product executable or distributions.
+
+GitHub's uploaded asset sizes and SHA-256 digests matched all three local artifacts:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SolarOdyssey-1.0.0-Windows-Portable.zip` | 113,628,342 | `546de01f44c9ff24ee5a83e17b7963260352d34d7d5e29ee2a552cc0b171f268` |
+| `SolarOdyssey-1.0.0-Windows-Setup.exe` | 111,936,387 | `d07031ea517e917dc6d357769870ac15cbf4b88a30000d7b6aea0af4876fbfb4` |
+| `SHA256SUMS.txt` | 211 | The release API digest matched the local checksum file. |
+
+The hosted runner warned about future MINGW64 and checkout action runtime deprecations. The currently tested distribution uses MINGW64; migrating CI/toolchain and rerunning native/package acceptance is follow-up work, not a silent change to this release.
